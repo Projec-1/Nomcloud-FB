@@ -1,7 +1,18 @@
 node_modules
 dist
 dist-ssr
-*.local
 .DS_Store
+
+# Environment files
 .env
 .env.local
+.env.development
+.env.production
+.env.*
+!.env.example
+*.local
+
+# TypeScript build artifacts
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

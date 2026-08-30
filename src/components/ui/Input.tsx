@@ -23,7 +23,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, ic
         <input
           ref={ref}
           id={inputId}
-          className={cn('input', icon && 'pl-11', error && 'border-red-400 focus:ring-red-300 focus:border-red-400', className)}
+          className={cn('input', Boolean(icon) && 'pl-11', Boolean(error) && 'border-red-400 focus:ring-red-300 focus:border-red-400', className)}
           {...props}
         />
       </div>
