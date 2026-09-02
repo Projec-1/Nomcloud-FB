@@ -12,7 +12,7 @@ const BASE: Record<string, string> = {
   classroomChildren: 'https://images.unsplash.com/photo-1473649085228-583485e6e4d7',
   boyWithPaper: 'https://images.unsplash.com/photo-1536337005238-94b997371b40',
   childrenWindow: 'https://images.unsplash.com/photo-1521493959102-bdd6677fdd81',
-  teacherWithLearners: 'https://images.unsplash.com/photo-1577896851231-70ef18881754',
+  teacherWithLearners: '/heroteacherpicture.png',
   studentsRaisingHands: 'https://images.unsplash.com/photo-1758270704286-83476deb3bd1',
   studentsTogether: 'https://images.unsplash.com/photo-1583468982228-19f19164aee2',
   teacherTutoring: 'https://images.unsplash.com/photo-1583468991267-3f068b607ae1',
