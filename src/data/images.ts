@@ -11,11 +11,11 @@ const BASE: Record<string, string> = {
   // Classrooms & students
   classroomChildren: 'https://images.unsplash.com/photo-1473649085228-583485e6e4d7',
   boyWithPaper: 'https://images.unsplash.com/photo-1536337005238-94b997371b40',
-  childrenWindow: 'https://images.unsplash.com/photo-1521493959102-bdd6677fdd81',
+  childrenWindow: '/Class%20childreng%2029,%202026,%2006_25_19%20PM.png',
   teacherWithLearners: '/heroteacherpicture.png',
-  studentsRaisingHands: 'https://images.unsplash.com/photo-1758270704286-83476deb3bd1',
+  studentsRaisingHands: '/Arday%20gdbho%20primarydownload%20(5).jpeg',
   studentsTogether: 'https://images.unsplash.com/photo-1583468982228-19f19164aee2',
-  teacherTutoring: 'https://images.unsplash.com/photo-1583468991267-3f068b607ae1',
+  teacherTutoring: '/Parentse56f9912-e7d2-49f3-bbd7-95f1240b4a16.png',
   // Technology & payments
   phoneWithCash: 'https://images.unsplash.com/photo-1533234944761-2f5337579079',
   // Security & infrastructure

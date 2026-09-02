@@ -4,13 +4,14 @@ import { Check, Minus, Users, Wallet, Building2, Sparkles } from 'lucide-react'
 import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
 import FaqAccordion from '@/components/marketing/FaqAccordion'
+import { paymentMethods, PaymentBadge } from '@/components/marketing/PaymentLogos'
 import { cn } from '@/utils/cn'
 import { useLanguage } from '@/context/LanguageContext'
 
 const planDefs = [
-  { name: 'Starter', prefix: 'pricing.starter', monthly: 149, annual: 119, highlight: false, features: ['f1', 'f2', 'f3', 'f4', 'f5'] },
-  { name: 'Growth', prefix: 'pricing.growth', monthly: 349, annual: 279, highlight: true, features: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6'] },
-  { name: 'Enterprise', prefix: 'pricing.enterprise', monthly: null as number | null, annual: null as number | null, highlight: false, features: ['f1', 'f2', 'f3', 'f4', 'f5'] },
+  { name: 'Starter', prefix: 'pricing.starter', monthly: 149, annual: 119, highlight: false, features: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10'] },
+  { name: 'Growth', prefix: 'pricing.growth', monthly: 349, annual: 279, highlight: true, features: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12'] },
+  { name: 'Enterprise', prefix: 'pricing.enterprise', monthly: null as number | null, annual: null as number | null, highlight: false, features: ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12'] },
 ]
 
 const comparisonCategories: {
@@ -100,8 +101,8 @@ export default function Pricing() {
             <Reveal key={plan.name} delay={i * 100}>
               <div
                 className={cn(
-                  'flex h-full flex-col rounded-3xl p-8',
-                  plan.highlight ? 'border-2 border-brand bg-white shadow-floaty dark:bg-[#161618]' : 'card',
+                  'group flex h-full flex-col rounded-3xl p-8 transition-all duration-300',
+                  plan.highlight ? 'border-2 border-brand bg-white shadow-floaty hover:shadow-[0_20px_40px_rgba(0,113,227,0.15)] dark:bg-[#161618]' : 'card hover:shadow-lg hover:border-brand/30',
                 )}
               >
                 {plan.highlight && (
@@ -127,19 +128,89 @@ export default function Pricing() {
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-3 text-sm text-ink dark:text-white">
                       <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand" />
-                      {t(`${plan.prefix}.${f}`)}
+                      <span>{t(`${plan.prefix}.${f}`)}</span>
                     </li>
                   ))}
                 </ul>
                 <Link
                   to={plan.monthly ? '/signup' : '/contact'}
-                  className={cn('mt-8 w-full justify-center py-3.5 text-sm', plan.highlight ? 'btn-accent' : 'btn-outline')}
+                  className={cn('mt-8 w-full justify-center py-3.5 text-sm transition-all', plan.highlight ? 'btn-accent hover:shadow-lg' : 'btn-outline hover:border-brand hover:text-brand')}
                 >
                   {plan.monthly ? t('pricing.getStarted') : t('pricing.contactSales')}
                 </Link>
               </div>
             </Reveal>
           ))}
+        </div>
+      </section>
+
+      <section className="py-24">
+        <div className="container">
+          <Reveal>
+            <div className="text-center mb-12">
+              <h2 className="text-display-md text-ink dark:text-white">Analysis Overview</h2>
+              <p className="mt-3 text-base text-graphite max-w-2xl mx-auto">See real-time insights into your school's performance with clean, actionable analytics.</p>
+            </div>
+          </Reveal>
+
+          <Reveal delay={100}>
+            <div className="mx-auto max-w-4xl">
+              <div className="rounded-3xl border border-ink/5 dark:border-white/10 bg-white dark:bg-white/[0.04] shadow-soft p-8 sm:p-10">
+                {/* Header Stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-10 pb-10 border-b border-ink/5 dark:border-white/10">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-graphite mb-2">Students</p>
+                    <p className="text-3xl font-semibold text-ink dark:text-white">1,248</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-graphite mb-2">Teachers</p>
+                    <p className="text-3xl font-semibold text-ink dark:text-white">68</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-graphite mb-2">Attendance</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-3xl font-semibold text-ink dark:text-white">94.8%</p>
+                      <p className="text-sm text-emerald-600 font-medium">+4.8%</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-graphite mb-2">Outstanding Fees</p>
+                    <p className="text-3xl font-semibold text-ink dark:text-white">$12,480</p>
+                  </div>
+                </div>
+
+                {/* Chart Section */}
+                <div>
+                  <h3 className="text-sm font-semibold text-ink dark:text-white mb-6">Attendance Trend</h3>
+                  <div className="h-48 flex items-end justify-center gap-2">
+                    {[68, 71, 69, 75, 72, 78, 82, 85, 88, 91, 93, 95].map((value, i) => (
+                      <div key={i} className="flex flex-col items-center flex-1 gap-2">
+                        <div
+                          className="w-full bg-gradient-to-t from-brand/60 to-brand rounded-t-md transition-all duration-300 hover:from-brand hover:to-brand/80"
+                          style={{ height: `${(value / 100) * 160}px` }}
+                        />
+                        <p className="text-xs text-graphite/50">W{String(i + 1).padStart(2, '0')}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-graphite mt-4 text-center">Week-by-week attendance percentage across all classes</p>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="pb-14">
+        <div className="container">
+          <p className="mb-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-graphite">{t('footer.payments')}</p>
+          <div className="overflow-hidden">
+            <div className="flex w-max animate-marquee-slow items-center gap-[32px] [animation-duration:54.8s]">
+              {[...paymentMethods, ...paymentMethods, ...paymentMethods].map((m, i) => (
+                <PaymentBadge key={`${m.name}-${i}`} method={m} />
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

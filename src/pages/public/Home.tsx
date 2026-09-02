@@ -20,16 +20,17 @@ import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
 import HoverText from '@/components/marketing/HoverText'
 import TiltCard from '@/components/marketing/TiltCard'
-import AdminDashboardMock from '@/components/marketing/previews/AdminDashboardMock'
+import CountUp from '@/components/marketing/CountUp'
+import AdminDashboardHeroMock from '@/components/marketing/previews/AdminDashboardHeroMock'
 import TeacherDashboardMock from '@/components/marketing/previews/TeacherDashboardMock'
 import ParentAppMock from '@/components/marketing/previews/ParentAppMock'
 import { useLanguage } from '@/context/LanguageContext'
 import { img } from '@/data/images'
 
 const pillars = [
-  { icon: Users, titleKey: 'home.pillar1.title', bodyKey: 'home.pillar1.body', size: 'lg' as const },
-  { icon: ShieldCheck, titleKey: 'home.pillar2.title', bodyKey: 'home.pillar2.body', size: 'sm' as const },
-  { icon: Zap, titleKey: 'home.pillar3.title', bodyKey: 'home.pillar3.body', size: 'sm' as const },
+  { icon: Users, titleKey: 'home.pillar1.title', bodyKey: 'home.pillar1.body', size: 'lg' as const, image: img('studentsRaisingHands', 900) },
+  { icon: ShieldCheck, titleKey: 'home.pillar2.title', bodyKey: 'home.pillar2.body', size: 'sm' as const, image: '/ARDO%20GBDHIO.png' },
+  { icon: Zap, titleKey: 'home.pillar3.title', bodyKey: 'home.pillar3.body', size: 'sm' as const, image: '/ardayaschoolphoto.png' },
 ]
 
 const capabilities = [
@@ -45,12 +46,87 @@ const capabilities = [
   { icon: GraduationCap, key: 'home.cap.teacherTools' },
 ]
 
+const capabilityThemes = {
+  'home.cap.studentManagement': {
+    card: 'linear-gradient(135deg, rgba(214, 236, 240, 0.92), rgba(245, 243, 255, 0.9))',
+    border: 'rgba(117, 156, 170, 0.28)',
+    iconBg: 'linear-gradient(135deg, rgba(222, 239, 244, 0.92), rgba(229, 238, 255, 0.9))',
+    iconColor: '#365d6d',
+    shadow: '0 10px 24px rgba(72, 109, 122, 0.12)',
+  },
+  'home.cap.attendance': {
+    card: 'linear-gradient(135deg, rgba(255, 246, 228, 0.95), rgba(255, 245, 242, 0.9))',
+    border: 'rgba(196, 165, 102, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(255, 234, 183, 0.9), rgba(255, 243, 224, 0.9))',
+    iconColor: '#9b6b1d',
+    shadow: '0 10px 24px rgba(168, 118, 39, 0.12)',
+  },
+  'home.cap.grades': {
+    card: 'linear-gradient(135deg, rgba(234, 243, 255, 0.95), rgba(247, 249, 255, 0.9))',
+    border: 'rgba(118, 149, 194, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(214, 231, 255, 0.9), rgba(232, 240, 255, 0.9))',
+    iconColor: '#395e9c',
+    shadow: '0 10px 24px rgba(82, 121, 184, 0.12)',
+  },
+  'home.cap.homework': {
+    card: 'linear-gradient(135deg, rgba(231, 246, 239, 0.95), rgba(246, 251, 248, 0.9))',
+    border: 'rgba(117, 168, 129, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(214, 239, 225, 0.9), rgba(234, 246, 239, 0.9))',
+    iconColor: '#2a6a52',
+    shadow: '0 10px 24px rgba(65, 114, 89, 0.12)',
+  },
+  'home.cap.fees': {
+    card: 'linear-gradient(135deg, rgba(242, 238, 255, 0.95), rgba(249, 247, 255, 0.9))',
+    border: 'rgba(151, 136, 201, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(228, 220, 255, 0.9), rgba(240, 236, 255, 0.9))',
+    iconColor: '#6752af',
+    shadow: '0 10px 24px rgba(103, 82, 175, 0.12)',
+  },
+  'home.cap.announcements': {
+    card: 'linear-gradient(135deg, rgba(255, 239, 233, 0.95), rgba(255, 249, 246, 0.9))',
+    border: 'rgba(196, 130, 105, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(255, 224, 212, 0.9), rgba(255, 240, 234, 0.9))',
+    iconColor: '#ae5d44',
+    shadow: '0 10px 24px rgba(170, 93, 68, 0.12)',
+  },
+  'home.cap.messaging': {
+    card: 'linear-gradient(135deg, rgba(234, 247, 255, 0.95), rgba(246, 250, 255, 0.9))',
+    border: 'rgba(117, 160, 187, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(214, 241, 255, 0.9), rgba(234, 244, 255, 0.9))',
+    iconColor: '#2c6989',
+    shadow: '0 10px 24px rgba(59, 118, 154, 0.12)',
+  },
+  'home.cap.reports': {
+    card: 'linear-gradient(135deg, rgba(245, 236, 255, 0.95), rgba(252, 249, 255, 0.9))',
+    border: 'rgba(163, 126, 179, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(234, 220, 255, 0.9), rgba(245, 238, 255, 0.9))',
+    iconColor: '#785792',
+    shadow: '0 10px 24px rgba(120, 87, 146, 0.12)',
+  },
+  'home.cap.academicYears': {
+    card: 'linear-gradient(135deg, rgba(239, 245, 234, 0.95), rgba(247, 250, 243, 0.9))',
+    border: 'rgba(127, 148, 108, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(220, 235, 208, 0.9), rgba(236, 244, 226, 0.9))',
+    iconColor: '#586f41',
+    shadow: '0 10px 24px rgba(88, 111, 65, 0.12)',
+  },
+  'home.cap.teacherTools': {
+    card: 'linear-gradient(135deg, rgba(234, 240, 249, 0.95), rgba(246, 249, 253, 0.9))',
+    border: 'rgba(117, 142, 175, 0.24)',
+    iconBg: 'linear-gradient(135deg, rgba(214, 227, 246, 0.9), rgba(234, 241, 249, 0.9))',
+    iconColor: '#3f5b7d',
+    shadow: '0 10px 24px rgba(63, 91, 125, 0.12)',
+  },
+} as const
+
 const stats = [
-  { value: '40+', key: 'home.stats.schools' },
-  { value: '120K+', key: 'home.stats.students' },
-  { value: '99.9%', key: 'home.stats.uptime' },
-  { value: '4.9/5', key: 'home.stats.rating' },
+  { value: 40, suffix: '+', decimals: 0, key: 'home.stats.schools' },
+  { value: 120, suffix: 'K+', decimals: 0, key: 'home.stats.students' },
+  { value: 99.9, suffix: '%', decimals: 1, key: 'home.stats.uptime' },
+  { value: 4.9, suffix: '/5', decimals: 1, key: 'home.stats.rating' },
 ]
+
+const accentColors = ['#FF5A1F', '#007AFF', '#34C759', '#FF9F0A']
 
 function HeroVisual() {
   const { t } = useLanguage()
@@ -157,7 +233,7 @@ export default function Home() {
 
         <Reveal delay={450}>
           <div className="container relative mx-auto mt-20 max-w-5xl">
-            <AdminDashboardMock />
+            <AdminDashboardHeroMock />
           </div>
         </Reveal>
       </section>
@@ -167,7 +243,14 @@ export default function Home() {
         <div className="container grid grid-cols-2 gap-8 sm:grid-cols-4">
           {stats.map((s, i) => (
             <Reveal key={s.key} delay={i * 80} className="text-center">
-              <p className="text-3xl font-semibold tracking-tight text-ink dark:text-white sm:text-4xl">{s.value}</p>
+              <p className="text-3xl font-semibold tracking-tight text-ink dark:text-white sm:text-4xl">
+                <CountUp
+                  value={s.value}
+                  decimals={s.decimals}
+                  suffix={s.suffix}
+                  accent={accentColors[i]}
+                />
+              </p>
               <p className="mt-1 text-sm text-graphite">{t(s.key)}</p>
             </Reveal>
           ))}
@@ -190,12 +273,12 @@ export default function Home() {
                       p.size === 'lg' ? 'min-h-[22rem]' : 'min-h-[15rem]'
                     }`}
                   >
-                    {i === 0 ? (
+                    {p.image ? (
                       <>
                         <img
-                          src={img('studentsRaisingHands', 900)}
-                          alt="Students engaged in a classroom lesson"
-                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          src={p.image}
+                          alt="School activity or campus photo"
+                          className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/40 to-ink/10" />
                       </>
@@ -289,25 +372,61 @@ export default function Home() {
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-mist to-transparent dark:from-surface-dark sm:w-32" />
 
           <div className="flex w-max animate-marquee gap-4 [animation-duration:34s]">
-            {[...capabilities, ...capabilities].map((c, i) => (
-              <div key={`${c.key}-${i}`} className="flex w-56 flex-shrink-0 items-center gap-3 rounded-2xl border border-ink/5 bg-white p-5 shadow-soft dark:border-white/10 dark:bg-[#161618]">
-                <div className="rounded-xl bg-ink/5 p-2.5 text-ink dark:bg-white/10 dark:text-white">
-                  <c.icon className="h-4 w-4" />
+            {[...capabilities, ...capabilities].map((c, i) => {
+              const theme = capabilityThemes[c.key as keyof typeof capabilityThemes]
+              return (
+                <div
+                  key={`${c.key}-${i}`}
+                  className="flex w-56 flex-shrink-0 items-center gap-3 rounded-2xl border bg-white p-5 shadow-soft dark:border-white/10 dark:bg-[#161618]"
+                  style={{
+                    background: theme.card,
+                    borderColor: theme.border,
+                    boxShadow: theme.shadow,
+                  }}
+                >
+                  <div
+                    className="rounded-xl p-2.5"
+                    style={{
+                      background: theme.iconBg,
+                      color: theme.iconColor,
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
+                    }}
+                  >
+                    <c.icon className="h-4 w-4" />
+                  </div>
+                  <p className="text-sm font-medium text-ink dark:text-white">{t(c.key)}</p>
                 </div>
-                <p className="text-sm font-medium text-ink dark:text-white">{t(c.key)}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className="flex w-max animate-marquee gap-4 [animation-direction:reverse] [animation-duration:40s]">
-            {[...capabilities.slice().reverse(), ...capabilities.slice().reverse()].map((c, i) => (
-              <div key={`${c.key}-rev-${i}`} className="flex w-56 flex-shrink-0 items-center gap-3 rounded-2xl border border-ink/5 bg-mist p-5 dark:border-white/10 dark:bg-white/[0.04]">
-                <div className="rounded-xl bg-brand/10 p-2.5 text-brand">
-                  <c.icon className="h-4 w-4" />
+            {[...capabilities.slice().reverse(), ...capabilities.slice().reverse()].map((c, i) => {
+              const theme = capabilityThemes[c.key as keyof typeof capabilityThemes]
+              return (
+                <div
+                  key={`${c.key}-rev-${i}`}
+                  className="flex w-56 flex-shrink-0 items-center gap-3 rounded-2xl border bg-mist p-5 dark:border-white/10 dark:bg-white/[0.04]"
+                  style={{
+                    background: theme.card,
+                    borderColor: theme.border,
+                    boxShadow: theme.shadow,
+                  }}
+                >
+                  <div
+                    className="rounded-xl p-2.5"
+                    style={{
+                      background: theme.iconBg,
+                      color: theme.iconColor,
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
+                    }}
+                  >
+                    <c.icon className="h-4 w-4" />
+                  </div>
+                  <p className="text-sm font-medium text-ink dark:text-white">{t(c.key)}</p>
                 </div>
-                <p className="text-sm font-medium text-ink dark:text-white">{t(c.key)}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
         <div className="container">

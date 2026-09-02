@@ -20,9 +20,9 @@ export default function Contact() {
   const [submitted, setSubmitted] = useState(false)
 
   const contactInfo = [
-    { icon: Mail, label: t('contact.email'), value: 'hello@nomcloud.academy' },
-    { icon: Phone, label: t('contact.phone'), value: '+254 700 112 233' },
-    { icon: MapPin, label: t('contact.office'), value: 'Ngong Road, Nairobi, Kenya' },
+    { icon: Mail, label: t('contact.email'), value: 'Sul.abdulsaq@gmail.com' },
+    { icon: Phone, label: t('contact.phone'), value: '+252617377918' },
+    { icon: MapPin, label: t('contact.office'), value: 'Via Liberia, Mogadishu, Somalia' },
   ]
 
   const validate = (): boolean => {

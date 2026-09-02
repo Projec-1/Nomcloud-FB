@@ -10,6 +10,8 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, icon, className, id, ...props }, ref) => {
   const inputId = id || props.name
+  const hasIcon = Boolean(icon)
+
   return (
     <div className="w-full">
       {label && (
@@ -19,11 +21,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, ic
         </label>
       )}
       <div className="relative">
-        {icon && <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-graphite">{icon}</div>}
+        {hasIcon && <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-graphite">{icon}</div>}
         <input
           ref={ref}
           id={inputId}
-          className={cn('input', Boolean(icon) && 'pl-11', Boolean(error) && 'border-red-400 focus:ring-red-300 focus:border-red-400', className)}
+          className={cn('input', hasIcon && 'pl-11', error && 'border-red-400 focus:ring-red-300 focus:border-red-400', className)}
           {...props}
         />
       </div>

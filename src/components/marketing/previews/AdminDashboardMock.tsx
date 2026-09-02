@@ -1,171 +1,250 @@
 import {
-  Users,
-  GraduationCap,
-  Wallet,
-  CalendarCheck,
+  ArrowUpRight,
   Bell,
-  Search,
-  LayoutDashboard,
   BookOpen,
-  ClipboardList,
-  Settings,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Circle,
+  Clock3,
+  LayoutGrid,
+  MessageSquare,
   School,
-  Megaphone,
-  BarChart3,
-  CalendarRange,
-  FileClock,
-  TrendingUp,
+  Sparkles,
+  Users,
 } from 'lucide-react'
 import BrowserFrame from '@/components/marketing/BrowserFrame'
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', active: true },
+  { icon: LayoutGrid, label: 'Overview', active: true },
   { icon: Users, label: 'Students' },
-  { icon: GraduationCap, label: 'Teachers' },
-  { icon: BookOpen, label: 'Classes' },
-  { icon: ClipboardList, label: 'Attendance' },
-  { icon: FileClock, label: 'Exams' },
-  { icon: Wallet, label: 'Fees' },
-  { icon: Megaphone, label: 'Announcements' },
-  { icon: BarChart3, label: 'Reports' },
-  { icon: CalendarRange, label: 'Academic Years' },
-  { icon: Settings, label: 'Settings' },
+  { icon: BookOpen, label: 'Teachers' },
+  { icon: CalendarDays, label: 'Attendance' },
+  { icon: School, label: 'Academics' },
+  { icon: MessageSquare, label: 'Messages' },
 ]
 
-const stats = [
-  { label: 'Students', value: '1,284', delta: '+3.2%', tint: '#0071E3', icon: Users },
-  { label: 'Teachers', value: '86', delta: '+1.1%', tint: '#FF5A1F', icon: GraduationCap },
-  { label: 'Attendance Today', value: '96.4%', delta: '+0.8%', tint: '#34A853', icon: CalendarCheck },
-  { label: 'Fees Collected', value: '$42,180', delta: '+12.4%', tint: '#A855F7', icon: Wallet },
+const statCards = [
+  { label: 'Students', value: '1,248', tone: 'from-[#0A7CFF] to-[#72B5FF]' },
+  { label: 'Teachers', value: '68', tone: 'from-[#6B7CFF] to-[#A1A9FF]' },
+  { label: 'Attendance', value: '94.8%', tone: 'from-[#18B37D] to-[#5FD4A5]' },
+  { label: 'Fees', value: '$12,480', tone: 'from-[#FF9D5C] to-[#FFC38C]' },
 ]
 
-// A smooth SVG polyline used as an animated "live" trend line.
-const linePoints = [18, 34, 24, 46, 38, 58, 48, 66, 54, 74, 62, 80]
-function toPath(points: number[], w: number, h: number) {
-  const stepX = w / (points.length - 1)
-  return points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${(i * stepX).toFixed(1)} ${(h - (p / 100) * h).toFixed(1)}`)
-    .join(' ')
-}
+const attendanceBars = [42, 54, 48, 66, 58, 72, 68, 80, 88, 74, 90, 97]
+
+const notifications = [
+  { title: 'Attendance submitted', time: '2 min ago', status: 'success' },
+  { title: 'New student enrolled', time: '17 min ago', status: 'neutral' },
+  { title: 'Grades published', time: '1 hr ago', status: 'success' },
+  { title: 'Payment recorded', time: '2 hrs ago', status: 'success' },
+]
+
+const classes = [
+  { name: 'Math 6A', time: '08:30', room: 'Room 12' },
+  { name: 'Science Lab', time: '10:15', room: 'Lab 4' },
+  { name: 'English Club', time: '13:00', room: 'Library' },
+]
 
 export default function AdminDashboardMock() {
-  const path = toPath(linePoints, 260, 88)
-
   return (
-    <BrowserFrame url="app.nomcloud.academy/admin">
-      <div className="flex h-[440px] text-[11px] sm:h-[480px]">
-        <aside className="hidden w-48 flex-col overflow-y-auto border-r border-ink/5 bg-white p-4 dark:border-white/10 dark:bg-[#141416] sm:flex">
-          <div className="mb-6 flex items-center gap-2 px-1">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-white">
-              <School className="h-3.5 w-3.5" />
-            </div>
-            <span className="font-semibold text-ink dark:text-white">Nom Cloud</span>
-          </div>
-          <nav className="space-y-0.5">
-            {navItems.map((item) => (
-              <div
-                key={item.label}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors ${
-                  item.active ? 'bg-brand/10 text-brand font-medium' : 'text-graphite'
-                }`}
-              >
-                <item.icon className="h-3.5 w-3.5" />
-                {item.label}
+    <BrowserFrame className="relative overflow-hidden shadow-[0_30px_90px_rgba(15,23,42,0.12)]">
+      <div className="relative bg-[radial-gradient(circle_at_top_left,_rgba(0,113,227,0.12),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(17,24,39,0.08),_transparent_30%),#F5F7FA]">
+        <div className="flex h-[560px] bg-transparent text-[#171A1F]">
+          <aside className="hidden w-[220px] border-r border-[#E7ECF2] bg-white/60 px-4 py-5 backdrop-blur-xl sm:block">
+            <div className="mb-8 flex items-center gap-3 px-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#0A7CFF] text-sm font-semibold text-white shadow-[0_12px_24px_rgba(10,124,255,0.35)]">
+                N
               </div>
-            ))}
-          </nav>
-          <div className="mt-auto rounded-xl bg-mist p-3 dark:bg-white/5">
-            <p className="font-medium text-ink dark:text-white">Term 1 · 2026</p>
-            <p className="mt-0.5 text-graphite">Active academic year</p>
-          </div>
-        </aside>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#77818B]">School</div>
+                <div className="text-[15px] font-semibold text-[#121A24]">Nom Cloud</div>
+              </div>
+            </div>
 
-        <div className="flex-1 overflow-hidden p-4 sm:p-6">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-ink dark:text-white">Good morning, Admin</p>
-              <p className="text-graphite">Nom Cloud Demo Academy · Live overview</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="hidden items-center gap-1.5 rounded-full bg-ink/5 px-3 py-1.5 text-graphite dark:bg-white/10 sm:flex">
-                <Search className="h-3 w-3" /> Search
-              </div>
-              <div className="relative flex h-7 w-7 items-center justify-center rounded-full bg-ink/5 dark:bg-white/10">
-                <Bell className="h-3.5 w-3.5 text-graphite" />
-                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-brand" />
-              </div>
-            </div>
-          </div>
+            <nav className="space-y-1.5">
+              {navItems.map(({ icon: Icon, label, active }) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-[14px] transition-all duration-300 ${
+                    active ? 'bg-[#EAF2FF] text-[#111827] shadow-[inset_0_0_0_1px_rgba(10,124,255,0.06)]' : 'text-[#4F5867] hover:bg-white/80'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {stats.map((s) => (
-              <div key={s.label} className="relative overflow-hidden rounded-xl border border-ink/5 bg-white p-3 dark:border-white/10 dark:bg-[#141416]">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="inline-flex rounded-lg p-1.5" style={{ backgroundColor: `${s.tint}1A`, color: s.tint }}>
-                    <s.icon className="h-3 w-3" />
-                  </div>
-                  <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600">{s.delta}</span>
+            <div className="mt-8 rounded-2xl border border-[#E7ECF2] bg-white/80 p-3 shadow-[0_12px_20px_rgba(15,23,42,0.04)]">
+              <div className="mb-2 flex items-center justify-between text-[12px] text-[#5F6977]">
+                <span>System status</span>
+                <span className="h-2.5 w-2.5 rounded-full bg-[#2ACD89]" />
+              </div>
+              <div className="text-[22px] font-semibold tracking-[-0.05em] text-[#121A24]">99.9%</div>
+            </div>
+          </aside>
+
+          <main className="flex-1 px-4 py-5 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between gap-4 pb-5">
+              <div className="hidden items-center gap-2 rounded-full border border-[#E2E8F0] bg-white/80 px-3 py-1.5 text-[11px] font-medium text-[#5F6977] shadow-sm sm:flex">
+                <Sparkles className="h-3.5 w-3.5 text-[#0A7CFF]" />
+                Live overview
+              </div>
+              <div className="text-[12px] text-[#697787]">Tuesday, 18 June 2024</div>
+              <div className="flex items-center gap-2">
+                <button type="button" className="hidden rounded-full border border-[#DEE5EF] bg-white/80 px-3.5 py-2 text-[12px] font-medium text-[#1F2937] shadow-sm sm:inline-flex">
+                  <Bell className="mr-2 h-3.5 w-3.5" />
+                  4 alerts
+                </button>
+                <button type="button" className="rounded-full bg-[#0A7CFF] px-4 py-2.5 text-[12px] font-medium text-white shadow-[0_12px_24px_rgba(10,124,255,0.32)]">
+                  View report
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-6 border-b border-[#E7ECF2] pb-6 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7A8190]">Operations overview</p>
+                <h1 className="mt-3 text-[32px] font-semibold leading-none tracking-[-0.07em] text-[#111827] sm:text-[44px] lg:text-[56px]">
+                  Good morning, Ahmed.
+                </h1>
+              </div>
+
+              <div className="rounded-[24px] border border-[#E2E8F0] bg-white/80 px-4 py-3 shadow-[0_18px_35px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-[#6B7280]">Attendance</div>
+                <div className="mt-2 flex items-end gap-2">
+                  <span className="text-[28px] font-semibold tracking-[-0.06em] text-[#111827]">94.8%</span>
+                  <span className="mb-1 text-[12px] font-medium text-[#1DB26A]">+4.8%</span>
                 </div>
-                <p className="font-semibold text-ink dark:text-white">{s.value}</p>
-                <p className="text-graphite">{s.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-5">
-            <div className="relative overflow-hidden rounded-xl border border-ink/5 bg-white p-4 dark:border-white/10 dark:bg-[#141416] sm:col-span-3">
-              <div className="mb-1 flex items-center justify-between">
-                <p className="font-medium text-ink dark:text-white">Enrollment &amp; Attendance Trend</p>
-                <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
-                  <TrendingUp className="h-3 w-3" /> Updating live
-                </span>
-              </div>
-              <p className="mb-2 text-graphite">Last 12 school days</p>
-              <div className="relative h-24 w-full overflow-hidden sm:h-28">
-                <svg viewBox="0 0 260 88" preserveAspectRatio="none" className="h-full w-full">
-                  <defs>
-                    <linearGradient id="fillGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0071E3" stopOpacity="0.28" />
-                      <stop offset="100%" stopColor="#0071E3" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path d={`${path} L 260 88 L 0 88 Z`} fill="url(#fillGrad)" />
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke="#0071E3"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray="600"
-                    className="animate-draw-line"
-                  />
-                  <circle cx="260" cy="8" r="4" fill="#0071E3" className="animate-pulse-dot" />
-                </svg>
-                <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-white to-transparent dark:from-[#141416]" />
               </div>
             </div>
 
-            <div className="rounded-xl border border-ink/5 bg-white p-4 dark:border-white/10 dark:bg-[#141416] sm:col-span-2">
-              <p className="mb-3 font-medium text-ink dark:text-white">Today&apos;s Activity</p>
-              <ul className="space-y-2.5">
-                {[
-                  { icon: Users, label: '3 new students enrolled', tint: '#0071E3' },
-                  { icon: Wallet, label: '$1,240 fees collected', tint: '#34A853' },
-                  { icon: Megaphone, label: 'Announcement sent to Grade 6', tint: '#FF5A1F' },
-                ].map((a) => (
-                  <li key={a.label} className="flex items-center gap-2.5">
-                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${a.tint}1A`, color: a.tint }}>
-                      <a.icon className="h-3 w-3" />
-                    </span>
-                    <span className="leading-snug text-ink dark:text-white">{a.label}</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {statCards.map((stat, index) => (
+                <div
+                  key={stat.label}
+                  className="rounded-[24px] border border-[#E9EEF5] bg-white/85 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.04)] transition-all duration-500 hover:-translate-y-1"
+                  style={{ animationDelay: `${index * 120}ms` }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-medium text-[#687485]">{stat.label}</span>
+                    <span className={`h-2.5 w-2.5 rounded-full bg-gradient-to-r ${stat.tone}`} />
+                  </div>
+                  <div className="mt-4 text-[30px] font-semibold tracking-[-0.06em] text-[#101827]">{stat.value}</div>
+                </div>
+              ))}
             </div>
-          </div>
+
+            <div className="mt-6 grid gap-5 xl:grid-cols-[1.7fr_0.9fr]">
+              <div className="rounded-[28px] border border-[#E9EEF5] bg-white/90 p-4 shadow-[0_20px_45px_rgba(15,23,42,0.06)] md:p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[12px] uppercase tracking-[0.2em] text-[#7B8290]">Attendance this term</p>
+                    <p className="mt-1 text-[24px] font-semibold tracking-[-0.06em] text-[#101827]">82.4% average</p>
+                  </div>
+                  <div className="flex items-center gap-1 rounded-full bg-[#EAF8F1] px-2.5 py-1.5 text-[11px] font-semibold text-[#17A66B]">
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                    +4.8%
+                  </div>
+                </div>
+
+                <div className="mt-5 flex h-[216px] items-end gap-2 rounded-[22px] bg-[linear-gradient(180deg,#F7FAFF_0%,#EEF3F8_100%)] px-3 pb-3 pt-4">
+                  {attendanceBars.map((value, index) => (
+                    <div key={index} className="flex flex-1 flex-col items-center justify-end gap-2">
+                      <div
+                        className={`w-full rounded-t-[10px] bg-gradient-to-t ${index >= 9 ? 'from-[#0A7CFF] to-[#7FC3FF]' : 'from-[#B9DBFF] to-[#7BB9FF]'} shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] transition-all duration-700`}
+                        style={{ height: `${value}%`, animation: `rise 850ms ${index * 80}ms ease-out both` }}
+                      />
+                      {index === 0 || index === attendanceBars.length - 1 ? (
+                        <span className="text-[10px] text-[#6F7C8B]">{index === 0 ? 'Week 01' : 'Week 12'}</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-[#F7FAFF] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[#728094]">Present</div>
+                    <div className="mt-2 text-[22px] font-semibold tracking-[-0.05em] text-[#101827]">831</div>
+                  </div>
+                  <div className="rounded-2xl bg-[#F4F9F5] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[#728094]">Excused</div>
+                    <div className="mt-2 text-[22px] font-semibold tracking-[-0.05em] text-[#101827]">92</div>
+                  </div>
+                  <div className="rounded-2xl bg-[#FFF7F2] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[#728094]">Late</div>
+                    <div className="mt-2 text-[22px] font-semibold tracking-[-0.05em] text-[#101827]">26</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div className="rounded-[28px] border border-[#E9EEF5] bg-white/90 p-4 shadow-[0_18px_35px_rgba(15,23,42,0.05)]">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[12px] uppercase tracking-[0.2em] text-[#7A8190]">Recent activity</p>
+                    <ArrowUpRight className="h-4 w-4 text-[#788294]" />
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {notifications.map(({ title, time, status }) => (
+                      <div key={title} className="flex items-center justify-between rounded-2xl bg-[#F7F9FC] px-3 py-2.5 transition-transform duration-300 hover:-translate-y-0.5">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex h-7 w-7 items-center justify-center rounded-full ${
+                              status === 'success' ? 'bg-[#EAF8F1] text-[#1CB26C]' : 'bg-[#EEF3F9] text-[#5B697A]'
+                            }`}
+                          >
+                            {status === 'success' ? <Check className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3 fill-current" />}
+                          </span>
+                          <div>
+                            <div className="text-[13px] font-medium text-[#171A1F]">{title}</div>
+                            <div className="text-[11px] text-[#748094]">{time}</div>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-[#8A94A4]" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-[#E9EEF5] bg-[#101827] p-4 text-white shadow-[0_18px_35px_rgba(15,23,42,0.16)]">
+                  <div className="flex items-center justify-between text-[12px] uppercase tracking-[0.18em] text-white/60">
+                    <span>Today</span>
+                    <span>3 classes</span>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {classes.map((item) => (
+                      <div key={item.name} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[15px] font-medium text-white">{item.name}</div>
+                            <div className="mt-1 text-[12px] text-white/65">{item.room}</div>
+                          </div>
+                          <div className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-medium text-white/80">{item.time}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-white/5 px-3 py-2 text-[12px] text-white/75">
+                    <span className="inline-flex items-center gap-2"><Clock3 className="h-3.5 w-3.5" /> Next check-in</span>
+                    <span className="font-medium text-white">09:25</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
         </div>
       </div>
+      <style>{`
+        @keyframes rise {
+          0% { transform: scaleY(0.6); opacity: 0; }
+          100% { transform: scaleY(1); opacity: 1; }
+        }
+      `}</style>
     </BrowserFrame>
   )
 }
