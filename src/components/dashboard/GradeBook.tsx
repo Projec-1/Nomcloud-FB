@@ -8,7 +8,6 @@ import Button from '@/components/ui/Button'
 import Avatar from '@/components/ui/Avatar'
 import EmptyState from '@/components/ui/EmptyState'
 import type { SchoolClass } from '@/types'
-import { CURRENT_TERM } from '@/data/mockData'
 import { cn } from '@/utils/cn'
 
 const assessmentTypes = ['CAT 1', 'CAT 2', 'Mid-Term Exam', 'End-Term Exam', 'Assignment']
@@ -31,7 +30,7 @@ function gradeTone(grade: string) {
 }
 
 export default function GradeBook({ classes, recordedBy }: { classes: SchoolClass[]; recordedBy: string }) {
-  const { students, grades, addGrade, updateGrade } = useData()
+  const { students, grades, addGrade, updateGrade, currentTerm } = useData()
   const { showToast } = useToast()
 
   const [classId, setClassId] = useState(classes[0]?.id ?? '')
@@ -54,7 +53,7 @@ export default function GradeBook({ classes, recordedBy }: { classes: SchoolClas
     const next: Record<string, string> = {}
     classStudents.forEach((s) => {
       const existing = grades.find(
-        (g) => g.studentId === s.id && g.classId === classId && g.subject === subject && g.assessment === assessment && g.term === CURRENT_TERM,
+        (g) => g.studentId === s.id && g.classId === classId && g.subject === subject && g.assessment === assessment && g.term === currentTerm,
       )
       next[s.id] = existing ? String(existing.score) : ''
     })
@@ -70,7 +69,7 @@ export default function GradeBook({ classes, recordedBy }: { classes: SchoolClas
       if (raw === undefined || raw === '') return
       const score = Math.max(0, Math.min(100, Number(raw)))
       const existing = grades.find(
-        (g) => g.studentId === s.id && g.classId === classId && g.subject === subject && g.assessment === assessment && g.term === CURRENT_TERM,
+        (g) => g.studentId === s.id && g.classId === classId && g.subject === subject && g.assessment === assessment && g.term === currentTerm,
       )
       count += 1
       if (existing) {
@@ -80,7 +79,7 @@ export default function GradeBook({ classes, recordedBy }: { classes: SchoolClas
           studentId: s.id,
           classId,
           subject,
-          term: CURRENT_TERM,
+          term: currentTerm,
           assessment,
           score,
           maxScore: 100,

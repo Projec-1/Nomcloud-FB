@@ -10,7 +10,6 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Input from '@/components/ui/Input'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
-import { CURRENT_TERM } from '@/data/mockData'
 import type { Exam } from '@/types'
 import type { FieldErrors } from '@/utils/validators'
 import { minLength } from '@/utils/validators'
@@ -19,7 +18,7 @@ import { formatDate } from '@/utils/format'
 const emptyForm = { name: '', classId: '', subject: '', date: '', startTime: '08:00', duration: '90', maxScore: '100', room: '' }
 
 export default function AdminExams() {
-  const { classes, exams, addExam, updateExam, deleteExam } = useData()
+  const { classes, exams, addExam, updateExam, deleteExam, currentTerm } = useData()
   const { showToast } = useToast()
 
   const [classFilter, setClassFilter] = useState('all')
@@ -77,7 +76,7 @@ export default function AdminExams() {
       startTime: form.startTime,
       duration: Number(form.duration) || 60,
       maxScore: Number(form.maxScore) || 100,
-      term: CURRENT_TERM,
+      term: currentTerm,
       status: new Date(form.date) < new Date() ? ('completed' as const) : ('scheduled' as const),
       room: form.room,
     }

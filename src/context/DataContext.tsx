@@ -95,6 +95,8 @@ function loadState(): SchoolDataState {
 
 interface DataContextValue extends SchoolDataState {
   scopeKey: typeof scopeKey
+  /** Active term. Served from the seed for now; will derive from the active academic year later. */
+  currentTerm: string
   resetDemoData: () => void
   // Students
   addStudent: (data: Omit<Student, 'id' | 'avatarColor' | 'status' | 'enrolledDate'> & { newParent?: { name: string; email: string; phone: string } }) => Student
@@ -538,6 +540,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     () => ({
       ...state,
       scopeKey,
+      currentTerm: seed.CURRENT_TERM,
       resetDemoData,
       addStudent,
       updateStudent,

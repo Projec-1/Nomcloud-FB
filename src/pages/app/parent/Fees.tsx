@@ -16,7 +16,6 @@ import { cn } from '@/utils/cn'
 import type { FeeRecord, FeeStatus } from '@/types'
 import { formatCurrency, formatDate } from '@/utils/format'
 import { downloadReceiptImage } from '@/utils/receipt'
-import { schoolSettings } from '@/data/mockData'
 
 const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
   paid: 'success',
@@ -36,7 +35,7 @@ const paymentOptions: { value: PaymentMethod; label: string; description: string
 ]
 
 export default function ParentFees() {
-  const { classes, fees, recordPayment } = useData()
+  const { classes, fees, recordPayment, settings } = useData()
   const { currentUser } = useAuth()
   const { showToast } = useToast()
   const { children, selectedChild, selectChild } = useSelectedChild()
@@ -90,7 +89,7 @@ export default function ParentFees() {
     if (!lastReceipt || !selectedChild) return
     downloadReceiptImage({
       reference: lastReceipt.reference,
-      schoolName: schoolSettings.name,
+      schoolName: settings.name,
       studentName: selectedChild.name,
       category: lastReceipt.category,
       amount: lastReceipt.amount,

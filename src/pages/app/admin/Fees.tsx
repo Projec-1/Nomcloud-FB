@@ -16,7 +16,6 @@ import EmptyState from '@/components/ui/EmptyState'
 import Avatar from '@/components/ui/Avatar'
 import type { FeeRecord, FeeStatus } from '@/types'
 import { formatCurrency, formatCurrencyPrecise, formatDate } from '@/utils/format'
-import { CURRENT_TERM, schoolSettings } from '@/data/mockData'
 
 const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
   paid: 'success',
@@ -28,7 +27,7 @@ const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'
 const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })
 
 export default function AdminFees() {
-  const { fees, students, classes, parents, recordPayment, createThread } = useData()
+  const { fees, students, classes, parents, recordPayment, createThread, currentTerm, settings } = useData()
   const { currentUser } = useAuth()
   const { showToast } = useToast()
 
@@ -103,7 +102,7 @@ export default function AdminFees() {
   const openReminder = () => {
     setReminderMonth(currentMonthName)
     setReminderMessage(
-      `Dear parent, this is a reminder that your child's school fees for ${currentMonthName} are outstanding at ${schoolSettings.name}. Kindly settle the balance at your earliest convenience via the parent app. Thank you.`,
+      `Dear parent, this is a reminder that your child's school fees for ${currentMonthName} are outstanding at ${settings.name}. Kindly settle the balance at your earliest convenience via the parent app. Thank you.`,
     )
     setReminderOpen(true)
   }
@@ -136,7 +135,7 @@ export default function AdminFees() {
   }
 
   const statementStudent = students.find((s) => s.id === statementTarget)
-  const statementFees = statementStudent ? fees.filter((f) => f.studentId === statementStudent.id && f.term === CURRENT_TERM) : []
+  const statementFees = statementStudent ? fees.filter((f) => f.studentId === statementStudent.id && f.term === currentTerm) : []
   const payable = statementFees.reduce((sum, f) => sum + f.amount, 0)
   const paidSoFar = statementFees.reduce((sum, f) => sum + f.amountPaid, 0)
   const debitBalance = Math.max(0, payable - paidSoFar)
@@ -291,7 +290,7 @@ export default function AdminFees() {
               <div>
                 <p className="font-semibold text-ink dark:text-white">{statementStudent.name}</p>
                 <p className="text-xs font-semibold uppercase tracking-wider text-graphite">
-                  Billing Term: {CURRENT_TERM.toUpperCase()} {new Date().getFullYear()}
+                  Billing Term: {currentTerm.toUpperCase()} {new Date().getFullYear()}
                 </p>
               </div>
             </div>
