@@ -23,6 +23,7 @@ import type {
 } from '@/types'
 import * as seed from '@/data/mockData'
 import { makeId } from '@/utils/id'
+import { AVATAR_COLORS } from '@/constants/avatarColors'
 
 const STORAGE_KEY = 'nomcloud_school_data_v2'
 
@@ -181,7 +182,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           email: data.newParent.email,
           phone: data.newParent.phone,
           studentIds: [],
-          avatarColor: seed.AVATAR_COLORS[parents.length % seed.AVATAR_COLORS.length],
+          avatarColor: AVATAR_COLORS[parents.length % AVATAR_COLORS.length],
         }
         parentId = newParent.id
         parents = [...parents, newParent]
@@ -196,7 +197,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         dateOfBirth: data.dateOfBirth,
         status: 'active',
         enrolledDate: new Date().toISOString().slice(0, 10),
-        avatarColor: seed.AVATAR_COLORS[prev.students.length % seed.AVATAR_COLORS.length],
+        avatarColor: AVATAR_COLORS[prev.students.length % AVATAR_COLORS.length],
       }
       return {
         ...prev,
@@ -240,7 +241,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       classIds: [],
       status: 'active',
       joinedDate: new Date().toISOString().slice(0, 10),
-      avatarColor: seed.AVATAR_COLORS[state.teachers.length % seed.AVATAR_COLORS.length],
+      avatarColor: AVATAR_COLORS[state.teachers.length % AVATAR_COLORS.length],
     }
     setState((prev) => ({ ...prev, teachers: [...prev.teachers, newTeacher] }))
     return newTeacher
@@ -275,7 +276,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ...data,
       id: makeId('p'),
       studentIds: [],
-      avatarColor: seed.AVATAR_COLORS[state.parents.length % seed.AVATAR_COLORS.length],
+      avatarColor: AVATAR_COLORS[state.parents.length % AVATAR_COLORS.length],
     }
     setState((prev) => ({ ...prev, parents: [...prev.parents, newParent] }))
     return newParent

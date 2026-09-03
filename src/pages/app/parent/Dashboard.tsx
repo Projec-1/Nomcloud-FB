@@ -8,7 +8,7 @@ import StatCard from '@/components/ui/StatCard'
 import ChildSwitcher from '@/components/dashboard/ChildSwitcher'
 import EmptyState from '@/components/ui/EmptyState'
 import Badge from '@/components/ui/Badge'
-import { schoolDays } from '@/data/mockData'
+import { schoolDays } from '@/utils/schoolCalendar'
 import { formatCurrency, formatDate, percentage } from '@/utils/format'
 
 export default function ParentDashboard() {

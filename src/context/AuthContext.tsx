@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AuthUser, Role } from '@/types'
-import { teachers as seedTeachers, parents as seedParents, AVATAR_COLORS, schoolSettings } from '@/data/mockData'
+import { teachers as seedTeachers, parents as seedParents, schoolSettings } from '@/data/mockData'
+import { AVATAR_COLORS } from '@/constants/avatarColors'
 import { makeId } from '@/utils/id'
 import { useData } from '@/context/DataContext'
 

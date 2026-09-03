@@ -10,7 +10,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import Modal from '@/components/ui/Modal'
 import Avatar from '@/components/ui/Avatar'
 import { WEEKDAYS } from '@/components/dashboard/TimetableGrid'
-import { schoolDays } from '@/data/mockData'
+import { schoolDays } from '@/utils/schoolCalendar'
 import { formatDate, percentage } from '@/utils/format'
 import type { Weekday } from '@/types'
 

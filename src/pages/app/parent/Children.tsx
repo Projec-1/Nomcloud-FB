@@ -7,7 +7,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import { formatDate, percentage } from '@/utils/format'
-import { schoolDays } from '@/data/mockData'
+import { schoolDays } from '@/utils/schoolCalendar'
 
 export default function ParentChildren() {
   const { classes, attendance, grades, fees } = useData()

@@ -8,7 +8,7 @@ import Button from '@/components/ui/Button'
 import Avatar from '@/components/ui/Avatar'
 import EmptyState from '@/components/ui/EmptyState'
 import type { AttendanceStatus, SchoolClass } from '@/types'
-import { schoolDays } from '@/data/mockData'
+import { schoolDays } from '@/utils/schoolCalendar'
 import { cn } from '@/utils/cn'
 
 const statusConfig: Record<AttendanceStatus, { label: string; icon: typeof Check; tone: string }> = {

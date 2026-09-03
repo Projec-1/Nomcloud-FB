@@ -7,7 +7,7 @@ import Tabs from '@/components/ui/Tabs'
 import Button from '@/components/ui/Button'
 import Avatar from '@/components/ui/Avatar'
 import { formatCurrency, percentage } from '@/utils/format'
-import { schoolDays } from '@/data/mockData'
+import { schoolDays } from '@/utils/schoolCalendar'
 
 type ReportTab = 'attendance' | 'academic' | 'financial' | 'students' | 'teachers' | 'monthly'
 

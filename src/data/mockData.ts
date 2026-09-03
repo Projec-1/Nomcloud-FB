@@ -16,21 +16,8 @@ import type {
   Student,
   Teacher,
 } from '@/types'
-
-export const AVATAR_COLORS = [
-  '#FF5A1F',
-  '#0071E3',
-  '#34A853',
-  '#A855F7',
-  '#F59E0B',
-  '#EC4899',
-  '#14B8A6',
-  '#6366F1',
-]
-
-function colorFor(index: number) {
-  return AVATAR_COLORS[index % AVATAR_COLORS.length]
-}
+import { colorFor } from '@/constants/avatarColors'
+import { schoolDays } from '@/utils/schoolCalendar'
 
 // ---------------------------------------------------------------------------
 // Academic years
@@ -214,21 +201,6 @@ classes.forEach((cls, classIdx) => {
 // ---------------------------------------------------------------------------
 // Attendance — last 12 school days across all classes
 // ---------------------------------------------------------------------------
-function lastSchoolDays(count: number): string[] {
-  const days: string[] = []
-  const d = new Date()
-  while (days.length < count) {
-    const day = d.getDay()
-    if (day !== 0 && day !== 6) {
-      days.unshift(d.toISOString().slice(0, 10))
-    }
-    d.setDate(d.getDate() - 1)
-  }
-  return days
-}
-
-export const schoolDays = lastSchoolDays(12)
-
 export const attendanceRecords: AttendanceRecord[] = []
 let attendanceCounter = 0
 const statusCycle: AttendanceStatus[] = ['present', 'present', 'present', 'present', 'present', 'late', 'absent', 'present', 'present', 'excused']

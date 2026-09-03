@@ -25,7 +25,7 @@ import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
 import Button from '@/components/ui/Button'
 import { formatCurrency, percentage, timeAgo } from '@/utils/format'
-import { schoolDays } from '@/data/mockData'
+import { schoolDays } from '@/utils/schoolCalendar'
 import type { AnnouncementAudience } from '@/types'
 
 type QuickAction = 'student' | 'teacher' | 'announcement' | null
