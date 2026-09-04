@@ -23,6 +23,7 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000003_identity` | **04** | `profiles`, `platform_admins`, `memberships`, `invitations`; the one-school composite FK; the FK owed from 02 | Applied |
 | `20260904000004_school_applications` | **05** | `school_applications` (PLATFORM-LEVEL, no `school_id`); both FKs land in one step | Applied |
 | `20260904000005_academic_structure` | **06** | `academic_years`, `terms`, `subjects` — first SCHOOL-OWNED migration. Does not touch `schools` | Applied |
+| `20260904000006_people` | **07** | `teachers`, `guardians`, `students`, `student_guardians`; **settles the four composite FKs owed since 04** | Applied |
 
 ### Correction to an applied file's header
 
@@ -36,7 +37,6 @@ drop — remains accurate.
 
 | Design # | Migration | Contents |
 |---|---|---|
-| 07 | `people` | `teachers`, `guardians`, `students`, `student_guardians` |
 | 08 | `classes_and_timetable` | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` |
 | 09 | `teaching_records` | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` |
 | 10 | `finance` | `fee_records`, `fee_payments` + `amount_paid` trigger |
@@ -52,21 +52,23 @@ Two amendments changed this plan from its original form:
 
 ## Outstanding, carried across migrations
 
-**Owed by Migration 07 (`people`) — four composite FKs, all `ON DELETE CASCADE`.** `teachers` and
-`guardians` do not exist until 07, so Migration 04 created the columns and the positive
-role/identity CHECK but could not create these. Until they are added, `teacher_id` and
-`guardian_id` accept any uuid.
+**Nothing is currently outstanding.** Every deferred constraint has been settled.
 
-| # | Source | Target | Authority |
-|---|---|---|---|
-| 1 | `memberships (school_id, teacher_id)` | `teachers (school_id, id)` | §13 row 11, §16 |
-| 2 | `memberships (school_id, guardian_id)` | `guardians (school_id, id)` | §13 row 12, §16 |
-| 3 | `invitations (school_id, teacher_id)` | `teachers (school_id, id)` | §13 row 15, §17 |
-| 4 | `invitations (school_id, guardian_id)` | `guardians (school_id, id)` | §13 row 16, §17 |
+### Settled
 
-Each needs `UNIQUE (school_id, id)` on `teachers` and on `guardians` as the composite-FK target,
-exactly as `profiles` carries `UNIQUE (id, school_id)`.
+- **The four composite FKs owed since Migration 04** were added by **Migration 07**, all
+  `ON DELETE CASCADE`, all verified `col_count = 2` in the live catalog:
+  `memberships (school_id, teacher_id) → teachers (school_id, id)` (§13 row 11, §16);
+  `memberships (school_id, guardian_id) → guardians (school_id, id)` (row 12, §16);
+  `invitations (school_id, teacher_id) → teachers (school_id, id)` (row 15, §17);
+  `invitations (school_id, guardian_id) → guardians (school_id, id)` (row 16, §17).
+  `teachers` and `guardians` each carry `UNIQUE (school_id, id)` as the target.
+- `contact_messages.handled_by → profiles(id) ON DELETE SET NULL` was added by **Migration 04**.
 
-**Settled.** `contact_messages.handled_by → profiles(id) ON DELETE SET NULL` was added by
-Migration 04. `contact_messages.status` remains plain `text NOT NULL DEFAULT 'new'` with **no
-vocabulary constraint**, deliberately, until one is approved.
+### Deliberately unconstrained
+
+Two `status` columns are plain `text` with no CHECK, because the design defines no vocabulary for
+them. A CHECK is added only where the design enumerates the values.
+
+- `contact_messages.status` — `NOT NULL DEFAULT 'new'`
+- `guardians.status` — `NOT NULL DEFAULT 'active'`
