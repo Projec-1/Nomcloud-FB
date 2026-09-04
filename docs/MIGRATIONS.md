@@ -22,6 +22,7 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000002_schools` | **03** | `schools` (TENANT ROOT, zero outbound FKs), `school_subscriptions`; `reject_reserved_shortcode()` guard | Applied |
 | `20260904000003_identity` | **04** | `profiles`, `platform_admins`, `memberships`, `invitations`; the one-school composite FK; the FK owed from 02 | Applied |
 | `20260904000004_school_applications` | **05** | `school_applications` (PLATFORM-LEVEL, no `school_id`); both FKs land in one step | Applied |
+| `20260904000005_academic_structure` | **06** | `academic_years`, `terms`, `subjects` — first SCHOOL-OWNED migration. Does not touch `schools` | Applied |
 
 ### Correction to an applied file's header
 
@@ -35,7 +36,6 @@ drop — remains accurate.
 
 | Design # | Migration | Contents |
 |---|---|---|
-| 06 | `academic_structure` | `academic_years`, `terms`, `subjects` |
 | 07 | `people` | `teachers`, `guardians`, `students`, `student_guardians` |
 | 08 | `classes_and_timetable` | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` |
 | 09 | `teaching_records` | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` |
