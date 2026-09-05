@@ -29,6 +29,8 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000009_teaching_records` | **09** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams`; five RESTRICTs protecting academic history | Applied |
 | `20260904000010_finance` | **10** | `fee_records`, `fee_payments`, and `sync_fee_record_amount_paid()` — the first business-logic trigger | Applied |
 | `20260904000011_index_fee_payments_fee_record` | **CORRECTIVE** — corrects 10 | Added `fee_payments_school_id_fee_record_id_idx`, the access path the `amount_paid` trigger queries on every payment write | Applied |
+| `20260904000012_communication_and_audit` | **11** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages`, `audit_logs`; access-granting composite user references and append-only audit snapshots | Applied |
+| `20260905000001_revoke_audit_log_mutation` | **CORRECTIVE** — corrects 11 | Revoked UPDATE and DELETE on `audit_logs` from `anon`, `authenticated`, and `service_role`, preserving insert-only application access | Applied |
 
 ### Correction to an applied file's header
 
@@ -40,9 +42,8 @@ drop — remains accurate.
 
 ## Planned (design §I, as amended)
 
-| Design # | Migration | Contents |
-|---|---|---|
-| 11 | `communication_and_audit` | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages`, `audit_logs` |
+**None — the Phase 3 migration plan is complete.** Design migrations 01–11 and all
+three corrective migrations are applied and verified.
 
 Two amendments changed this plan from its original form:
 
