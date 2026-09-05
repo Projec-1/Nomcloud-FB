@@ -28,6 +28,7 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000008_classes_and_timetable` | **08** | `classes`, `class_subjects`, `class_enrollments` (time-scoped), `timetable_slots`; first migration written under the scoped-SET-NULL rule | Applied |
 | `20260904000009_teaching_records` | **09** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams`; five RESTRICTs protecting academic history | Applied |
 | `20260904000010_finance` | **10** | `fee_records`, `fee_payments`, and `sync_fee_record_amount_paid()` — the first business-logic trigger | Applied |
+| `20260904000011_index_fee_payments_fee_record` | **CORRECTIVE** — corrects 10 | Added `fee_payments_school_id_fee_record_id_idx`, the access path the `amount_paid` trigger queries on every payment write | Applied |
 
 ### Correction to an applied file's header
 
@@ -99,6 +100,32 @@ Related: **`fee_records.amount_paid` is maintained by `sync_fee_record_amount_pa
 written by the application. An overpayment is rejected by `amount_paid <= amount` (verified:
 SQLSTATE 23514), and a `fee_records` row with payments against it cannot be deleted (verified:
 SQLSTATE 23503, `ON DELETE RESTRICT`).
+
+**Settled — the trigger's access path.** That trigger sums
+`WHERE school_id = $1 AND fee_record_id = $2` on every payment write. PostgreSQL indexes only the
+*referenced* side of a foreign key, so no index covered it and each write planned a sequential
+scan. `20260904000011` added `fee_payments_school_id_fee_record_id_idx`; the planner now chooses
+it, with both columns in the Index Cond. The same predicate serves the "all payments against this
+fee" read.
+
+### Payment events — deferred to Phase 11
+
+Recorded verbatim in `20260904000010_finance.sql`: *"payment_events (provider event id, event
+type, received_at, verification status, processed_at, idempotency guard) is DEFERRED from Phase 3
+and REQUIRED before production payment integration in Phase 11."* Nothing blocks adding it —
+`fee_payments.external_ref` is already the unconstrained join point, and no unique constraint would
+collide with a later idempotency key. **One prerequisite:** amendment §11 has `payment_events`
+referencing `fee_payments (school_id, id)` compositely, so Phase 11 must first add
+`UNIQUE (school_id, id)` to `fee_payments`.
+
+### No secrets are stored
+
+The finance layer holds **no credential fields** — no API secrets, private keys, passwords,
+signing secrets or raw provider credentials. `reference` and `external_ref` are ordinary
+transaction identifiers, not secrets. Schema-wide, the only credential-adjacent column is
+`invitations.token_hash`, which stores a **hash** and never the token itself, so a database dump
+yields no working invites. Credentials live in Supabase Auth; the application schema never carries
+a `password` or `password_hash` column.
 
 ### Deliberately unconstrained
 
