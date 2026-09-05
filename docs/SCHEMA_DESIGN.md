@@ -567,6 +567,90 @@ Promotes the frontend's embedded `HomeworkSubmission[]` array into rows — nece
 
 ---
 
+# §D. ENTITY RELATIONSHIP SUMMARY
+
+```
+PLATFORM
+  subscription_plans 1 ──< school_subscriptions >── 1 schools
+  reserved_shortcodes (standalone guard)
+  school_applications 0..1 ──> 1 schools        (approved_school_id)
+  contact_messages (standalone)
+  platform_admins >── 1 profiles
+
+IDENTITY
+  auth.users 1 ──1 profiles 1 ──< memberships >── 1 schools
+  memberships 0..1 ──> teachers | guardians
+  invitations >── 1 schools
+
+SCHOOL (all rows carry school_id)
+  schools 1 ──< academic_years 1 ──< terms
+  schools 1 ──< subjects, teachers, guardians, students, classes
+
+  students   M ──< student_guardians >── M guardians      (many-to-many)
+  students   M ──< class_enrollments >── M classes        (time-scoped, per year)
+  classes    M ──< class_subjects    >── M subjects
+  classes    1 ──< timetable_slots   >── 0..1 teachers
+
+  students 1 ──< attendance_records  (1 per student per day)
+  students 1 ──< grade_records       >── 1 subjects, 1 terms
+  classes  1 ──< homework 1 ──< homework_submissions >── 1 students
+  classes  1 ──< exams
+  students 1 ──< fee_records 1 ──< fee_payments
+
+  schools  1 ──< announcements, notifications
+  schools  1 ──< message_threads 1 ──< messages
+  message_threads M ──< message_thread_participants >── M profiles
+
+  audit_logs 0..1 ──> schools (NULL = platform action)
+```
+
+**Cardinality changes from the frontend:** student↔guardian becomes M:M (was 1:M); student↔class becomes M:M-over-time (was 1:1); homework submissions become rows (were an embedded array).
+
+> ⚠ **Amendment note.** The IDENTITY block reads `profiles 1 ──< memberships >── 1 schools`. Under
+> Amendment §2 a `profiles` row belongs to exactly **one** school, so the many-side of `memberships`
+> is now **many roles at one school**, not many schools. `profiles` also gained `school_id`, which
+> this diagram predates. §13 is authoritative over this diagram wherever they differ.
+
+---
+
+# §E. FRONTEND FIELD MAPPING
+
+> Cited correctly here. Several Phase 3 prompts used "§E" to mean the `audit_logs` design; that is §H.
+
+## Maps cleanly — direct, no transformation
+
+`Teacher` (name, email, phone, status, joinedDate) · `Parent` → `guardians` (name, email, phone) · `Student` (name, admissionNo, gender, dateOfBirth, status, enrolledDate) · `SchoolClass` (name, grade, section, capacity, room) · `AttendanceRecord` (date, status, note) · `GradeRecord` (score, maxScore, assessment, comment) · `Homework` (title, description, assignedDate, dueDate) · `Exam` (name, date, startTime, duration, maxScore, status, room) · `FeeRecord` (category, amount, dueDate) · `FeePayment` (amount, date, method, reference) · `Announcement` (title, body, audience, priority, pinned) · `ChatMessage` (body, date) · most of `SchoolSettings`.
+
+## Does **not** map cleanly — requires transformation
+
+| Frontend | Problem | Resolution |
+|---|---|---|
+| `Student.parentId: string` | Single guardian | → `student_guardians` M:M |
+| `Parent.studentIds: string[]` | Array FK | → `student_guardians` rows |
+| `Student.classId: string` | No year dimension; loses history | → `class_enrollments` |
+| `SchoolClass.studentIds: string[]` | Array FK | → `class_enrollments` |
+| `SchoolClass.subject: string[]` | Free-text array | → `class_subjects` + `subjects` |
+| `Teacher.classIds: string[]` | Array FK | → `class_subjects` / `classes.class_teacher_id` |
+| `*.subject: string` (6 types) | Free text; typos fragment reports | → `subject_id` FK |
+| `*.term: string` (`'Term 1'`) | Free text | → `term_id` FK |
+| `Homework.submissions[]` | Embedded array | → `homework_submissions` rows (required for per-student RLS) |
+| `TimetableSlot.day: 'Monday'…'Friday'` | English string union; Mon–Fri only | → `day_of_week smallint` 1–7 |
+| `MessageThread.participantIds/Names[]` | Parallel arrays | → `message_thread_participants` |
+| `NotificationItem.userId: 'parent:p3'` | Synthetic composite string | → real `user_id` uuid FK |
+| `AuthUser.{schoolId,teacherId,parentId}` | Flattened onto the user | → `memberships` |
+| `SchoolSettings.logoDataUrl` | base64 in state | → `logo_path` + Supabase Storage |
+| `Homework.attachments: number` | A count, not the files | → attachments table + Storage (Phase 10) |
+| `AcademicYear.terms[]` | Nested array | → `terms` rows |
+
+> ⚠ **Two rows added by Amendment §18**, which lists them as additive to this section:
+>
+> | Frontend | Problem | Resolution |
+> |---|---|---|
+> | `SchoolSettings.academicYearId` | Was a stored pointer on `schools` | → **derived lookup**: the `academic_years` row for this school with `status='active'` (§14) |
+> | `AuthUser.schoolId` | Hardcoded constant | → resolves from `profiles.school_id` (§2). `StoredUser.password` has **no destination by design** (§7) |
+
+---
+
 # §F. FRONTEND DATA THAT SHOULD **NOT** BE PERSISTED
 
 | Item | Why not | Instead |
@@ -582,6 +666,28 @@ Promotes the frontend's embedded `HomeworkSubmission[]` array into rows — nece
 | `avatarColor` | Pure presentation | Derive deterministically from `id` hash — **recommended**; storing it is defensible for stability, but it is 34 bytes of design system in every people row |
 | `schoolDays` | A computed function, not data | `weekend_days` + calendar util |
 | `nomcloud_school_data_v2` blob | Entire client-side DB | Deleted at Phase 8 |
+
+---
+
+# §G. ROADMAP REQUIREMENTS THE FRONTEND LACKS ENTIRELY
+
+| Need | Roadmap | Schema impact |
+|---|---|---|
+| Tenant isolation | 6, 7 | `memberships`, `school_id` everywhere, composite FKs |
+| Approval workflow | 20 | `school_applications`, `schools.status` |
+| Invitations | 4, 5 | `invitations` — the frontend *promises* this in UI copy but has no mechanism |
+| MFA | security | Supabase `auth.mfa_factors` — not modelled by us |
+| Audit logging | security | `audit_logs` (§H) |
+| Subscriptions / billing | 11 | `subscription_plans`, `school_subscriptions` |
+| File storage | 10 | `logo_path`, `photo_path`, future `attachments` |
+| Notifications delivery | 12 | Future `notification_deliveries`, `device_tokens` |
+| Subjects as entities | — | `subjects` |
+| Per-year class history | — | `class_enrollments` |
+| Multi-guardian | — | `student_guardians` |
+| Teacher double-booking prevention | — | partial unique on `timetable_slots` |
+| Reserved subdomains | 1 | `reserved_shortcodes` |
+| Consent / policy acceptance | 17 | **Deferred** — flagged in §J |
+| Analytics / AI | 13, 14 | **Deferred** — no tables yet, by design |
 
 ---
 
@@ -647,6 +753,51 @@ Promotes the frontend's embedded `HomeworkSubmission[]` array into rows — nece
 **Explicitly NOT in this plan: RLS policies.** They belong to **Phase 7** as their own migration series, applied after the schema is stable and verified.
 
 ⚠ **Amendment §14 changed 03 and 06:** 03 creates `schools` complete with no deferred column and no outbound FKs; 06 creates the academic tables only and **does not touch `schools`**. The word "deferrable" no longer appears anywhere in the design.
+
+---
+
+# §J. RISKS, AMBIGUITIES, ASSUMPTIONS
+
+## Risks
+
+1. **Composite FKs add real cost.** Every school-owned child needs `UNIQUE (school_id, id)` on its parent — ~15 extra unique indexes, more write amplification, more verbose DDL. **I judge this worth it**: it converts cross-tenant leakage from a policy-review problem into a structural impossibility. If you disagree, the fallback is single-column FKs plus a Phase 16 test suite proving isolation — weaker, but cheaper.
+
+2. **Denormalised `school_id` can drift** if any write path forgets it. Mitigated by composite FKs and `NOT NULL`, but a BEFORE INSERT trigger deriving `school_id` from the parent would be belt-and-braces. I lean toward not adding it (triggers hide behaviour) — flagging for your call.
+
+3. **`audit_logs` growth is unbounded.** Without partitioning and a retention policy it becomes the largest table within a year. Needs a decision before Phase 19.
+
+4. **`attendance_records` volume** is the main scale risk: ~40k rows/school/year. At 100 schools that is 4M rows/year — fine for Postgres, but only with the composite indexes specified.
+
+5. **The subdomain-as-authorisation trap.** `{shortcode}.class.so` makes it tempting to derive tenancy from the Host header. Anyone can send any Host header. RLS must read the verified JWT claim only. This is the single most likely security mistake in Phase 6/7.
+
+## Ambiguities resolved in the design (flagged in case you disagree)
+
+- **`parents` → `guardians`.** A naming change from the frontend, made now because renaming post-launch touches every layer.
+- **One attendance row per student per day.** Matches the frontend. Per-period attendance would need `(student_id, date, period)` — a change that is cheap now and expensive after data exists.
+  > This is the caveat §C table 23 refers to with "See §J for the per-period caveat."
+- **No `deleted_at` anywhere.** Lifecycle `status` columns plus `audit_logs` cover it, and soft-delete would force every unique constraint to become partial and every RLS policy to carry an extra predicate.
+- **`grade` letter and `fee status` not stored.** Both derived. The counter-argument — historical report cards must not change when a school edits its grading scale — is addressed by snapshotting at issuance rather than storing per row.
+
+## Assumptions stated plainly
+
+- Supabase Auth owns credentials and MFA; `auth.users` is not ours to model.
+- One database, one `public` schema, shared by all tenants — per your constraint.
+- Students do not receive logins (no `user_id` on `students`). If student portals are ever planned, say so now — it changes `memberships` and several policies.
+- ⚠ ~~A person may hold roles at multiple schools; the active school comes from a verified JWT claim, not the subdomain.~~
+  **VOID — SUPERSEDED BY AMENDMENT §2.** V1 is **one human, one school**. A person may hold multiple
+  roles at the **same** school only. The second half of the sentence still stands: the active school
+  comes from a verified JWT claim, never the subdomain.
+- Currency is per school, single-currency. Multi-currency schools would need it per fee record.
+- `/staff` in the URL scheme maps to role `teacher`. Worth confirming the vocabulary split is intentional — two names for one concept is a durable source of confusion.
+
+## What could not be decided from the repository
+
+Two items genuinely lack evidence, and both are Phase 17 compliance concerns rather than Phase 3 blockers:
+
+1. **Data retention periods** — how long attendance, grades, and audit logs must be kept. This is a legal/regulatory question about Somali and future jurisdictions that the repo cannot answer. §10 specifies what the schema must *support* so durations can be configured later without schema change.
+2. **Consent records** — the frontend has a cookie banner and legal pages, but nothing captures per-user acceptance of Terms/Privacy with a version and timestamp. If compliance requires provable consent, that is a `policy_acceptances` table. It is **not** included, because guessing at a compliance requirement is worse than naming the gap.
+
+Both are restated as the two open non-blocking items in the Amendment §18 verdict.
 
 ---
 
@@ -1129,18 +1280,37 @@ must be created explicitly — as corrective `20260904000011` did for
 
 ---
 
-# SECTIONS NOT EXPORTED
+# EXPORT COMPLETENESS
 
-The following sections of the original design exist in the source transcript but were **not**
-requested for this export and are **not** reproduced here. They are **not lost** — they remain in
-the Phase 3 session transcript. Marked so their absence is visible rather than silent.
+**Every section of the approved design is now exported. Nothing is MISSING.**
 
 | Section | Title | Status |
 |---|---|---|
-| §D | Entity relationship summary | **NOT EXPORTED** — diagrammatic; superseded in practice by §13 |
-| §E | Frontend field mapping (maps cleanly / does not map cleanly) | **NOT EXPORTED** — Phase 8 concern |
-| §G | Roadmap requirements the frontend lacks entirely | **NOT EXPORTED** |
-| §J | Risks, ambiguities, assumptions | **NOT EXPORTED** — contains the `attendance_records` per-period caveat referenced by §C table 23 |
+| §A | Foundations (A.1 conventions, A.2 tenancy, A.3 `current_school_id()`, A.4 status vocabularies) | ✅ Exported |
+| §B | Table inventory — 34 tables with classification | ✅ Exported |
+| §C | Table-by-table detail, tables 1–34 | ✅ Exported |
+| §D | Entity relationship summary | ✅ Exported (second pass) |
+| §E | Frontend field mapping | ✅ Exported (second pass) |
+| §F | Frontend data that should NOT be persisted | ✅ Exported |
+| §G | Roadmap requirements the frontend lacks entirely | ✅ Exported (second pass) |
+| §H | `audit_logs` design | ✅ Exported |
+| §I | Migration file plan — 11 migrations | ✅ Exported |
+| §J | Risks, ambiguities, assumptions | ✅ Exported (second pass) |
+| §1–§18 | All 18 approved amendments | ✅ Exported |
+| §13 | Complete FK audit — all 87 | ✅ Exported |
+| §10 | Data lifecycle classification | ✅ Exported |
+| — | Standing implementation rules (Migrations 01–10) | ✅ Exported |
 
-Nothing in this document is reconstructed or inferred. Every section above is transcribed from the
-approved design and amendment text.
+**Nothing in this document is reconstructed, inferred, redesigned or gap-filled.** Every section is
+transcribed from the approved design and amendment text. Where the original text is superseded by an
+amendment, the original is retained and marked ⚠ rather than deleted, so the provenance of every
+decision stays visible.
+
+**Three passages are marked VOID or superseded in place**, because following them would produce a
+wrong schema:
+
+| Where | What is void | Superseded by |
+|---|---|---|
+| §B closing note | "one human may hold roles at several schools" as the reason `profiles` has no `school_id` | Amendment §2 |
+| §C tables 7, 8, 9, 10, 11 | Original identity columns, membership uniqueness, prohibitive CHECK, invitation SET NULLs, `active_academic_year_id`, subscription default | Amendments §2, §9, §14, §16, §17 |
+| §J assumptions | "A person may hold roles at multiple schools" | Amendment §2 |
