@@ -1184,7 +1184,34 @@ Legend — **C** = composite, **S** = single-column.
 | 86 | `audit_logs.school_id` | `schools.id` | S | SET NULL | Nullable by design (platform actions); TENANT ROOT |
 | 87 | `audit_logs.actor_user_id` | `profiles.id` | S | SET NULL | **Never CASCADE** — the record of what someone did must outlive them; identity preserved via snapshots |
 
-**Total: 87 foreign keys — 35 composite, 52 single-column, every single-column one justified above. The composite strategy is applied completely, with no partial application remaining.**
+**Total: 88 foreign keys — 42 composite, 46 single-column, every single-column one justified above. The composite strategy is applied completely, with no partial application remaining.**
+
+> ### ⚠ Tally corrected — do not re-derive the old numbers
+>
+> This line previously read *"87 foreign keys — 35 composite, 52 single-column"*. All three figures
+> were wrong. **Every individual row above was and remains correct**; only the summary was.
+> Verified against the live database during the Phase 3 closeout audit: **88 / 42 / 46**.
+>
+> **Why the total was one short.** The grouped row label **`19–41` spans 23 numbers but enumerates
+> 24 tables**, and the database holds 24 such foreign keys — one per table listed. The row label is
+> deliberately **left as `19–41`**, because every Phase 3 migration prompt cited that block by that
+> name; renumbering it would break those references. Count the *tables listed*, not the number span.
+> `18 + 24 + 35 + 9 + 2 = 88`.
+>
+> **Why the composite count was seven short.** "35 composite" counted only the *school-owned →
+> school-owned* block (rows 42–76). It omitted the seven composite foreign keys elsewhere in this
+> audit — rows **9, 11, 12, 15, 16** under Identity, and rows **77, 78** under school-owned → user.
+> `35 + 7 = 42`.
+>
+> **Why the single-column count was wrong.** "52" was never counted directly; it was derived as
+> `87 − 35`, inheriting both errors. Counted properly: 13 single-column in rows 1–18, plus the 24 in
+> the `19–41` group, plus 7 in rows 79–85, plus 2 in rows 86–87. `13 + 24 + 7 + 2 = 46`.
+>
+> Cross-checks from the live catalog, all consistent with 88 / 42 / 46: **28** single-column
+> `school_id → schools` foreign keys (the 24 from the group, plus `memberships`, `invitations`,
+> `audit_logs` and `profiles`, which are numbered separately as rows 10, 14, 86 and 8); **3**
+> composite foreign keys targeting `profiles` (rows 9, 77, 78); **15** single-column foreign keys
+> targeting `profiles`.
 
 ---
 

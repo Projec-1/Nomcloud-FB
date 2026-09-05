@@ -31,6 +31,7 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000011_index_fee_payments_fee_record` | **CORRECTIVE** — corrects 10 | Added `fee_payments_school_id_fee_record_id_idx`, the access path the `amount_paid` trigger queries on every payment write | Applied |
 | `20260904000012_communication_and_audit` | **11** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages`, `audit_logs`; access-granting composite user references and append-only audit snapshots | Applied |
 | `20260905000001_revoke_audit_log_mutation` | **CORRECTIVE** — corrects 11 | Revoked UPDATE and DELETE on `audit_logs` from `anon`, `authenticated`, and `service_role`, preserving insert-only application access | Applied |
+| `20260905000002_revoke_audit_log_truncate` | **CORRECTIVE** — extends `20260905000001` | Revoked TRUNCATE on `audit_logs` from the same three roles. §H named only UPDATE and DELETE, but TRUNCATE erases every row in one statement and fires no row-level trigger | Applied |
 
 ### Correction to an applied file's header
 
@@ -40,10 +41,46 @@ authority on migration identity; a header comment inside an applied file is not.
 because it is applied; **this document supersedes its header.** Its body — the reasoning for the
 drop — remains accurate.
 
-## Planned (design §I, as amended)
+## Phase 3 — CLOSED
 
-**None — the Phase 3 migration plan is complete.** Design migrations 01–11 and all
-three corrective migrations are applied and verified.
+**Design migrations 01–11 and all five correctives are applied and verified. Phase 3 is closed.**
+
+Closed out by a full schema audit against the live database: 34 tables, 88 foreign keys
+(42 composite, 46 single-column), 5 scoped composite SET NULLs, 4 enums, 3 functions — all
+`SECURITY INVOKER` with `search_path` pinned — 35 triggers, 111 indexes. Every §13 row matched.
+No credential-bearing column anywhere.
+
+**Two closeout fixes were applied after the audit:**
+
+- `docs/SCHEMA_DESIGN.md` §13's summary tally was corrected from *"87 / 35 / 52"* to **88 / 42 / 46**,
+  with a note recording why the old figures were wrong. No individual row changed, and the `19–41`
+  range label was deliberately left alone because every migration prompt cites that block by name.
+- `20260905000002` revoked TRUNCATE on `audit_logs` — see below.
+
+**Deliberately left as is, to revisit in Phase 15 with real query data:** `attendance_records`
+carries both `..._date_key` (UNIQUE, ASC) and `..._date_idx` (`date DESC`) on the same leading
+columns. The unique index can serve the DESC query by backward scan, so the second is arguably
+redundant — but it is design-specified (§C table 23) and the table is empty, so there is no
+evidence to act on yet.
+
+### Append-only enforcement on `audit_logs` — two findings
+
+**ALTER DEFAULT PRIVILEGES will re-grant TRUNCATE on any future table.** Supabase's platform
+defaults on `public` grant `arwdDxtm` to `anon`, `authenticated` and `service_role`, and **`D` is
+TRUNCATE**. The revoke protects `public.audit_logs` only; it cannot protect a table that does not
+exist yet. **If `payment_events` (deferred, §11) is to be append-only, its Phase 11 migration must
+issue its own `REVOKE UPDATE, DELETE, TRUNCATE`.**
+
+**No other table has this gap.** `audit_logs` is the only append-only table in the design, confirmed
+two ways: it is the only table with no `updated_at` column, and the only table where `anon` cannot
+UPDATE. Separately and more broadly, 33 of 34 tables still allow all three application roles to
+TRUNCATE — that is the general pre-RLS exposure, not an append-only defect, and Phase 7 addresses it
+as a whole. **Not acted on beyond `audit_logs`.**
+
+## Planned
+
+**None for Phase 3.** RLS policies are Phase 7, as their own migration series, applied after the
+schema is stable and verified.
 
 Two amendments changed this plan from its original form:
 
