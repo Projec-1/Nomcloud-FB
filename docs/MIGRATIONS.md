@@ -27,6 +27,7 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000007_fix_composite_set_null_scope` | **CORRECTIVE** — corrects 07 | Re-created `teachers_school_id_primary_subject_id_fkey` with `ON DELETE SET NULL (primary_subject_id)`; plain composite SET NULL blocked the delete with 23502 | Applied |
 | `20260904000008_classes_and_timetable` | **08** | `classes`, `class_subjects`, `class_enrollments` (time-scoped), `timetable_slots`; first migration written under the scoped-SET-NULL rule | Applied |
 | `20260904000009_teaching_records` | **09** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams`; five RESTRICTs protecting academic history | Applied |
+| `20260904000010_finance` | **10** | `fee_records`, `fee_payments`, and `sync_fee_record_amount_paid()` — the first business-logic trigger | Applied |
 
 ### Correction to an applied file's header
 
@@ -40,7 +41,6 @@ drop — remains accurate.
 
 | Design # | Migration | Contents |
 |---|---|---|
-| 10 | `finance` | `fee_records`, `fee_payments` + `amount_paid` trigger |
 | 11 | `communication_and_audit` | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages`, `audit_logs` |
 
 Two amendments changed this plan from its original form:
@@ -86,6 +86,19 @@ This is not a design change — it is the only way to implement what §13 descri
 **§13 rows 50, 55 and 56** in Migration 08 (`class_subjects.teacher_id`,
 `timetable_slots.teacher_id`, `timetable_slots.subject_id`) and to every later composite SET NULL.
 Single-column SET NULL FKs are unaffected and need no subset.
+
+### Deliberately absent — `fee_records.status`
+
+**`fee_records` has NO status column, and this must not be "fixed".** paid / partial / unpaid /
+overdue is derived from `amount`, `amount_paid` and `due_date` at read time. It cannot be a
+generated column either: `overdue` depends on today's date, and a generated column must be
+IMMUTABLE. §F: a stored copy *"drifts and produces wrong money"*. No view was created for it —
+computing it at read is Phase 8's job, and the design specifies no view.
+
+Related: **`fee_records.amount_paid` is maintained by `sync_fee_record_amount_paid()`**, never
+written by the application. An overpayment is rejected by `amount_paid <= amount` (verified:
+SQLSTATE 23514), and a `fee_records` row with payments against it cannot be deleted (verified:
+SQLSTATE 23503, `ON DELETE RESTRICT`).
 
 ### Deliberately unconstrained
 
