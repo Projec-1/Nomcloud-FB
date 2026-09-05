@@ -24,6 +24,7 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000004_school_applications` | **05** | `school_applications` (PLATFORM-LEVEL, no `school_id`); both FKs land in one step | Applied |
 | `20260904000005_academic_structure` | **06** | `academic_years`, `terms`, `subjects` — first SCHOOL-OWNED migration. Does not touch `schools` | Applied |
 | `20260904000006_people` | **07** | `teachers`, `guardians`, `students`, `student_guardians`; **settles the four composite FKs owed since 04** | Applied |
+| `20260904000007_fix_composite_set_null_scope` | **CORRECTIVE** — corrects 07 | Re-created `teachers_school_id_primary_subject_id_fkey` with `ON DELETE SET NULL (primary_subject_id)`; plain composite SET NULL blocked the delete with 23502 | Applied |
 
 ### Correction to an applied file's header
 
@@ -64,6 +65,27 @@ Two amendments changed this plan from its original form:
   `invitations (school_id, guardian_id) → guardians (school_id, id)` (row 16, §17).
   `teachers` and `guardians` each carry `UNIQUE (school_id, id)` as the target.
 - `contact_messages.handled_by → profiles(id) ON DELETE SET NULL` was added by **Migration 04**.
+
+### Standing rule — scoped `SET NULL` on composite foreign keys
+
+**Every composite FK with `ON DELETE SET NULL` MUST name the column subset**, from Migration 08
+onward and in any future correction:
+
+```sql
+on delete set null (the_reference_column)
+```
+
+Plain `ON DELETE SET NULL` nulls *every* referencing column, `school_id` included. Because
+`school_id` is `NOT NULL` on all school-owned tables, the delete then fails with `23502` — RESTRICT
+behaviour under a SET NULL label. Measured on this database: the plain form failed with
+`23502: null value in column "school_id" ... violates not-null constraint`; the scoped form
+succeeded, keeping `school_id` and nulling only the reference. The column-list syntax needs
+PostgreSQL 15+; this project runs 17.
+
+This is not a design change — it is the only way to implement what §13 describes. It applies to
+**§13 rows 50, 55 and 56** in Migration 08 (`class_subjects.teacher_id`,
+`timetable_slots.teacher_id`, `timetable_slots.subject_id`) and to every later composite SET NULL.
+Single-column SET NULL FKs are unaffected and need no subset.
 
 ### Deliberately unconstrained
 
