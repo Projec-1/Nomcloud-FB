@@ -4,7 +4,7 @@ import { schoolSettings } from '@/data/mockData'
 import { makeId } from '@/utils/id'
 import { useData } from '@/context/DataContext'
 import { supabase } from '@/lib/supabase'
-import { fetchActiveMemberships, fetchProfileByAuthUserId, fetchSchoolById } from '@/services/identityService'
+import { fetchActiveMemberships, fetchPlatformAdminStatus, fetchProfileByAuthUserId, fetchSchoolById } from '@/services/identityService'
 import type { AuthSessionUser, AuthState, MembershipRow, ProfileRow, SchoolRow } from '@/types/auth'
 
 const ACTIVE_ROLE_KEY = 'nomcloud_active_role'
@@ -22,6 +22,7 @@ interface AuthContextValue {
   signup: (input: SignupInput) => { ok: boolean; error?: string; role?: Role }
   logout: () => void
   authUser: AuthSessionUser | null
+  platformAdmin: boolean
   profile: ProfileRow | null
   memberships: MembershipRow[]
   activeMembership: MembershipRow | null
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const data = useData()
   const [isLoading, setIsLoading] = useState(true)
   const [authUser, setAuthUser] = useState<AuthSessionUser | null>(null)
+  const [platformAdmin, setPlatformAdmin] = useState(false)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [memberships, setMemberships] = useState<MembershipRow[]>([])
   const [school, setSchool] = useState<SchoolRow | null>(null)
@@ -57,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       supabaseUserRef.current = null
       setAuthUser(null)
+      setPlatformAdmin(false)
       setProfile(null)
       setMemberships([])
       setSchool(null)
@@ -78,9 +81,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!nextProfile) throw new Error('Authenticated user has no profile.')
         const nextMemberships = await fetchActiveMemberships(sessionUser.id)
         const nextSchool = nextProfile.school_id ? await fetchSchoolById(nextProfile.school_id) : null
+        const nextPlatformAdmin = await fetchPlatformAdminStatus(sessionUser.id)
         if (cancelled) return
 
         setAuthUser(sessionUser)
+        setPlatformAdmin(nextPlatformAdmin)
         setProfile(nextProfile)
         setMemberships(nextMemberships)
         setSchool(nextSchool)
@@ -94,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         supabaseUserRef.current = null
         setAuthUser(null)
+        setPlatformAdmin(false)
         setProfile(null)
         setMemberships([])
         setSchool(null)
@@ -218,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signup,
         logout,
         authUser,
+        platformAdmin,
         profile,
         memberships,
         activeMembership: memberships.find((membership) => membership.role === activeRole) ?? memberships[0] ?? null,
