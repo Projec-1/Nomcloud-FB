@@ -4,10 +4,19 @@ import { useAuth } from '@/context/AuthContext'
 import type { Role } from '@/types'
 
 export default function RoleRoute({ role, children }: { role: Role; children: ReactNode }) {
-  const { currentUser } = useAuth()
+  const { authState, memberships, activeRole } = useAuth()
 
-  if (!currentUser) return <Navigate to="/login" replace />
-  if (currentUser.role !== role) return <Navigate to={`/app/${currentUser.role}`} replace />
+  if (authState !== 'ready') return null
 
-  return <>{children}</>
+  const activeRoles = memberships.map((membership) => membership.role)
+  if (activeRoles.includes(role)) {
+    // This is navigation convenience only; Phase 7 RLS must independently verify every role.
+    return <>{children}</>
+  }
+
+  if (activeRoles.length > 0) {
+    return <Navigate to={`/app/${activeRole && activeRoles.includes(activeRole) ? activeRole : activeRoles[0]}`} replace />
+  }
+
+  return <Navigate to="/login" replace state={{ reason: 'no-active-membership' }} />
 }

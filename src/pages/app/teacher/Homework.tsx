@@ -6,9 +6,9 @@ import EmptyState from '@/components/ui/EmptyState'
 import HomeworkBoard from '@/components/dashboard/HomeworkBoard'
 
 export default function TeacherHomework() {
-  const { currentUser } = useAuth()
+  const { activeMembership } = useAuth()
   const { classes } = useData()
-  const myClasses = classes.filter((c) => c.teacherId === currentUser?.teacherId)
+  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
 
   return (
     <div>
@@ -16,7 +16,7 @@ export default function TeacherHomework() {
       {myClasses.length === 0 ? (
         <EmptyState icon={ClipboardCheck} title="No classes assigned yet" description="You'll be able to assign homework once a class is assigned to you." />
       ) : (
-        <HomeworkBoard classes={myClasses} createdBy={currentUser?.teacherId ?? ''} />
+        <HomeworkBoard classes={myClasses} createdBy={activeMembership?.teacher_id ?? ''} />
       )}
     </div>
   )

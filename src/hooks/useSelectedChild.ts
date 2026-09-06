@@ -5,10 +5,10 @@ import { useData } from '@/context/DataContext'
 const STORAGE_KEY = 'nomcloud_selected_child'
 
 export function useSelectedChild() {
-  const { currentUser } = useAuth()
+  const { activeMembership } = useAuth()
   const { parents, students } = useData()
 
-  const parent = parents.find((p) => p.id === currentUser?.parentId)
+  const parent = parents.find((p) => p.id === activeMembership?.guardian_id)
   const children = students.filter((s) => parent?.studentIds.includes(s.id))
 
   const [selectedId, setSelectedId] = useState<string>(() => {

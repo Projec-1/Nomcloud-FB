@@ -36,7 +36,7 @@ const paymentOptions: { value: PaymentMethod; label: string; description: string
 
 export default function ParentFees() {
   const { classes, fees, recordPayment, settings } = useData()
-  const { currentUser } = useAuth()
+  const { profile } = useAuth()
   const { showToast } = useToast()
   const { children, selectedChild, selectChild } = useSelectedChild()
 
@@ -94,7 +94,7 @@ export default function ParentFees() {
       category: lastReceipt.category,
       amount: lastReceipt.amount,
       method: lastReceipt.method,
-      payerName: currentUser?.name ?? 'Parent',
+      payerName: profile?.full_name ?? 'Parent',
       date: lastReceipt.date,
     })
   }

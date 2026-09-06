@@ -6,9 +6,9 @@ import AttendanceMarker from '@/components/dashboard/AttendanceMarker'
 import { CalendarCheck } from 'lucide-react'
 
 export default function TeacherAttendance() {
-  const { currentUser } = useAuth()
+  const { activeMembership } = useAuth()
   const { classes } = useData()
-  const myClasses = classes.filter((c) => c.teacherId === currentUser?.teacherId)
+  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
 
   return (
     <div>
@@ -16,7 +16,7 @@ export default function TeacherAttendance() {
       {myClasses.length === 0 ? (
         <EmptyState icon={CalendarCheck} title="No classes assigned yet" description="You'll be able to mark attendance once a class is assigned to you." />
       ) : (
-        <AttendanceMarker classes={myClasses} markedBy={currentUser?.teacherId ?? ''} />
+        <AttendanceMarker classes={myClasses} markedBy={activeMembership?.teacher_id ?? ''} />
       )}
     </div>
   )

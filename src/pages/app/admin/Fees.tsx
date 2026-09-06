@@ -28,7 +28,7 @@ const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', yea
 
 export default function AdminFees() {
   const { fees, students, classes, parents, recordPayment, createThread, currentTerm, settings } = useData()
-  const { currentUser } = useAuth()
+  const { profile } = useAuth()
   const { showToast } = useToast()
 
   const [search, setSearch] = useState('')
@@ -117,11 +117,11 @@ export default function AdminFees() {
       if (!parent) return
       createThread({
         participantIds: ['admin', parentId],
-        participantNames: [currentUser?.name ?? 'School Administration', parent.name],
+        participantNames: [profile?.full_name ?? 'School Administration', parent.name],
         subject: `Fee Reminder — ${reminderMonth}`,
         firstMessage: {
           senderId: 'admin',
-          senderName: currentUser?.name ?? 'School Administration',
+          senderName: profile?.full_name ?? 'School Administration',
           body: reminderMessage,
         },
       })

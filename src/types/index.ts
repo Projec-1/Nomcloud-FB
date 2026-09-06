@@ -1,17 +1,5 @@
 export type Role = 'admin' | 'teacher' | 'parent'
 
-export interface AuthUser {
-  id: string
-  name: string
-  email: string
-  role: Role
-  avatarColor: string
-  schoolId: string
-  teacherId?: string
-  parentId?: string
-  createdAt: string
-}
-
 export interface SchoolSettings {
   id: string
   name: string

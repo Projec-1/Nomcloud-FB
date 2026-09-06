@@ -6,9 +6,9 @@ import EmptyState from '@/components/ui/EmptyState'
 import GradeBook from '@/components/dashboard/GradeBook'
 
 export default function TeacherGrades() {
-  const { currentUser } = useAuth()
+  const { activeMembership } = useAuth()
   const { classes } = useData()
-  const myClasses = classes.filter((c) => c.teacherId === currentUser?.teacherId)
+  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
 
   return (
     <div>
@@ -16,7 +16,7 @@ export default function TeacherGrades() {
       {myClasses.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No classes assigned yet" description="You'll be able to record grades once a class is assigned to you." />
       ) : (
-        <GradeBook classes={myClasses} recordedBy={currentUser?.teacherId ?? ''} />
+        <GradeBook classes={myClasses} recordedBy={activeMembership?.teacher_id ?? ''} />
       )}
     </div>
   )

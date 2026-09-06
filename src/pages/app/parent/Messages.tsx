@@ -5,11 +5,11 @@ import PageHeader from '@/components/ui/PageHeader'
 import MessagesPanel from '@/components/dashboard/MessagesPanel'
 
 export default function ParentMessages() {
-  const { currentUser } = useAuth()
+  const { profile, activeMembership } = useAuth()
   const { classes, teachers, messageThreads } = useData()
   const { children } = useSelectedChild()
 
-  const parentId = currentUser?.parentId ?? ''
+  const parentId = activeMembership?.guardian_id ?? ''
   const myClassIds = new Set(children.map((c) => c.classId))
   const myThreads = messageThreads.filter((t) => t.participantIds.includes(parentId))
 
@@ -26,7 +26,7 @@ export default function ParentMessages() {
       <PageHeader title="Messages" description="Message your children's teachers directly." />
       <MessagesPanel
         currentId={parentId}
-        currentName={currentUser?.name ?? ''}
+        currentName={profile?.full_name ?? ''}
         threads={myThreads}
         recipients={recipients}
         recipientLabel="Teacher"

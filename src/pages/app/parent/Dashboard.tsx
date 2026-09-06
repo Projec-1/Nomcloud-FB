@@ -12,14 +12,14 @@ import { schoolDays } from '@/utils/schoolCalendar'
 import { formatCurrency, formatDate, percentage } from '@/utils/format'
 
 export default function ParentDashboard() {
-  const { currentUser } = useAuth()
+  const { profile } = useAuth()
   const { classes, attendance, grades, homework, fees, announcements } = useData()
   const { children, selectedChild, selectChild } = useSelectedChild()
 
   if (!selectedChild) {
     return (
       <div>
-        <PageHeader title={`Welcome, ${currentUser?.name.split(' ')[0]}`} description="Your children's information will appear here." />
+        <PageHeader title={`Welcome, ${profile?.full_name.split(' ')[0]}`} description="Your children's information will appear here." />
         <EmptyState
           icon={Users}
           title="No children linked to your account yet"
@@ -46,7 +46,7 @@ export default function ParentDashboard() {
   return (
     <div>
       <PageHeader
-        title={`Welcome, ${currentUser?.name.split(' ')[0]}`}
+        title={`Welcome, ${profile?.full_name.split(' ')[0]}`}
         description={`Here's how ${selectedChild.name.split(' ')[0]} is doing at ${cls?.name ?? 'school'}.`}
         actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => classes.find((cl) => cl.id === c.classId)?.name ?? ''} />}
       />

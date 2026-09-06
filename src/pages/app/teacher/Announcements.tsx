@@ -8,9 +8,9 @@ import AnnouncementBoard from '@/components/dashboard/AnnouncementBoard'
 const audienceOptions = [{ value: 'class' as const, label: 'My Class' }]
 
 export default function TeacherAnnouncements() {
-  const { currentUser } = useAuth()
+  const { profile, activeMembership } = useAuth()
   const { classes, announcements } = useData()
-  const myClasses = classes.filter((c) => c.teacherId === currentUser?.teacherId)
+  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
   const myClassIds = myClasses.map((c) => c.id)
 
   const visible = announcements.filter(
@@ -26,10 +26,10 @@ export default function TeacherAnnouncements() {
         <AnnouncementBoard
           audienceOptions={audienceOptions}
           classes={myClasses}
-          authorName={currentUser?.name ?? 'Teacher'}
+          authorName={profile?.full_name ?? 'Teacher'}
           authorRole="teacher"
           visibleAnnouncements={visible}
-          canManage={(a) => a.createdBy === currentUser?.name}
+          canManage={(a) => a.createdBy === profile?.full_name}
         />
       )}
     </div>

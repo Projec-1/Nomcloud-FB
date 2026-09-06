@@ -21,7 +21,7 @@ export default function PublicHeader() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const { theme, toggleTheme } = useTheme()
-  const { currentUser } = useAuth()
+  const { profile, activeRole } = useAuth()
   const { t } = useLanguage()
   const navigate = useNavigate()
 
@@ -72,8 +72,8 @@ export default function PublicHeader() {
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-          {currentUser ? (
-            <button onClick={() => navigate(`/app/${currentUser.role}`)} className="btn-ghost px-4 py-2 text-sm">
+          {profile && activeRole ? (
+            <button onClick={() => navigate(`/app/${activeRole}`)} className="btn-ghost px-4 py-2 text-sm">
               {t('nav.dashboard')}
             </button>
           ) : (
@@ -115,8 +115,8 @@ export default function PublicHeader() {
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />} Theme
             </button>
-            {currentUser ? (
-              <button onClick={() => navigate(`/app/${currentUser.role}`)} className="btn-ghost flex-1 justify-center py-2.5 text-sm">
+            {profile && activeRole ? (
+              <button onClick={() => navigate(`/app/${activeRole}`)} className="btn-ghost flex-1 justify-center py-2.5 text-sm">
                 {t('nav.dashboard')}
               </button>
             ) : (

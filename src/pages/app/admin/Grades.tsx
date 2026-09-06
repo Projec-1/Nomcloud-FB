@@ -5,12 +5,12 @@ import GradeBook from '@/components/dashboard/GradeBook'
 
 export default function AdminGrades() {
   const { classes } = useData()
-  const { currentUser } = useAuth()
+  const { authUser } = useAuth()
 
   return (
     <div>
       <PageHeader title="Grades" description="Record and review assessment scores for any class." />
-      <GradeBook classes={classes} recordedBy={currentUser?.id ?? 'admin'} />
+      <GradeBook classes={classes} recordedBy={authUser?.id ?? 'admin'} />
     </div>
   )
 }

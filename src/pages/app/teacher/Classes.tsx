@@ -15,12 +15,12 @@ import { formatDate } from '@/utils/format'
 import type { SchoolClass, Weekday } from '@/types'
 
 export default function TeacherClasses() {
-  const { currentUser } = useAuth()
+  const { activeMembership } = useAuth()
   const { classes, students, timetables, addTimetableSlot, deleteTimetableSlot } = useData()
   const { showToast } = useToast()
   const [viewing, setViewing] = useState<SchoolClass | null>(null)
 
-  const myClasses = classes.filter((c) => c.teacherId === currentUser?.teacherId)
+  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
   const [timetableClassId, setTimetableClassId] = useState(myClasses[0]?.id ?? '')
   const [slotDraft, setSlotDraft] = useState<{ day: Weekday; period: number } | null>(null)
   const [slotSubject, setSlotSubject] = useState('')
@@ -43,7 +43,7 @@ export default function TeacherClasses() {
     const periodInfo = PERIODS.find((p) => p.period === slotDraft.period)!
     addTimetableSlot({
       classId: activeClass.id,
-      teacherId: currentUser!.teacherId!,
+      teacherId: activeMembership!.teacher_id!,
       day: slotDraft.day,
       period: slotDraft.period,
       startTime: periodInfo.startTime,

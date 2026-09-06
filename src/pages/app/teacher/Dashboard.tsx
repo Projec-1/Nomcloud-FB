@@ -15,11 +15,11 @@ import { formatDate, percentage } from '@/utils/format'
 import type { Weekday } from '@/types'
 
 export default function TeacherDashboard() {
-  const { currentUser } = useAuth()
+  const { profile, activeMembership } = useAuth()
   const { classes, students, attendance, homework, messageThreads, timetables } = useData()
   const [studentsModalOpen, setStudentsModalOpen] = useState(false)
 
-  const myClasses = classes.filter((c) => c.teacherId === currentUser?.teacherId)
+  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
   const myClassIds = myClasses.map((c) => c.id)
   const myStudentIds = myClasses.flatMap((c) => c.studentIds)
   const latestDay = schoolDays[schoolDays.length - 1]
@@ -27,7 +27,7 @@ export default function TeacherDashboard() {
   const presentCount = todayAttendance.filter((a) => a.status === 'present' || a.status === 'late').length
   const myHomework = homework.filter((h) => myClassIds.includes(h.classId))
   const pendingSubmissions = myHomework.reduce((sum, h) => sum + h.submissions.filter((s) => s.status === 'pending').length, 0)
-  const myThreads = messageThreads.filter((t) => t.participantIds.includes(currentUser?.teacherId ?? ''))
+  const myThreads = messageThreads.filter((t) => t.participantIds.includes(activeMembership?.teacher_id ?? ''))
 
   // Weekly homework load — assignments due each of the last 7 school days.
   const weeklyHomework = useMemo(
@@ -89,7 +89,7 @@ export default function TeacherDashboard() {
   return (
     <div>
       <PageHeader
-        title={`Welcome back, ${currentUser?.name.split(' ')[0]}`}
+        title={`Welcome back, ${profile?.full_name.split(' ')[0]}`}
         description={myClasses.length ? `You're teaching ${myClasses.length} class${myClasses.length === 1 ? '' : 'es'} this term.` : 'No classes assigned yet.'}
       />
 

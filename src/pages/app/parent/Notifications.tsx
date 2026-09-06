@@ -19,10 +19,11 @@ const iconByType: Record<NotificationItem['type'], typeof Bell> = {
 }
 
 export default function ParentNotifications() {
-  const { scope } = useAuth()
-  const { notificationsFor, markNotificationRead, markAllNotificationsRead } = useData()
+  const { activeMembership } = useAuth()
+  const { notificationsFor, markNotificationRead, markAllNotificationsRead, scopeKey } = useData()
   const navigate = useNavigate()
 
+  const scope = scopeKey('parent', undefined, activeMembership?.guardian_id ?? undefined)
   const notifications = notificationsFor(scope)
   const unread = notifications.filter((n) => !n.read).length
 

@@ -13,7 +13,7 @@ const audienceOptions = [
 
 export default function AdminAnnouncements() {
   const { classes, announcements } = useData()
-  const { currentUser } = useAuth()
+  const { profile } = useAuth()
 
   return (
     <div>
@@ -21,7 +21,7 @@ export default function AdminAnnouncements() {
       <AnnouncementBoard
         audienceOptions={audienceOptions}
         classes={classes}
-        authorName={currentUser?.name ?? 'School Administration'}
+        authorName={profile?.full_name ?? 'School Administration'}
         authorRole="admin"
         visibleAnnouncements={announcements}
       />

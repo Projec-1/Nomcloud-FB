@@ -5,12 +5,12 @@ import AttendanceMarker from '@/components/dashboard/AttendanceMarker'
 
 export default function AdminAttendance() {
   const { classes } = useData()
-  const { currentUser } = useAuth()
+  const { authUser } = useAuth()
 
   return (
     <div>
       <PageHeader title="Attendance" description="Mark or review attendance for any class across the school." />
-      <AttendanceMarker classes={classes} markedBy={currentUser?.id ?? 'admin'} />
+      <AttendanceMarker classes={classes} markedBy={authUser?.id ?? 'admin'} />
     </div>
   )
 }

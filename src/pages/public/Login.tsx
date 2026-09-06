@@ -1,19 +1,19 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { ArrowRight, Mail, Lock, Eye, EyeOff, ShieldCheck, GraduationCap, Users } from 'lucide-react'
+import { ArrowRight, Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
-import { useAuth, DEMO_CREDENTIALS } from '@/context/AuthContext'
+import { useAuth } from '@/context/AuthContext'
 import { isValidEmail } from '@/utils/validators'
 import { useToast } from '@/context/ToastContext'
 import { useLanguage } from '@/context/LanguageContext'
-
-const demoIcons = { admin: ShieldCheck, teacher: GraduationCap, parent: Users }
+import { supabase } from '@/lib/supabase'
+import { fetchActiveMemberships } from '@/services/identityService'
+import type { Role } from '@/types'
 
 export default function Login() {
   const { t } = useLanguage()
-  const { login } = useAuth()
   const { showToast } = useToast()
   const navigate = useNavigate()
   const location = useLocation() as { state?: { from?: string } }
@@ -22,10 +22,26 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [confirmationRequired, setConfirmationRequired] = useState(false)
+  const [resendingConfirmation, setResendingConfirmation] = useState(false)
+  const [confirmationSent, setConfirmationSent] = useState(false)
+
+  const destinationForRoles = (roles: Role[]) => {
+    const role = (['admin', 'teacher', 'parent'] as Role[]).find((candidate) => roles.includes(candidate))
+    return role ? `/app/${role}` : null
+  }
+
+  const requestedPathForRoles = (roles: Role[]) => {
+    const requested = location.state?.from
+    if (!requested || !requested.startsWith('/app/')) return null
+    return roles.some((role) => requested === `/app/${role}` || requested.startsWith(`/app/${role}/`)) ? requested : null
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    setConfirmationRequired(false)
+    setConfirmationSent(false)
     if (!isValidEmail(email)) {
       setError('Please enter a valid email address.')
       return
@@ -35,23 +51,52 @@ export default function Login() {
       return
     }
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 500))
-    const result = login(email, password)
-    setLoading(false)
-    if (!result.ok) {
-      setError(result.error || 'Unable to log in.')
+
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+
+    if (signInError || !data.user) {
+      setLoading(false)
+      if (signInError?.code === 'email_not_confirmed' || signInError?.message.toLowerCase().includes('email not confirmed')) {
+        setConfirmationRequired(true)
+        setError('Please confirm your email address before signing in.')
+      } else {
+        setError('Invalid email or password.')
+      }
       return
     }
-    showToast({ type: 'success', title: 'Welcome back!' })
-    const redirectTo = location.state?.from
-    const fallback = `/app/${result.role}`
-    navigate(redirectTo && redirectTo !== '/login' && redirectTo.startsWith(`/app/${result.role}`) ? redirectTo : fallback)
+
+    try {
+      const memberships = await fetchActiveMemberships(data.user.id)
+      const roles = memberships.map((membership) => membership.role)
+      const destination = requestedPathForRoles(roles) || destinationForRoles(roles)
+
+      if (!destination) {
+        setError('Your account is not assigned an active workspace.')
+        return
+      }
+
+      showToast({ type: 'success', title: 'Welcome back!' })
+      navigate(destination)
+    } catch {
+      setError('We could not load your workspace. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const quickFill = (demoEmail: string, demoPassword: string) => {
-    setEmail(demoEmail)
-    setPassword(demoPassword)
-    setError('')
+  const resendConfirmation = async () => {
+    setResendingConfirmation(true)
+    setConfirmationSent(false)
+    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: email.trim() })
+    setResendingConfirmation(false)
+    if (resendError) {
+      setError('We could not resend the confirmation email. Please try again.')
+      return
+    }
+    setConfirmationSent(true)
   }
 
   return (
@@ -86,38 +131,21 @@ export default function Login() {
           </button>
         </div>
         {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">{error}</p>}
+        {confirmationRequired && (
+          <button
+            type="button"
+            onClick={resendConfirmation}
+            disabled={resendingConfirmation}
+            className="text-left text-sm font-medium text-accent disabled:opacity-60"
+          >
+            {resendingConfirmation ? 'Sending confirmation email…' : 'Resend confirmation email'}
+          </button>
+        )}
+        {confirmationSent && <p className="text-sm font-medium text-green-600">Confirmation email sent. Check your inbox.</p>}
         <Button type="submit" size="lg" loading={loading} className="w-full">
           {t('auth.login.submit')} <ArrowRight className="h-4 w-4" />
         </Button>
       </form>
-
-      <div className="mt-8">
-        <div className="relative text-center">
-          <span className="relative z-10 bg-mist px-3 text-xs font-medium text-graphite dark:bg-surface-dark">{t('auth.login.or')}</span>
-          <div className="absolute left-0 right-0 top-1/2 -z-0 h-px bg-ink/10 dark:bg-white/10" />
-        </div>
-        <div className="mt-4 space-y-2">
-          {DEMO_CREDENTIALS.map((cred) => {
-            const Icon = demoIcons[cred.role]
-            return (
-              <button
-                key={cred.role}
-                type="button"
-                onClick={() => quickFill(cred.email, cred.password)}
-                className="flex w-full items-center gap-3 rounded-xl border border-ink/10 px-4 py-3 text-left text-sm transition-colors hover:border-accent/40 hover:bg-accent/5 dark:border-white/10"
-              >
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-ink/5 text-ink dark:bg-white/10 dark:text-white">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-ink dark:text-white">{cred.label}</span>
-                  <span className="block truncate text-xs text-graphite">{cred.email}</span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
 
       <p className="mt-8 text-center text-sm text-graphite">
         {t('auth.login.noAccount')}{' '}

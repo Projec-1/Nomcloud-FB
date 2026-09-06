@@ -31,7 +31,7 @@ import type { AnnouncementAudience } from '@/types'
 type QuickAction = 'student' | 'teacher' | 'announcement' | null
 
 export default function AdminDashboard() {
-  const { currentUser } = useAuth()
+  const { profile } = useAuth()
   const { students, teachers, classes, attendance, fees, announcements, parents, addStudent, addTeacher, addAnnouncement } = useData()
   const { showToast } = useToast()
 
@@ -119,7 +119,7 @@ export default function AdminDashboard() {
       body: announcementForm.body,
       audience: announcementForm.audience,
       priority: announcementForm.priority,
-      createdBy: currentUser?.name ?? 'School Administration',
+      createdBy: profile?.full_name ?? 'School Administration',
       createdByRole: 'admin',
     })
     showToast({ type: 'success', title: 'Announcement sent', description: 'It now appears across the relevant dashboards.' })
@@ -130,7 +130,7 @@ export default function AdminDashboard() {
   return (
     <div>
       <PageHeader
-        title={`Good to see you, ${currentUser?.name.split(' ')[0]}`}
+        title={`Good to see you, ${profile?.full_name.split(' ')[0]}`}
         description="Here's what's happening across Nom Cloud Demo Academy today."
         actions={
           <Link to="/app/admin/announcements" className="btn-accent px-5 py-2.5 text-sm">

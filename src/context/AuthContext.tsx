@@ -1,109 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { AuthUser, Role } from '@/types'
-import { teachers as seedTeachers, parents as seedParents, schoolSettings } from '@/data/mockData'
-import { AVATAR_COLORS } from '@/constants/avatarColors'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { Role } from '@/types'
+import { schoolSettings } from '@/data/mockData'
 import { makeId } from '@/utils/id'
 import { useData } from '@/context/DataContext'
 import { supabase } from '@/lib/supabase'
 import { fetchActiveMemberships, fetchProfileByAuthUserId, fetchSchoolById } from '@/services/identityService'
 import type { AuthSessionUser, AuthState, MembershipRow, ProfileRow, SchoolRow } from '@/types/auth'
 
-const USERS_KEY = 'nomcloud_auth_users'
-const SESSION_KEY = 'nomcloud_auth_session'
-
-interface StoredUser extends AuthUser {
-  password: string
-}
-
-export interface DemoCredential {
-  role: Role
-  label: string
-  email: string
-  password: string
-}
-
-export const DEMO_CREDENTIALS: DemoCredential[] = import.meta.env.DEV
-  ? [
-      { role: 'admin', label: 'Administrator', email: 'admin@nomcloud.academy', password: 'demo1234' },
-      { role: 'teacher', label: `Teacher — ${seedTeachers[0].name}`, email: seedTeachers[0].email, password: 'demo1234' },
-      { role: 'parent', label: `Parent — ${seedParents[2].name}`, email: seedParents[2].email, password: 'demo1234' },
-    ]
-  : []
-
-function seedUsers(): StoredUser[] {
-  if (!import.meta.env.DEV) return []
-
-  return [
-    {
-      id: 'demo-admin',
-      name: 'School Administrator',
-      email: DEMO_CREDENTIALS[0].email,
-      password: DEMO_CREDENTIALS[0].password,
-      role: 'admin',
-      avatarColor: AVATAR_COLORS[0],
-      schoolId: schoolSettings.id,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'demo-teacher-t1',
-      name: seedTeachers[0].name,
-      email: seedTeachers[0].email,
-      password: 'demo1234',
-      role: 'teacher',
-      avatarColor: seedTeachers[0].avatarColor,
-      schoolId: schoolSettings.id,
-      teacherId: seedTeachers[0].id,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'demo-parent-p1',
-      name: seedParents[2].name,
-      email: seedParents[2].email,
-      password: 'demo1234',
-      role: 'parent',
-      avatarColor: seedParents[2].avatarColor,
-      schoolId: schoolSettings.id,
-      parentId: seedParents[2].id,
-      createdAt: new Date().toISOString(),
-    },
-  ]
-}
-
-function loadUsers(): StoredUser[] {
-  if (!import.meta.env.DEV || typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(USERS_KEY)
-    if (!raw) {
-      const initial = seedUsers()
-      window.localStorage.setItem(USERS_KEY, JSON.stringify(initial))
-      return initial
-    }
-    return JSON.parse(raw) as StoredUser[]
-  } catch {
-    return seedUsers()
-  }
-}
-
-function saveUsers(users: StoredUser[]) {
-  window.localStorage.setItem(USERS_KEY, JSON.stringify(users))
-}
-
-function legacyUserFromIdentity(authUser: AuthSessionUser, profile: ProfileRow, memberships: MembershipRow[]): AuthUser | null {
-  const membership = memberships[0]
-  if (!membership || !profile.school_id) return null
-
-  return {
-    id: authUser.id,
-    name: profile.full_name,
-    email: profile.email,
-    role: membership.role,
-    avatarColor: AVATAR_COLORS[0],
-    schoolId: profile.school_id,
-    teacherId: membership.teacher_id ?? undefined,
-    parentId: membership.guardian_id ?? undefined,
-    createdAt: profile.created_at,
-  }
-}
+const ACTIVE_ROLE_KEY = 'nomcloud_active_role'
 
 interface SignupInput {
   name: string
@@ -114,31 +18,37 @@ interface SignupInput {
 }
 
 interface AuthContextValue {
-  currentUser: AuthUser | null
   isLoading: boolean
-  login: (email: string, password: string) => { ok: boolean; error?: string; role?: Role }
   signup: (input: SignupInput) => { ok: boolean; error?: string; role?: Role }
   logout: () => void
-  scope: string
   authUser: AuthSessionUser | null
   profile: ProfileRow | null
   memberships: MembershipRow[]
+  activeMembership: MembershipRow | null
   school: SchoolRow | null
+  displayName: string
   authState: AuthState
+  activeRole: Role | null
+  setActiveRole: (role: Role) => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const data = useData()
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [authUser, setAuthUser] = useState<AuthSessionUser | null>(null)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [memberships, setMemberships] = useState<MembershipRow[]>([])
   const [school, setSchool] = useState<SchoolRow | null>(null)
   const [authState, setAuthState] = useState<AuthState>('initialising')
+  const [activeRole, setActiveRoleState] = useState<Role | null>(null)
   const supabaseUserRef = useRef<AuthSessionUser | null>(null)
+
+  useEffect(() => {
+    window.localStorage.removeItem('nomcloud_auth_users')
+    window.localStorage.removeItem('nomcloud_auth_session')
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -150,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null)
       setMemberships([])
       setSchool(null)
-      setCurrentUser(null)
+      setActiveRoleState(null)
       setAuthState('signed_out')
       setIsLoading(false)
     }
@@ -174,7 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(nextProfile)
         setMemberships(nextMemberships)
         setSchool(nextSchool)
-        setCurrentUser(legacyUserFromIdentity(sessionUser, nextProfile, nextMemberships))
+        const storedRole = window.localStorage.getItem(ACTIVE_ROLE_KEY) as Role | null
+        const activeRoles = nextMemberships.map((membership) => membership.role)
+        const nextActiveRole = activeRoles.includes(storedRole as Role) ? storedRole : activeRoles[0] ?? null
+        setActiveRoleState(nextActiveRole)
         setAuthState('ready')
         setIsLoading(false)
       } catch {
@@ -184,24 +97,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null)
         setMemberships([])
         setSchool(null)
-        setCurrentUser(null)
+        setActiveRoleState(null)
         setAuthState('error')
         setIsLoading(false)
       }
-    }
-
-    const restoreDemoSession = () => {
-      if (!import.meta.env.DEV || typeof window === 'undefined') return false
-      const sessionId = window.localStorage.getItem(SESSION_KEY)
-      if (!sessionId) return false
-      const found = loadUsers().find((user) => user.id === sessionId)
-      if (!found) return false
-
-      const { password: _password, ...rest } = found
-      setCurrentUser(rest)
-      setAuthState('ready')
-      setIsLoading(false)
-      return true
     }
 
     const initialise = async () => {
@@ -212,9 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (sessionData.session?.user) {
           await loadIdentity(sessionData.session.user, true)
-        } else if (!restoreDemoSession()) {
-          clearIdentity()
-        }
+        } else clearIdentity()
         if (cancelled) return undefined
 
         const { data: authStateData } = supabase.auth.onAuthStateChange((event, session) => {
@@ -250,96 +147,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login: AuthContextValue['login'] = (email, password) => {
-    if (!import.meta.env.DEV) {
-      return { ok: false, error: 'Email and password login is not available through the prototype.' }
-    }
-
-    const users = loadUsers()
-    const found = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase())
-    if (!found) return { ok: false, error: 'No account found with that email address.' }
-    if (found.password !== password) return { ok: false, error: 'Incorrect password. Please try again.' }
-    const { password: _password, ...rest } = found
-    setCurrentUser(rest)
-    setAuthState('ready')
-    setIsLoading(false)
-    window.localStorage.setItem(SESSION_KEY, found.id)
-    return { ok: true, role: found.role }
-  }
-
   const signup: AuthContextValue['signup'] = ({ name, email, password, role, phone }) => {
     if (!import.meta.env.DEV) {
       return { ok: false, error: 'Public self-registration is not available.' }
     }
 
-    const users = loadUsers()
-    if (users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
-      return { ok: false, error: 'An account with that email already exists. Try logging in instead.' }
-    }
-    const id = makeId('u')
-    let teacherId: string | undefined
-    let parentId: string | undefined
+    void password
+    const id = makeId('demo-user')
 
     if (role === 'teacher') {
-      const t = data.addTeacher({ name, email, phone: phone || '', subject: 'Not assigned yet' })
-      teacherId = t.id
+      data.addTeacher({ name, email, phone: phone || '', subject: 'Not assigned yet' })
     } else if (role === 'parent') {
-      const p = data.addParent({ name, email, phone: phone || '' })
-      parentId = p.id
+      data.addParent({ name, email, phone: phone || '' })
     }
 
-    const newUser: StoredUser = {
+    const now = new Date().toISOString()
+    setProfile({
       id,
-      name,
+      school_id: schoolSettings.id,
+      full_name: name,
       email,
-      password,
+      phone: phone || null,
+      locale: 'en',
+      avatar_url: null,
+      last_seen_at: null,
+      created_at: now,
+      updated_at: now,
+    })
+    setMemberships([{
+      id: `${id}-membership`,
+      user_id: id,
+      school_id: schoolSettings.id,
       role,
-      teacherId,
-      parentId,
-      avatarColor: AVATAR_COLORS[users.length % AVATAR_COLORS.length],
-      schoolId: schoolSettings.id,
-      createdAt: new Date().toISOString(),
-    }
-    saveUsers([...users, newUser])
-    const { password: _password, ...rest } = newUser
-    setCurrentUser(rest)
+      status: 'active',
+      teacher_id: null,
+      guardian_id: null,
+      invited_by: null,
+      joined_at: now,
+      created_at: now,
+      updated_at: now,
+    }])
+    setActiveRoleState(role)
     setAuthState('ready')
     setIsLoading(false)
-    window.localStorage.setItem(SESSION_KEY, id)
     return { ok: true, role }
   }
 
   const logout = () => {
-    setCurrentUser(null)
     setAuthUser(null)
     setProfile(null)
     setMemberships([])
     setSchool(null)
+    setActiveRoleState(null)
     setAuthState('signed_out')
     setIsLoading(false)
-    if (import.meta.env.DEV) window.localStorage.removeItem(SESSION_KEY)
     if (supabaseUserRef.current) void supabase.auth.signOut()
   }
 
-  const scope = useMemo(() => {
-    if (!currentUser) return ''
-    return data.scopeKey(currentUser.role, currentUser.teacherId, currentUser.parentId)
-  }, [currentUser, data])
+  const setActiveRole = (role: Role) => {
+    const availableRoles = memberships.map((membership) => membership.role)
+    if (!availableRoles.includes(role)) return
+    setActiveRoleState(role)
+    window.localStorage.setItem(ACTIVE_ROLE_KEY, role)
+  }
 
   return (
     <AuthContext.Provider
       value={{
-        currentUser,
         isLoading,
-        login,
         signup,
         logout,
-        scope,
         authUser,
         profile,
         memberships,
+        activeMembership: memberships.find((membership) => membership.role === activeRole) ?? memberships[0] ?? null,
         school,
+        displayName: profile?.full_name ?? '',
         authState,
+        activeRole,
+        setActiveRole,
       }}
     >
       {children}
