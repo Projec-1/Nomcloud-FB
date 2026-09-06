@@ -41,6 +41,19 @@ authority on migration identity; a header comment inside an applied file is not.
 because it is applied; **this document supersedes its header.** Its body — the reasoning for the
 drop — remains accurate.
 
+## Phase 4 — AUTHENTICATION
+
+| Timestamp | What it did | Status |
+|---|---|---|
+| `20260906000001_accept_invitation` | Atomic, locked invitation redemption function; creates/completes profiles and memberships | Applied |
+| `20260906000002_revoke_accept_invitation_anon` | Corrective privilege hardening; removes anonymous EXECUTE and grants only authenticated EXECUTE | Applied |
+
+`accept_invitation` is `SECURITY DEFINER` because an invite recipient cannot write their
+profile or membership before redemption. It pins `search_path` to the empty string,
+schema-qualifies database objects, requires `auth.uid()` to match the supplied user id,
+reads tenancy and role fields only from the locked invitation, and is executable only by
+`authenticated`. The row lock serialises simultaneous redemption of one token.
+
 ## Phase 3 — CLOSED
 
 **Design migrations 01–11 and all five correctives are applied and verified. Phase 3 is closed.**

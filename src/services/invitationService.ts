@@ -77,7 +77,7 @@ export async function createInvitation(input: CreateInvitationInput): Promise<In
     throw error
   }
 
-  const invitationUrl = `${window.location.origin}/invite/accept?token=${encodeURIComponent(token)}`
+  const invitationUrl = `${window.location.origin}/signup?token=${encodeURIComponent(token)}`
   // TODO: hand invitationUrl to the approved email-delivery service. Do not log, persist, or return it.
   void invitationUrl
 
