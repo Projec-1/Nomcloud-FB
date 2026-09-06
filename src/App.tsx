@@ -1,4 +1,4 @@
-import { Navigate, Routes, Route } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import PublicLayout from '@/components/layout/PublicLayout'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -57,9 +57,7 @@ import ParentAnnouncements from '@/pages/app/parent/Announcements'
 import ParentNotifications from '@/pages/app/parent/Notifications'
 import ParentMessages from '@/pages/app/parent/Messages'
 import ParentTutorials from '@/pages/app/parent/Tutorials'
-import PlatformApplications from '@/pages/platform/Applications'
-import PlatformApplicationDetail from '@/pages/platform/ApplicationDetail'
-import PlatformSchools from '@/pages/platform/Schools'
+import PlatformPlaceholder from '@/pages/platform/Placeholder'
 
 export default function App() {
   return (
@@ -92,10 +90,7 @@ export default function App() {
             </PlatformRoute>
           }
         >
-          <Route index element={<Navigate to="applications" replace />} />
-          <Route path="applications" element={<PlatformApplications />} />
-          <Route path="applications/:id" element={<PlatformApplicationDetail />} />
-          <Route path="schools" element={<PlatformSchools />} />
+          <Route index element={<PlatformPlaceholder />} />
         </Route>
 
         <Route

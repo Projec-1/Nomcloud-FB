@@ -312,6 +312,16 @@ This document names them only; it does not change them.
   address**: set approved callback URLs and security wording.
 - Configure the email sender name, sender address, reply-to address, SMTP provider
   and rate limits for the production environment.
+- Transactional application and invitation messages are sent by the authenticated
+  Supabase Edge Function `transactional-email`, which reads `RESEND_API_KEY` only
+  from Edge Function secrets. The key must never appear in the repository, `.env`,
+  frontend bundle, request payload, or logs. The function owns the subjects,
+  sender, and plain-text templates; callers provide only a validated recipient,
+  template identifier, and link variables.
+- Testing currently uses Resend's shared `onboarding@resend.dev` sender. On a free
+  Resend account this usually delivers only to the account owner's address.
+  That limitation is expected during testing and is not an application defect;
+  a verified sending domain must be configured before launch.
 - Confirm that confirmation links, invitation links, and reset links expire according
   to the approved security policy and that expired links produce actionable errors.
 
@@ -410,4 +420,3 @@ this document:
    will be approved for production?
 9. What is the approved audit event vocabulary for sign-in, invitation creation,
    acceptance, revocation, membership suspension, and platform-admin revocation?
-

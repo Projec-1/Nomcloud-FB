@@ -1,12 +1,6 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Building2, ClipboardList, LogOut, ShieldCheck } from 'lucide-react'
+import { Outlet, useNavigate } from 'react-router-dom'
+import { LogOut, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { cn } from '@/utils/cn'
-
-const links = [
-  { to: '/platform/applications', label: 'Applications', icon: ClipboardList },
-  { to: '/platform/schools', label: 'Schools', icon: Building2 },
-]
 
 export default function PlatformLayout() {
   const { profile, logout } = useAuth()
@@ -26,15 +20,8 @@ export default function PlatformLayout() {
           </div>
         </div>
       </header>
-      <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-8 lg:flex-row">
-        <nav className="flex gap-2 lg:w-56 lg:flex-col">
-          {links.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => cn('flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition-colors', isActive ? 'bg-white text-slate-900' : 'text-slate-300 hover:bg-white/10 hover:text-white')}>
-              <Icon className="h-4 w-4" /> {label}
-            </NavLink>
-          ))}
-        </nav>
-        <main className="min-w-0 flex-1"><Outlet /></main>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+        <main className="min-w-0"><Outlet /></main>
       </div>
     </div>
   )
