@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowRight, CheckCircle2, KeyRound, Mail, Phone, School, User as UserIcon } from 'lucide-react'
+import { ArrowRight, KeyRound, Mail, User as UserIcon } from 'lucide-react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase'
-import { isValidEmail, isValidPhone, minLength, type FieldErrors } from '@/utils/validators'
+import { minLength, type FieldErrors } from '@/utils/validators'
 
 type InvitationOutcome = 'accepted' | 'already_accepted' | 'expired' | 'revoked' | 'not_found' | 'email_mismatch' | 'role_already_held'
 type PageState = 'loading' | 'ready' | 'confirmation_required' | 'accepted' | 'already_accepted' | 'expired' | 'revoked' | 'not_found' | 'email_mismatch' | 'role_already_held' | 'error'
@@ -47,11 +47,6 @@ export default function Signup() {
   const [formError, setFormError] = useState('')
   const [loading, setLoading] = useState(false)
   const accepting = useRef(false)
-  const [applicationForm, setApplicationForm] = useState({ schoolName: '', applicantName: '', email: '', phone: '', website: '' })
-  const [applicationErrors, setApplicationErrors] = useState<FieldErrors>({})
-  const [applicationLoading, setApplicationLoading] = useState(false)
-  const [applicationSubmitted, setApplicationSubmitted] = useState(false)
-  const [applicationError, setApplicationError] = useState('')
 
   const acceptInvitation = async (userId: string) => {
     if (!tokenHash || accepting.current) return
@@ -121,45 +116,6 @@ export default function Signup() {
     }
   }, [location.search])
 
-  const validateApplication = () => {
-    const next: FieldErrors = {}
-    if (!minLength(applicationForm.schoolName, 2)) next.schoolName = 'Please enter your school name.'
-    if (!minLength(applicationForm.applicantName, 2)) next.applicantName = 'Please enter your name.'
-    if (!isValidEmail(applicationForm.email)) next.email = 'Please enter a valid email address.'
-    if (!isValidPhone(applicationForm.phone)) next.phone = 'Please enter a valid phone number.'
-    setApplicationErrors(next)
-    return Object.keys(next).length === 0
-  }
-
-  const submitApplication = async (event: FormEvent) => {
-    event.preventDefault()
-    setApplicationError('')
-    if (applicationForm.website || !validateApplication()) return
-    const cooldownKey = 'nomcloud_application_submission'
-    const lastSubmitted = Number(window.localStorage.getItem(cooldownKey) || 0)
-    if (Date.now() - lastSubmitted < 60_000) {
-      setApplicationError('Please wait a minute before submitting another application.')
-      return
-    }
-    setApplicationLoading(true)
-    try {
-      const { error } = await supabase.from('school_applications').insert({
-        school_name: applicationForm.schoolName.trim(),
-        administrator_name: applicationForm.applicantName.trim(),
-        email: applicationForm.email.trim().toLowerCase(),
-        phone: applicationForm.phone.trim(),
-        status: 'pending',
-      })
-      if (error) throw error
-      window.localStorage.setItem(cooldownKey, String(Date.now()))
-      setApplicationSubmitted(true)
-    } catch {
-      setApplicationError('We could not submit your application. Please try again.')
-    } finally {
-      setApplicationLoading(false)
-    }
-  }
-
   const validate = () => {
     const next: FieldErrors = {}
     if (!minLength(form.name, 2)) next.name = 'Please enter your full name.'
@@ -228,24 +184,9 @@ export default function Signup() {
 
   if (!hasInvitationToken) {
     return (
-      <AuthLayout title="Apply for Nom Cloud" subtitle="Tell us about your school and our team will review your application.">
-        {applicationSubmitted ? (
-          <div className="flex flex-col items-center py-8 text-center">
-            <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-            <h2 className="mt-4 text-xl font-semibold text-ink dark:text-white">Application received</h2>
-            <p className="mt-2 text-sm text-graphite">Thank you. Your application is under review. We will contact you at {applicationForm.email} if we need more information.</p>
-          </div>
-        ) : (
-          <form onSubmit={submitApplication} className="space-y-4" noValidate>
-            <Input label="School name" required icon={<School className="h-4 w-4" />} value={applicationForm.schoolName} onChange={(e) => setApplicationForm({ ...applicationForm, schoolName: e.target.value })} error={applicationErrors.schoolName} />
-            <Input label="Your name" required icon={<UserIcon className="h-4 w-4" />} value={applicationForm.applicantName} onChange={(e) => setApplicationForm({ ...applicationForm, applicantName: e.target.value })} error={applicationErrors.applicantName} />
-            <Input label="Email" type="email" required icon={<Mail className="h-4 w-4" />} value={applicationForm.email} onChange={(e) => setApplicationForm({ ...applicationForm, email: e.target.value })} error={applicationErrors.email} />
-            <Input label="Phone" type="tel" required icon={<Phone className="h-4 w-4" />} value={applicationForm.phone} onChange={(e) => setApplicationForm({ ...applicationForm, phone: e.target.value })} error={applicationErrors.phone} />
-            <input aria-hidden="true" tabIndex={-1} autoComplete="off" className="hidden" value={applicationForm.website} onChange={(e) => setApplicationForm({ ...applicationForm, website: e.target.value })} />
-            {applicationError && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">{applicationError}</p>}
-            <Button type="submit" size="lg" loading={applicationLoading} className="w-full">Submit application <ArrowRight className="h-4 w-4" /></Button>
-          </form>
-        )}
+      <AuthLayout title="Invitation required" subtitle="Nom Cloud accounts are created only from a valid invitation.">
+        <p className="text-sm text-graphite">Ask your school administrator to send you an invitation link.</p>
+        <Link to="/login" className="mt-6 block text-center text-sm font-medium text-accent">Return to sign in</Link>
       </AuthLayout>
     )
   }

@@ -32,6 +32,7 @@ authority on migration identity; a header comment inside an applied file is not.
 | `20260904000012_communication_and_audit` | **11** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages`, `audit_logs`; access-granting composite user references and append-only audit snapshots | Applied |
 | `20260905000001_revoke_audit_log_mutation` | **CORRECTIVE** — corrects 11 | Revoked UPDATE and DELETE on `audit_logs` from `anon`, `authenticated`, and `service_role`, preserving insert-only application access | Applied |
 | `20260905000002_revoke_audit_log_truncate` | **CORRECTIVE** — extends `20260905000001` | Revoked TRUNCATE on `audit_logs` from the same three roles. §H named only UPDATE and DELETE, but TRUNCATE erases every row in one statement and fires no row-level trigger | Applied |
+| `20260908000001_campuses` | **CAMPUS/ROLE EXPANSION 1 of 8** | Created `campuses`, the school-owned physical-site entity, with per-school identity/uniqueness, active/inactive status CHECK, composite-FK target `(school_id, id)`, and `set_updated_at` trigger. This belongs to the campus/role expansion approved in `docs/CAMPUS_ROLE_DESIGN.md`, not the original Phase 3 design plan. | Applied |
 
 ### Correction to an applied file's header
 

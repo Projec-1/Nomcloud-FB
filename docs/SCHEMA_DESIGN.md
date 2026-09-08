@@ -669,6 +669,23 @@ SCHOOL (all rows carry school_id)
 
 ---
 
+# §F.1 APPLICATION-LEVEL IDENTIFIERS — AUDIT CLARIFICATION
+
+The proposed display identifiers `SNS-ADM-001`, `SNS-TCH-001`, and `SNS-GDN-001`
+must not be assumed to be schema-backed without checking the actual tables.
+
+| Identifier | Current schema support | Decision |
+|---|---|---|
+| Teacher (`SNS-TCH-*`) | `teachers.staff_no text`, nullable, with a partial unique index on `(school_id, staff_no)` | Supported now. The application may format and display this existing field. |
+| Student (`SNS-STU-*`) | `students.admission_no text NOT NULL`, unique on `(school_id, admission_no)` | Supported now. The application may format and display this existing field. |
+| Guardian (`SNS-GDN-*`) | `guardians` has no equivalent identifier column | Requires an approved new column and migration; do not pretend the value is persistent. |
+| School admin (`SNS-ADM-*`) | No admin-person table or admin number column; identity is `profiles.id` plus an `admin` membership | A display-only label may be derived from `schools.shortcode` and an existing identifier. A persistent admin number requires an approved new column and migration. |
+
+These identifiers are labels, not authorization inputs. School ownership remains
+`school_id`; platform authority remains the unrevoked `platform_admins` row.
+
+---
+
 # §G. ROADMAP REQUIREMENTS THE FRONTEND LACKS ENTIRELY
 
 | Need | Roadmap | Schema impact |

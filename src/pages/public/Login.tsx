@@ -9,7 +9,7 @@ import { isValidEmail } from '@/utils/validators'
 import { useToast } from '@/context/ToastContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { supabase } from '@/lib/supabase'
-import { fetchActiveMemberships, fetchPlatformAdminStatus } from '@/services/identityService'
+import { fetchActiveMemberships } from '@/services/identityService'
 import type { Role } from '@/types'
 
 export default function Login() {
@@ -69,18 +69,12 @@ export default function Login() {
     }
 
     try {
-      if (await fetchPlatformAdminStatus(data.user.id)) {
-        showToast({ type: 'success', title: 'Welcome back!' })
-        navigate('/platform')
-        return
-      }
-
       const memberships = await fetchActiveMemberships(data.user.id)
       const roles = memberships.map((membership) => membership.role)
       const destination = requestedPathForRoles(roles) || destinationForRoles(roles)
 
       if (!destination) {
-        setError('Your account is not assigned an active school workspace or platform administrator role.')
+        setError('Your account is not assigned an active school workspace.')
         return
       }
 
@@ -115,7 +109,7 @@ export default function Login() {
           icon={<Mail className="h-4 w-4" />}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@school.ac.ke"
+          placeholder="you@school.nclass.ac"
         />
         <div>
           <Input

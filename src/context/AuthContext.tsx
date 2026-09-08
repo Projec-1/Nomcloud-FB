@@ -1,28 +1,15 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Role } from '@/types'
-import { schoolSettings } from '@/data/mockData'
-import { makeId } from '@/utils/id'
-import { useData } from '@/context/DataContext'
 import { supabase } from '@/lib/supabase'
-import { fetchActiveMemberships, fetchPlatformAdminStatus, fetchProfileByAuthUserId, fetchSchoolById } from '@/services/identityService'
+import { fetchActiveMemberships, fetchProfileByAuthUserId, fetchSchoolById } from '@/services/identityService'
 import type { AuthSessionUser, AuthState, MembershipRow, ProfileRow, SchoolRow } from '@/types/auth'
 
 const ACTIVE_ROLE_KEY = 'nomcloud_active_role'
 
-interface SignupInput {
-  name: string
-  email: string
-  password: string
-  role: Role
-  phone?: string
-}
-
 interface AuthContextValue {
   isLoading: boolean
-  signup: (input: SignupInput) => { ok: boolean; error?: string; role?: Role }
   logout: () => void
   authUser: AuthSessionUser | null
-  platformAdmin: boolean
   profile: ProfileRow | null
   memberships: MembershipRow[]
   activeMembership: MembershipRow | null
@@ -36,10 +23,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const data = useData()
   const [isLoading, setIsLoading] = useState(true)
   const [authUser, setAuthUser] = useState<AuthSessionUser | null>(null)
-  const [platformAdmin, setPlatformAdmin] = useState(false)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [memberships, setMemberships] = useState<MembershipRow[]>([])
   const [school, setSchool] = useState<SchoolRow | null>(null)
@@ -59,7 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       supabaseUserRef.current = null
       setAuthUser(null)
-      setPlatformAdmin(false)
       setProfile(null)
       setMemberships([])
       setSchool(null)
@@ -81,11 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!nextProfile) throw new Error('Authenticated user has no profile.')
         const nextMemberships = await fetchActiveMemberships(sessionUser.id)
         const nextSchool = nextProfile.school_id ? await fetchSchoolById(nextProfile.school_id) : null
-        const nextPlatformAdmin = await fetchPlatformAdminStatus(sessionUser.id)
         if (cancelled) return
 
         setAuthUser(sessionUser)
-        setPlatformAdmin(nextPlatformAdmin)
         setProfile(nextProfile)
         setMemberships(nextMemberships)
         setSchool(nextSchool)
@@ -99,7 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         supabaseUserRef.current = null
         setAuthUser(null)
-        setPlatformAdmin(false)
         setProfile(null)
         setMemberships([])
         setSchool(null)
@@ -153,52 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const signup: AuthContextValue['signup'] = ({ name, email, password, role, phone }) => {
-    if (!import.meta.env.DEV) {
-      return { ok: false, error: 'Public self-registration is not available.' }
-    }
-
-    void password
-    const id = makeId('demo-user')
-
-    if (role === 'teacher') {
-      data.addTeacher({ name, email, phone: phone || '', subject: 'Not assigned yet' })
-    } else if (role === 'parent') {
-      data.addParent({ name, email, phone: phone || '' })
-    }
-
-    const now = new Date().toISOString()
-    setProfile({
-      id,
-      school_id: schoolSettings.id,
-      full_name: name,
-      email,
-      phone: phone || null,
-      locale: 'en',
-      avatar_url: null,
-      last_seen_at: null,
-      created_at: now,
-      updated_at: now,
-    })
-    setMemberships([{
-      id: `${id}-membership`,
-      user_id: id,
-      school_id: schoolSettings.id,
-      role,
-      status: 'active',
-      teacher_id: null,
-      guardian_id: null,
-      invited_by: null,
-      joined_at: now,
-      created_at: now,
-      updated_at: now,
-    }])
-    setActiveRoleState(role)
-    setAuthState('ready')
-    setIsLoading(false)
-    return { ok: true, role }
-  }
-
   const logout = () => {
     setAuthUser(null)
     setProfile(null)
@@ -221,10 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         isLoading,
-        signup,
         logout,
         authUser,
-        platformAdmin,
         profile,
         memberships,
         activeMembership: memberships.find((membership) => membership.role === activeRole) ?? memberships[0] ?? null,

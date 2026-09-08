@@ -5,8 +5,6 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import CookieConsent from '@/components/layout/CookieConsent'
 import ProtectedRoute from '@/routes/ProtectedRoute'
 import RoleRoute from '@/routes/RoleRoute'
-import PlatformRoute from '@/routes/PlatformRoute'
-import PlatformLayout from '@/components/layout/PlatformLayout'
 
 import Home from '@/pages/public/Home'
 import Solutions from '@/pages/public/Solutions'
@@ -57,7 +55,6 @@ import ParentAnnouncements from '@/pages/app/parent/Announcements'
 import ParentNotifications from '@/pages/app/parent/Notifications'
 import ParentMessages from '@/pages/app/parent/Messages'
 import ParentTutorials from '@/pages/app/parent/Tutorials'
-import PlatformPlaceholder from '@/pages/platform/Placeholder'
 
 export default function App() {
   return (
@@ -81,17 +78,6 @@ export default function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-
-        <Route
-          path="/platform"
-          element={
-            <PlatformRoute>
-              <PlatformLayout />
-            </PlatformRoute>
-          }
-        >
-          <Route index element={<PlatformPlaceholder />} />
-        </Route>
 
         <Route
           path="/app/admin"

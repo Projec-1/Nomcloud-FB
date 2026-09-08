@@ -34,15 +34,3 @@ export async function fetchSchoolById(schoolId: string): Promise<SchoolRow | nul
   if (error) throw error
   return data as SchoolRow | null
 }
-
-export async function fetchPlatformAdminStatus(userId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('platform_admins')
-    .select('id')
-    .eq('user_id', userId)
-    .is('revoked_at', null)
-    .maybeSingle()
-
-  if (error) throw error
-  return data !== null
-}

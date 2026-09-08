@@ -252,6 +252,14 @@ roles retain broad/full DML grants as currently documented. A valid Supabase ses
 therefore does not, by itself, stop a client from reading, changing, deleting, or
 truncating rows outside the user's school if the database is queried directly.
 
+**Current verified posture (Phase 4 audit, 2026-09-07):** live REST probing returned
+HTTP 200 for all 34 public tables using the publishable anonymous key. There are zero
+RLS policies. `anon`, `authenticated`, and `service_role` retain broad DML grants on
+33 of 34 tables; `audit_logs` is the exception because UPDATE, DELETE, and TRUNCATE
+were revoked. The publishable key ships in the frontend bundle, so anyone who can use
+the application can currently read and modify data belonging to any school through
+the REST API. **No real school data may be entered before Phase 7 closes this exposure.**
+
 Phase 4 protects identity and session handling only. It does not claim tenant
 isolation, role enforcement, or safe CRUD authorization. Phase 7 is the separate
 RLS and grant-hardening phase that must close this exposure. No Phase 4 UI guard,
@@ -259,10 +267,10 @@ subdomain, active-role value, or hidden button is a substitute for Phase 7.
 
 ## §8. Demo mode
 
-Demo credentials and quick-fill buttons remain available only in development builds.
-They are clearly marked as demo-only and never represent Supabase accounts or a
-production authentication path. Development may use fixed seed credentials against
-the local prototype data while the real invitation flow is being built.
+Demo credentials and self-registration were part of the prototype and are not an
+authentication path. The development self-registration implementation that accepted
+a caller-supplied role and created a synthetic membership was removed after the Phase
+4 audit. No code path may create a profile or membership from a caller-selected role.
 
 Production builds must exclude:
 
@@ -274,7 +282,11 @@ The production build must use only Supabase authentication and invitation-create
 accounts. Removal is verified by building with production mode, inspecting the
 generated assets for demo email addresses/passwords and demo labels, and manually
 confirming that `/login` has no demo controls. The demo path is deleted entirely
-before launch, not merely hidden with CSS.
+before launch, not merely hidden with CSS. **Audit finding carried forward:** as of
+2026-09-07, `demo1234` and demo-account instructions still exist in `README.md`,
+`docs/GETTING_STARTED.md`, translations, and mock data. Task 10 therefore remains
+incomplete until those artifacts are removed or isolated into an explicitly separate
+fixture package.
 
 ## §9. Supabase configuration
 
@@ -285,6 +297,9 @@ This document names them only; it does not change them.
 
 - **Authentication → Providers → Email**: enable email/password sign-in.
 - **Email provider → Confirm email**: enable required email confirmation.
+- Set the project-level signup setting to disabled (`disable_signup=true`) once
+  invitation acceptance is the only account-creation path. Frontend gating is not
+  sufficient: the live project currently reports `disable_signup=false`.
 - Disable every social/OAuth provider not explicitly approved for launch. No provider
   may create a public self-registration path around invitations.
 - Configure password reset and email-change security consistently with the required
@@ -312,16 +327,9 @@ This document names them only; it does not change them.
   address**: set approved callback URLs and security wording.
 - Configure the email sender name, sender address, reply-to address, SMTP provider
   and rate limits for the production environment.
-- Transactional application and invitation messages are sent by the authenticated
-  Supabase Edge Function `transactional-email`, which reads `RESEND_API_KEY` only
-  from Edge Function secrets. The key must never appear in the repository, `.env`,
-  frontend bundle, request payload, or logs. The function owns the subjects,
-  sender, and plain-text templates; callers provide only a validated recipient,
-  template identifier, and link variables.
-- Testing currently uses Resend's shared `onboarding@resend.dev` sender. On a free
-  Resend account this usually delivers only to the account owner's address.
-  That limitation is expected during testing and is not an application defect;
-  a verified sending domain must be configured before launch.
+- The Phase 4 transactional email Edge Function and its repository implementation
+  were removed as out-of-scope work. Invitation delivery therefore remains an open
+  follow-up for a later email-delivery phase.
 - Confirm that confirmation links, invitation links, and reset links expire according
   to the approved security policy and that expired links produce actionable errors.
 
@@ -336,8 +344,7 @@ On the first real-auth build:
 
 - existing localStorage users are ignored by the Supabase provider;
 - existing localStorage session IDs are ignored and do not create sessions;
-- the user is treated as signed out and must use an invitation or the manually
-  bootstrapped platform account;
+- the user is treated as signed out and must use an invitation;
 - mock school records are not migrated as production data;
 - a one-time, non-blocking cleanup may remove the obsolete keys after the new
   provider is confirmed, but no password or token is copied anywhere.
@@ -345,6 +352,48 @@ On the first real-auth build:
 Nothing in localStorage needs preserving for authentication. If product owners need
 to preserve prototype content for demonstrations, it must be exported as a separate
 fixture, never interpreted as identity or membership data.
+
+### Phase 4 audit carry-forward
+
+The authenticated shell now reads identity from Supabase, but school application data
+still comes from the mock `DataContext` and is persisted in browser localStorage.
+This is not real backend authorization or tenant data access. Replacing that mock data
+path is a separate application-data migration and must not be mistaken for Phase 4
+identity work.
+
+Invitation creation currently hashes and stores the token, but discards the generated
+acceptance URL. The transactional email function was removed as out-of-scope
+work, so invitations cannot currently be delivered.
+
+The platform-admin area was also removed as out-of-scope work. The existing platform
+admin account (`nomcloud.inc@gmail.com`) has no school and no membership, so it will
+return to the "Your account is not assigned an active school workspace" state. This
+is an accepted known open item; no fallback route or special case is permitted.
+
+The uncommitted changes present during the 2026-09-07 audit were:
+
+- `src/pages/public/Login.tsx`: changes the email placeholder from
+  `you@school.ac.ke` to `you@school.nclass.ac`.
+- `src/pages/public/Signup.tsx`: supplies `school_size_band: 'not provided'`
+  when inserting a school application.
+
+These are incidental changes, not authentication design decisions.
+
+## §10A. Application-level identifiers
+
+The schema already supports some human-facing identifiers:
+
+| Person type | Existing support | Meaning |
+|---|---|---|
+| Teacher | `teachers.staff_no`, nullable, unique per school when present | Persistent employment/staff identifier; already supported. |
+| Student | `students.admission_no`, required, unique per school | Persistent student admission identifier; already supported. |
+| Guardian | No identifier column | A value such as `SNS-GDN-001` would require a new `guardians` column and migration. |
+| School admin | No separate admin-person identifier column | Admin identity is `profiles.id` plus an `admin` membership. A display label may be derived from the school shortcode plus an existing profile or membership identifier, but a persistent `SNS-ADM-001` field would require a new column and policy. |
+
+The `SNS-*` forms are therefore not uniformly schema-backed. Teacher and student
+identifiers can use existing fields. Guardian identifiers require schema work.
+School-admin identifiers are display-only if derived from existing values and must not
+be treated as authoritative identifiers without an approved schema change.
 
 ## §11. Edge cases
 
