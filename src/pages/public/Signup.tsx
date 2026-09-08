@@ -1,225 +1,279 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { ArrowRight, KeyRound, Mail, User as UserIcon } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
+import Select from '@/components/ui/Select'
+import Textarea from '@/components/ui/Textarea'
 import Button from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase'
-import { minLength, type FieldErrors } from '@/utils/validators'
+import { isValidEmail, isValidPhone, minLength, type FieldErrors } from '@/utils/validators'
 
-type InvitationOutcome = 'accepted' | 'already_accepted' | 'expired' | 'revoked' | 'not_found' | 'email_mismatch' | 'role_already_held'
-type PageState = 'loading' | 'ready' | 'confirmation_required' | 'accepted' | 'already_accepted' | 'expired' | 'revoked' | 'not_found' | 'email_mismatch' | 'role_already_held' | 'error'
+type Position = 'Administrator' | 'Principal' | 'Director' | 'Owner' | 'Other'
 
-interface InvitationPreview {
+interface ApplicationForm {
+  fullName: string
   email: string
-  role: 'admin' | 'teacher' | 'parent'
-  expires_at: string
-  accepted_at: string | null
-  revoked_at: string | null
+  phone: string
+  position: Position | ''
+  schoolName: string
+  country: string
+  schoolAddress: string
+  campusCount: string
+  studentRange: string
+  classRange: string
+  staffRange: string
+  curriculum: string
+  currentSystem: string
+  reasons: string[]
 }
 
-async function hashToken(token: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+const initialForm: ApplicationForm = {
+  fullName: '',
+  email: '',
+  phone: '',
+  position: '',
+  schoolName: '',
+  country: '',
+  schoolAddress: '',
+  campusCount: '',
+  studentRange: '',
+  classRange: '',
+  staffRange: '',
+  curriculum: '',
+  currentSystem: '',
+  reasons: [],
 }
 
-function stateMessage(state: PageState): string {
-  switch (state) {
-    case 'already_accepted': return 'This invitation has already been accepted.'
-    case 'expired': return 'This invitation has expired. Ask a school administrator to send a new one.'
-    case 'revoked': return 'This invitation has been revoked. Ask a school administrator for a new invitation.'
-    case 'not_found': return 'This invitation link is invalid.'
-    case 'email_mismatch': return 'This account email does not match the invitation.'
-    case 'role_already_held': return 'This role is already assigned to your account.'
-    case 'error': return 'We could not complete this invitation. Please try again.'
-    default: return ''
-  }
+const positions: Position[] = ['Administrator', 'Principal', 'Director', 'Owner', 'Other']
+const campusRanges = ['1', '2–3', '4–6', '7+']
+const studentRanges = ['1–150', '151–500', '501–1,000', '1,001+']
+const classRanges = ['1–10', '11–30', '31–60', '61+']
+const staffRanges = ['1–10', '11–30', '31–75', '76+']
+const reasons = [
+  'Bring school operations into one system',
+  'Improve teaching and learning coordination',
+  'Give families better visibility',
+  'Support multiple campuses',
+  'Replace spreadsheets or disconnected tools',
+  'Improve reporting and decision-making',
+]
+
+function formatApplicationMessage(form: ApplicationForm): string {
+  return [
+    `Position: ${form.position}`,
+    `School address / identifying details: ${form.schoolAddress}`,
+    `Number of campuses: ${form.campusCount}`,
+    `Total students: ${form.studentRange}`,
+    `Total classes: ${form.classRange}`,
+    `Teachers/staff: ${form.staffRange}`,
+    `Curriculum: ${form.curriculum}`,
+    `Current system: ${form.currentSystem}`,
+    `Main reasons: ${form.reasons.join(', ')}`,
+  ].join('\n')
 }
 
 export default function Signup() {
-  const location = useLocation()
-  const hasInvitationToken = Boolean(new URLSearchParams(location.search).get('token'))
-  const [tokenHash, setTokenHash] = useState<string | null>(null)
-  const [invitation, setInvitation] = useState<InvitationPreview | null>(null)
-  const [pageState, setPageState] = useState<PageState>('loading')
-  const [form, setForm] = useState({ name: '', password: '', confirmPassword: '' })
+  const [step, setStep] = useState(1)
+  const [form, setForm] = useState<ApplicationForm>(initialForm)
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [formError, setFormError] = useState('')
   const [loading, setLoading] = useState(false)
-  const accepting = useRef(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
-  const acceptInvitation = async (userId: string) => {
-    if (!tokenHash || accepting.current) return
-    accepting.current = true
-    setLoading(true)
-
-    const { data, error } = await supabase.rpc('accept_invitation', {
-      p_token_hash: tokenHash,
-      p_authenticated_user_id: userId,
-    })
-
-    if (error) {
-      setPageState('error')
-    } else {
-      const outcome = (Array.isArray(data) ? data[0]?.outcome : data?.outcome) as InvitationOutcome | undefined
-      setPageState(outcome ?? 'error')
-      if (outcome === 'accepted' || outcome === 'role_already_held') {
-        await supabase.auth.refreshSession()
-      }
-    }
-
-    setLoading(false)
-    accepting.current = false
+  const update = <K extends keyof ApplicationForm>(key: K, value: ApplicationForm[K]) => {
+    setForm((current) => ({ ...current, [key]: value }))
+    setErrors((current) => ({ ...current, [key]: undefined }))
   }
 
-  useEffect(() => {
-    let cancelled = false
-    const rawToken = new URLSearchParams(location.search).get('token')
-
-    const loadInvitation = async () => {
-      if (!rawToken) return
-
-      try {
-        const hashedToken = await hashToken(rawToken)
-        if (cancelled) return
-        setTokenHash(hashedToken)
-
-        const { data, error } = await supabase
-          .from('invitations')
-          .select('email,role,expires_at,accepted_at,revoked_at')
-          .eq('token_hash', hashedToken)
-          .maybeSingle()
-
-        if (error || !data) {
-          setPageState('not_found')
-          return
-        }
-
-        const preview = data as InvitationPreview
-        setInvitation(preview)
-        if (preview.accepted_at) setPageState('already_accepted')
-        else if (preview.revoked_at) setPageState('revoked')
-        else if (new Date(preview.expires_at).getTime() <= Date.now()) setPageState('expired')
-        else {
-          setPageState('ready')
-          const { data: sessionData } = await supabase.auth.getSession()
-          if (sessionData.session?.user) await acceptInvitation(sessionData.session.user.id)
-        }
-      } catch {
-        if (!cancelled) setPageState('error')
-      }
-    }
-
-    void loadInvitation()
-    return () => {
-      cancelled = true
-    }
-  }, [location.search])
-
-  const validate = () => {
+  const validateStep = (currentStep: number): boolean => {
     const next: FieldErrors = {}
-    if (!minLength(form.name, 2)) next.name = 'Please enter your full name.'
-    if (!minLength(form.password, 8)) next.password = 'Password must be at least 8 characters.'
-    if (form.password !== form.confirmPassword) next.confirmPassword = 'Passwords do not match.'
+
+    if (currentStep === 1) {
+      if (!minLength(form.fullName, 2)) next.fullName = 'Please enter your full name.'
+      if (!isValidEmail(form.email)) next.email = 'Please enter a valid email address.'
+      if (!isValidPhone(form.phone)) next.phone = 'Please enter a valid phone number.'
+      if (!form.position) next.position = 'Please select your position.'
+    }
+
+    if (currentStep === 2) {
+      if (!minLength(form.schoolName, 2)) next.schoolName = 'Please enter your school name.'
+      if (!/^[A-Za-z]{2}$/.test(form.country.trim())) next.country = 'Enter a two-letter country code, such as SO or KE.'
+      if (!minLength(form.schoolAddress, 3)) next.schoolAddress = 'Please enter identifying details for the school.'
+    }
+
+    if (currentStep === 3) {
+      if (!form.campusCount) next.campusCount = 'Please select the number of campuses.'
+      if (!form.studentRange) next.studentRange = 'Please select the student range.'
+      if (!form.classRange) next.classRange = 'Please select the class range.'
+      if (!form.staffRange) next.staffRange = 'Please select the teachers/staff range.'
+      if (!minLength(form.curriculum, 2)) next.curriculum = 'Please describe the curriculum.'
+      if (!minLength(form.currentSystem, 2)) next.currentSystem = 'Please describe the current system.'
+      if (form.reasons.length === 0) next.reasons = 'Select at least one reason.'
+    }
+
     setErrors(next)
     return Object.keys(next).length === 0
   }
 
+  const nextStep = () => {
+    if (validateStep(step)) setStep((current) => Math.min(current + 1, 4))
+  }
+
+  const previousStep = () => {
+    setErrors({})
+    setStep((current) => Math.max(current - 1, 1))
+  }
+
+  const toggleReason = (reason: string) => {
+    update('reasons', form.reasons.includes(reason)
+      ? form.reasons.filter((item) => item !== reason)
+      : [...form.reasons, reason])
+  }
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    setFormError('')
-    if (!invitation || !validate()) return
-    setLoading(true)
+    setSubmitError('')
+    if (!validateStep(3)) {
+      setStep(3)
+      return
+    }
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: invitation.email,
-      password: form.password,
-      options: { data: { full_name: form.name } },
+    setLoading(true)
+    const { error } = await supabase.from('school_applications').insert({
+      school_name: form.schoolName.trim(),
+      administrator_name: form.fullName.trim(),
+      email: form.email.trim().toLowerCase(),
+      phone: form.phone.trim(),
+      school_size_band: form.studentRange,
+      message: formatApplicationMessage(form),
+      country: form.country.trim().toUpperCase(),
+      status: 'pending',
     })
 
-    let user = signUpData.user
-    let session = signUpData.session
-
-    if (signUpError?.message.toLowerCase().includes('already registered')) {
-      const signIn = await supabase.auth.signInWithPassword({ email: invitation.email, password: form.password })
-      user = signIn.data.user
-      session = signIn.data.session
-      if (signIn.error) {
-        setFormError('This account already exists. Sign in with its password to accept the invitation.')
-        setLoading(false)
-        return
-      }
-    } else if (signUpError || !user) {
-      setFormError('We could not create the account for this invitation.')
+    if (error) {
+      setSubmitError('We could not submit your application. Please check your details and try again.')
       setLoading(false)
       return
     }
 
-    if (!session || !user) {
-      const signIn = await supabase.auth.signInWithPassword({ email: invitation.email, password: form.password })
-      if (signIn.data.session?.user) {
-        await acceptInvitation(signIn.data.session.user.id)
-        return
-      }
-      if (signIn.error?.code && signIn.error.code !== 'email_not_confirmed' && !signIn.error.message.toLowerCase().includes('email not confirmed')) {
-        setFormError('This account already exists. Sign in with its password to accept the invitation.')
-        setLoading(false)
-        return
-      }
-      setPageState('confirmation_required')
-      setLoading(false)
-      return
-    }
-
-    await acceptInvitation(user.id)
+    setLoading(false)
+    setSubmitted(true)
   }
 
-  const retryAfterConfirmation = async () => {
-    const { data } = await supabase.auth.getSession()
-    if (data.session?.user) await acceptInvitation(data.session.user.id)
-    else setFormError('Please confirm your email, then return to this link.')
-  }
-
-  const terminalMessage = stateMessage(pageState)
-
-  if (!hasInvitationToken) {
+  if (submitted) {
     return (
-      <AuthLayout title="Invitation required" subtitle="Nom Cloud accounts are created only from a valid invitation.">
-        <p className="text-sm text-graphite">Ask your school administrator to send you an invitation link.</p>
-        <Link to="/login" className="mt-6 block text-center text-sm font-medium text-accent">Return to sign in</Link>
+      <AuthLayout title="Your application is under review" subtitle="Thank you for your interest in Nom Cloud.">
+        <div className="flex flex-col items-center text-center">
+          <CheckCircle2 className="h-14 w-14 text-emerald-500" />
+          <p className="mt-5 text-sm leading-relaxed text-graphite">
+            We have received your school application. Our team will review it and contact you using the details provided.
+          </p>
+        </div>
       </AuthLayout>
     )
   }
 
   return (
-    <AuthLayout title="Accept your invitation" subtitle="Use the invited email address to finish setting up your Nom Cloud account.">
-      {pageState === 'loading' && <p className="text-sm text-graphite">Checking your invitation…</p>}
-      {invitation && pageState !== 'loading' && (
-        <div className="mb-5 rounded-xl bg-ink/5 px-4 py-3 text-sm text-graphite dark:bg-white/10">
-          <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> {invitation.email}</div>
+    <AuthLayout
+      title="Apply for Nom Cloud"
+      subtitle="Tell us about yourself and your school. This application does not create an account."
+    >
+      <div className="mb-8 flex items-center gap-2" aria-label={`Step ${step} of 4`}>
+        {[1, 2, 3, 4].map((item) => (
+          <div key={item} className={`h-1.5 flex-1 rounded-full ${item <= step ? 'bg-accent' : 'bg-ink/10 dark:bg-white/10'}`} />
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        {step === 1 && (
+          <>
+            <h2 className="text-lg font-semibold text-ink dark:text-white">About you</h2>
+            <Input label="Full name" name="fullName" required value={form.fullName} onChange={(event) => update('fullName', event.target.value)} error={errors.fullName} />
+            <Input label="Email address" name="email" type="email" required value={form.email} onChange={(event) => update('email', event.target.value)} error={errors.email} />
+            <Input label="Phone number" name="phone" type="tel" required value={form.phone} onChange={(event) => update('phone', event.target.value)} error={errors.phone} />
+            <Select label="Your position" name="position" required value={form.position} onChange={(event) => update('position', event.target.value as Position)} error={errors.position}>
+              <option value="">Select your position</option>
+              {positions.map((position) => <option key={position} value={position}>{position}</option>)}
+            </Select>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <h2 className="text-lg font-semibold text-ink dark:text-white">Your school</h2>
+            <Input label="School name" name="schoolName" required value={form.schoolName} onChange={(event) => update('schoolName', event.target.value)} error={errors.schoolName} />
+            <Input label="Country code" name="country" required maxLength={2} value={form.country} onChange={(event) => update('country', event.target.value.toUpperCase())} error={errors.country} hint="Use the two-letter code, such as SO or KE." />
+            <Textarea label="School address and identifying details" name="schoolAddress" required value={form.schoolAddress} onChange={(event) => update('schoolAddress', event.target.value)} error={errors.schoolAddress} placeholder="City, neighbourhood, postal address, or other details that identify your school." />
+            {/* A searchable Ministry directory is a future enhancement; it is not built here. */}
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <h2 className="text-lg font-semibold text-ink dark:text-white">School scale</h2>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Select label="Number of campuses" name="campusCount" required value={form.campusCount} onChange={(event) => update('campusCount', event.target.value)} error={errors.campusCount}>
+                <option value="">Select a range</option>
+                {campusRanges.map((range) => <option key={range} value={range}>{range}</option>)}
+              </Select>
+              <Select label="Total students" name="studentRange" required value={form.studentRange} onChange={(event) => update('studentRange', event.target.value)} error={errors.studentRange}>
+                <option value="">Select a range</option>
+                {studentRanges.map((range) => <option key={range} value={range}>{range}</option>)}
+              </Select>
+              <Select label="Total classes" name="classRange" required value={form.classRange} onChange={(event) => update('classRange', event.target.value)} error={errors.classRange}>
+                <option value="">Select a range</option>
+                {classRanges.map((range) => <option key={range} value={range}>{range}</option>)}
+              </Select>
+              <Select label="Teachers/staff" name="staffRange" required value={form.staffRange} onChange={(event) => update('staffRange', event.target.value)} error={errors.staffRange}>
+                <option value="">Select a range</option>
+                {staffRanges.map((range) => <option key={range} value={range}>{range}</option>)}
+              </Select>
+            </div>
+            <Input label="Curriculum" name="curriculum" required value={form.curriculum} onChange={(event) => update('curriculum', event.target.value)} error={errors.curriculum} placeholder="For example, national curriculum or Cambridge" />
+            <Input label="Current system" name="currentSystem" required value={form.currentSystem} onChange={(event) => update('currentSystem', event.target.value)} error={errors.currentSystem} placeholder="For example, spreadsheets, paper, or another platform" />
+            <fieldset>
+              <legend className="label">Main reasons for using Nom Cloud <span className="text-brand"> *</span></legend>
+              <div className="space-y-2">
+                {reasons.map((reason) => (
+                  <label key={reason} className="flex items-start gap-3 rounded-xl border border-ink/10 px-3 py-2.5 text-sm text-ink dark:border-white/10 dark:text-white">
+                    <input type="checkbox" checked={form.reasons.includes(reason)} onChange={() => toggleReason(reason)} className="mt-0.5 accent-brand" />
+                    <span>{reason}</span>
+                  </label>
+                ))}
+              </div>
+              {errors.reasons && <p className="mt-1.5 text-xs font-medium text-red-500">{errors.reasons}</p>}
+            </fieldset>
+          </>
+        )}
+
+        {step === 4 && (
+          <>
+            <h2 className="text-lg font-semibold text-ink dark:text-white">Review your application</h2>
+            <div className="space-y-3 rounded-2xl bg-mist p-5 text-sm dark:bg-white/5">
+              <p><strong>Applicant:</strong> {form.fullName} · {form.email}</p>
+              <p><strong>Position:</strong> {form.position}</p>
+              <p><strong>School:</strong> {form.schoolName} · {form.country.toUpperCase()}</p>
+              <p><strong>Campuses:</strong> {form.campusCount} · <strong>Students:</strong> {form.studentRange}</p>
+              <p><strong>Classes:</strong> {form.classRange} · <strong>Teachers/staff:</strong> {form.staffRange}</p>
+              <p><strong>Curriculum:</strong> {form.curriculum}</p>
+              <p><strong>Current system:</strong> {form.currentSystem}</p>
+              <p><strong>Reasons:</strong> {form.reasons.join(', ')}</p>
+            </div>
+            {submitError && <p className="text-sm font-medium text-red-500">{submitError}</p>}
+          </>
+        )}
+
+        <div className="flex justify-between gap-3 pt-2">
+          {step > 1 ? (
+            <Button type="button" variant="outline" onClick={previousStep} icon={<ArrowLeft className="h-4 w-4" />}>Back</Button>
+          ) : <span />}
+          {step < 4 ? (
+            <Button type="button" variant="accent" onClick={nextStep}>Continue <ArrowRight className="h-4 w-4" /></Button>
+          ) : (
+            <Button type="submit" variant="accent" loading={loading}>Submit application</Button>
+          )}
         </div>
-      )}
-      {pageState === 'ready' && invitation && (
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <Input label="Full name" required icon={<UserIcon className="h-4 w-4" />} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} />
-          <Input label="Password" type="password" required icon={<KeyRound className="h-4 w-4" />} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} error={errors.password} placeholder="8+ characters" />
-          <Input label="Confirm password" type="password" required icon={<KeyRound className="h-4 w-4" />} value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} error={errors.confirmPassword} />
-          {formError && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">{formError}</p>}
-          <Button type="submit" size="lg" loading={loading} className="w-full">Accept invitation <ArrowRight className="h-4 w-4" /></Button>
-        </form>
-      )}
-      {pageState === 'confirmation_required' && (
-        <div className="space-y-4">
-          <p className="text-sm text-graphite">Your account was created. Confirm your email address, then return here to finish accepting the invitation.</p>
-          <Button type="button" onClick={retryAfterConfirmation} loading={loading} className="w-full">I confirmed my email</Button>
-        </div>
-      )}
-      {pageState === 'accepted' && <p className="rounded-xl bg-green-500/10 px-4 py-3 text-sm font-medium text-green-700">Invitation accepted. Your workspace is ready.</p>}
-      {pageState === 'role_already_held' && <p className="rounded-xl bg-green-500/10 px-4 py-3 text-sm font-medium text-green-700">{terminalMessage}</p>}
-      {terminalMessage && !['accepted', 'role_already_held'].includes(pageState) && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">{terminalMessage}</p>}
-      {pageState !== 'ready' && pageState !== 'confirmation_required' && pageState !== 'accepted' && pageState !== 'role_already_held' && (
-        <Link to="/login" className="mt-6 block text-center text-sm font-medium text-accent">Return to sign in</Link>
-      )}
+      </form>
     </AuthLayout>
   )
 }
