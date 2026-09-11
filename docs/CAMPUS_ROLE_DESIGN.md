@@ -330,7 +330,7 @@ No SQL is specified here.
 | 3 | `membership_campus_scope` | Add explicit all/selected scope mode and `membership_campus_scopes` with composite tenancy | `membership_role_expansion`, `campuses` | **DONE** — applied as `20260911000002_membership_campus_scope` |
 | 4 | `classes_campus` | Add campus ownership to classes, composite campus FK, and campus-aware class uniqueness/indexes | `campuses`, `20260904000008_classes_and_timetable` | **DONE** — applied as `20260911000003_classes_campus`; class naming is now campus-aware with `NULLS NOT DISTINCT` |
 | 5 | `campus_scope_integrity` | Add or revise constraints/triggers needed to keep role, scope mode, and scope rows consistent | `membership_campus_scope`, `classes_campus` | **DONE** — applied as `20260911000004_campus_scope_integrity`; resolves J open question 6 |
-| 6 | `invitation_role_scope_expansion` | Extend invitation role validation and store/validate invitation scope intent without storing bearer tokens | `membership_campus_scope`, `20260906000001_accept_invitation` | NOT STARTED |
+| 6 | `invitation_role_scope_expansion` | Extend invitation role validation and store/validate invitation scope intent without storing bearer tokens | `membership_campus_scope`, `20260906000001_accept_invitation` | **DONE** — applied as `20260911000005_invitation_role_scope_expansion`; resolves J open question 11 |
 | 7 | `accept_invitation_role_scope` | Update `accept_invitation` to create six-role memberships and approved campus scopes transactionally | `invitation_role_scope_expansion`, `20260906000002_revoke_accept_invitation_anon` | NOT STARTED |
 | 8 | `campus_rls_and_grants` | Phase 7 authorization policies for school-wide, campus-scoped, and guardian-student access | All preceding migrations; existing Phase 3 grants | NOT STARTED |
 
@@ -380,9 +380,14 @@ never edited; corrections are new migrations.
 10. **Guardian notifications:** Guardian access is unchanged, but notification
     delivery may need campus-aware operational routing without changing the
     access relationship.
-11. **Invitation scope:** Whether an invitation may grant all-campus scope,
-    selected campuses, or only a role awaiting operator scope assignment is
-    unresolved.
+11. **J11 RESOLVED — Invitation scope:** An invitation carries the same shape a
+    membership does. `invitations.scope_mode` is `'all'` or `'selected'` under
+    the same role restriction, and a `'selected'` invitation names its intended
+    campuses in `invitation_campus_scopes`. Those rows are intent only; the real
+    grant is written to `membership_campus_scopes` at acceptance by Migration 7.
+    The at-least-one-campus rule is enforced by a deferred constraint trigger
+    limited to live invitations, so a pending invitation blocks deletion of the
+    last campus it names while an accepted or revoked one never does.
 12. **One-school rule:** The brief explicitly preserves the existing
     one-user-one-school model. Multi-campus access does not imply multi-school
     access; changing that remains a separate design.
