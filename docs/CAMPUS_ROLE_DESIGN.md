@@ -323,16 +323,16 @@ This is a database and authorization-model design only.
 
 No SQL is specified here.
 
-| Order | Proposed migration name | Contents | Depends on |
-|---|---|---|---|
-| 1 | `campuses` | Create `campuses`, school ownership, per-school uniqueness, lifecycle fields, and composite-FK target | `20260904000002_schools` |
-| 2 | `membership_role_expansion` | Add six-role vocabulary compatibility and replace the three-role positive membership check | `20260903000001_extensions_and_enums`, `20260904000003_identity` |
-| 3 | `membership_campus_scope` | Add explicit all/selected scope mode and `membership_campus_scopes` with composite tenancy | `membership_role_expansion`, `campuses` |
-| 4 | `classes_campus` | Add campus ownership to classes, composite campus FK, and campus-aware class uniqueness/indexes | `campuses`, `20260904000008_classes_and_timetable` |
-| 5 | `campus_scope_integrity` | Add or revise constraints/triggers needed to keep role, scope mode, and scope rows consistent | `membership_campus_scope`, `classes_campus` |
-| 6 | `invitation_role_scope_expansion` | Extend invitation role validation and store/validate invitation scope intent without storing bearer tokens | `membership_campus_scope`, `20260906000001_accept_invitation` |
-| 7 | `accept_invitation_role_scope` | Update `accept_invitation` to create six-role memberships and approved campus scopes transactionally | `invitation_role_scope_expansion`, `20260906000002_revoke_accept_invitation_anon` |
-| 8 | `campus_rls_and_grants` | Phase 7 authorization policies for school-wide, campus-scoped, and guardian-student access | All preceding migrations; existing Phase 3 grants |
+| Order | Proposed migration name | Contents | Depends on | Status |
+|---|---|---|---|---|
+| 1 | `campuses` | Create `campuses`, school ownership, per-school uniqueness, lifecycle fields, and composite-FK target | `20260904000002_schools` | **DONE** — applied as `20260908000001_campuses` |
+| 2 | `membership_role_expansion` | Add six-role vocabulary compatibility and replace the three-role positive membership check | `20260903000001_extensions_and_enums`, `20260904000003_identity` | **DONE** — applied as `20260908000002_membership_role_expansion`; also added the J2 owner partial unique index |
+| 3 | `membership_campus_scope` | Add explicit all/selected scope mode and `membership_campus_scopes` with composite tenancy | `membership_role_expansion`, `campuses` | **DONE** — applied as `20260911000002_membership_campus_scope` |
+| 4 | `classes_campus` | Add campus ownership to classes, composite campus FK, and campus-aware class uniqueness/indexes | `campuses`, `20260904000008_classes_and_timetable` | NOT STARTED |
+| 5 | `campus_scope_integrity` | Add or revise constraints/triggers needed to keep role, scope mode, and scope rows consistent | `membership_campus_scope`, `classes_campus` | NOT STARTED |
+| 6 | `invitation_role_scope_expansion` | Extend invitation role validation and store/validate invitation scope intent without storing bearer tokens | `membership_campus_scope`, `20260906000001_accept_invitation` | NOT STARTED |
+| 7 | `accept_invitation_role_scope` | Update `accept_invitation` to create six-role memberships and approved campus scopes transactionally | `invitation_role_scope_expansion`, `20260906000002_revoke_accept_invitation_anon` | NOT STARTED |
+| 8 | `campus_rls_and_grants` | Phase 7 authorization policies for school-wide, campus-scoped, and guardian-student access | All preceding migrations; existing Phase 3 grants | NOT STARTED |
 
 Migration ordering must preserve the repository rule that applied migrations are
 never edited; corrections are new migrations.
