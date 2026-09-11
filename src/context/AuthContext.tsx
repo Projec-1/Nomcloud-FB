@@ -1,7 +1,13 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Role } from '@/types'
 import { supabase } from '@/lib/supabase'
-import { fetchActiveMemberships, fetchProfileByAuthUserId, fetchSchoolById } from '@/services/identityService'
+import { workspaceForMembershipRole, workspacesForMembershipRoles } from '@/lib/roles'
+import {
+  fetchActiveMemberships,
+  fetchPlatformAdminStatus,
+  fetchProfileByAuthUserId,
+  fetchSchoolById,
+} from '@/services/identityService'
 import type { AuthSessionUser, AuthState, MembershipRow, ProfileRow, SchoolRow } from '@/types/auth'
 
 const ACTIVE_ROLE_KEY = 'nomcloud_active_role'
@@ -10,8 +16,10 @@ interface AuthContextValue {
   isLoading: boolean
   logout: () => void
   authUser: AuthSessionUser | null
+  platformAdmin: boolean
   profile: ProfileRow | null
   memberships: MembershipRow[]
+  workspaces: Role[]
   activeMembership: MembershipRow | null
   school: SchoolRow | null
   displayName: string
@@ -25,6 +33,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [authUser, setAuthUser] = useState<AuthSessionUser | null>(null)
+  const [platformAdmin, setPlatformAdmin] = useState(false)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [memberships, setMemberships] = useState<MembershipRow[]>([])
   const [school, setSchool] = useState<SchoolRow | null>(null)
@@ -44,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       supabaseUserRef.current = null
       setAuthUser(null)
+      setPlatformAdmin(false)
       setProfile(null)
       setMemberships([])
       setSchool(null)
@@ -65,15 +75,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!nextProfile) throw new Error('Authenticated user has no profile.')
         const nextMemberships = await fetchActiveMemberships(sessionUser.id)
         const nextSchool = nextProfile.school_id ? await fetchSchoolById(nextProfile.school_id) : null
+        // An unrevoked platform_admins row is the sole determinant of platform
+        // authority; a null school_id never grants it (AUTH_DESIGN.md section 1).
+        const nextPlatformAdmin = await fetchPlatformAdminStatus(sessionUser.id)
         if (cancelled) return
 
         setAuthUser(sessionUser)
+        setPlatformAdmin(nextPlatformAdmin)
         setProfile(nextProfile)
         setMemberships(nextMemberships)
         setSchool(nextSchool)
         const storedRole = window.localStorage.getItem(ACTIVE_ROLE_KEY) as Role | null
-        const activeRoles = nextMemberships.map((membership) => membership.role)
-        const nextActiveRole = activeRoles.includes(storedRole as Role) ? storedRole : activeRoles[0] ?? null
+        const nextWorkspaces = workspacesForMembershipRoles(nextMemberships.map((membership) => membership.role))
+        const nextActiveRole = nextWorkspaces.includes(storedRole as Role) ? storedRole : nextWorkspaces[0] ?? null
         setActiveRoleState(nextActiveRole)
         setAuthState('ready')
         setIsLoading(false)
@@ -81,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         supabaseUserRef.current = null
         setAuthUser(null)
+        setPlatformAdmin(false)
         setProfile(null)
         setMemberships([])
         setSchool(null)
@@ -136,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setAuthUser(null)
+    setPlatformAdmin(false)
     setProfile(null)
     setMemberships([])
     setSchool(null)
@@ -145,9 +161,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (supabaseUserRef.current) void supabase.auth.signOut()
   }
 
+  const workspaces = workspacesForMembershipRoles(memberships.map((membership) => membership.role))
+
   const setActiveRole = (role: Role) => {
-    const availableRoles = memberships.map((membership) => membership.role)
-    if (!availableRoles.includes(role)) return
+    if (!workspaces.includes(role)) return
     setActiveRoleState(role)
     window.localStorage.setItem(ACTIVE_ROLE_KEY, role)
   }
@@ -158,9 +175,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         logout,
         authUser,
+        platformAdmin,
         profile,
         memberships,
-        activeMembership: memberships.find((membership) => membership.role === activeRole) ?? memberships[0] ?? null,
+        workspaces,
+        activeMembership:
+          memberships.find((membership) => workspaceForMembershipRole(membership.role) === activeRole) ??
+          memberships[0] ??
+          null,
         school,
         displayName: profile?.full_name ?? '',
         authState,

@@ -58,20 +58,6 @@ const reasons = [
   'Improve reporting and decision-making',
 ]
 
-function formatApplicationMessage(form: ApplicationForm): string {
-  return [
-    `Position: ${form.position}`,
-    `School address / identifying details: ${form.schoolAddress}`,
-    `Number of campuses: ${form.campusCount}`,
-    `Total students: ${form.studentRange}`,
-    `Total classes: ${form.classRange}`,
-    `Teachers/staff: ${form.staffRange}`,
-    `Curriculum: ${form.curriculum}`,
-    `Current system: ${form.currentSystem}`,
-    `Main reasons: ${form.reasons.join(', ')}`,
-  ].join('\n')
-}
-
 export default function Signup() {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<ApplicationForm>(initialForm)
@@ -145,8 +131,16 @@ export default function Signup() {
       email: form.email.trim().toLowerCase(),
       phone: form.phone.trim(),
       school_size_band: form.studentRange,
-      message: formatApplicationMessage(form),
       country: form.country.trim().toUpperCase(),
+      applicant_position: form.position,
+      school_address: form.schoolAddress.trim(),
+      campus_count: form.campusCount,
+      student_count_band: form.studentRange,
+      class_count_band: form.classRange,
+      staff_count_band: form.staffRange,
+      curriculum: form.curriculum.trim(),
+      current_system: form.currentSystem.trim(),
+      reasons: form.reasons,
       status: 'pending',
     })
 

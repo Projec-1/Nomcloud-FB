@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import PublicLayout from '@/components/layout/PublicLayout'
@@ -5,6 +6,8 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import CookieConsent from '@/components/layout/CookieConsent'
 import ProtectedRoute from '@/routes/ProtectedRoute'
 import RoleRoute from '@/routes/RoleRoute'
+import PlatformRoute from '@/routes/PlatformRoute'
+import PlatformLayout from '@/components/layout/PlatformLayout'
 
 import Home from '@/pages/public/Home'
 import Solutions from '@/pages/public/Solutions'
@@ -55,6 +58,9 @@ import ParentAnnouncements from '@/pages/app/parent/Announcements'
 import ParentNotifications from '@/pages/app/parent/Notifications'
 import ParentMessages from '@/pages/app/parent/Messages'
 import ParentTutorials from '@/pages/app/parent/Tutorials'
+import PlatformPlaceholder from '@/pages/platform/Placeholder'
+
+const DevApprovalPanel = import.meta.env.DEV ? lazy(() => import('@/pages/dev/ApprovalPanel')) : null
 
 export default function App() {
   return (
@@ -78,6 +84,29 @@ export default function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        {import.meta.env.DEV && DevApprovalPanel ? (
+          <Route
+            path="/dev/approval"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<div className="p-8 text-sm text-graphite">Loading development panel…</div>}>
+                  <DevApprovalPanel />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+        ) : null}
+
+        <Route
+          path="/platform"
+          element={
+            <PlatformRoute>
+              <PlatformLayout />
+            </PlatformRoute>
+          }
+        >
+          <Route index element={<PlatformPlaceholder />} />
+        </Route>
 
         <Route
           path="/app/admin"

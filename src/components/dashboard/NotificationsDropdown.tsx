@@ -18,13 +18,13 @@ const iconByType: Record<NotificationItem['type'], typeof Bell> = {
 }
 
 export default function NotificationsDropdown() {
-  const { activeMembership } = useAuth()
+  const { activeMembership, activeRole } = useAuth()
   const { notificationsFor, markNotificationRead, markAllNotificationsRead, scopeKey } = useData()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  const scope = scopeKey(activeMembership?.role ?? 'admin', activeMembership?.teacher_id ?? undefined, activeMembership?.guardian_id ?? undefined)
+  const scope = scopeKey(activeRole ?? 'admin', activeMembership?.teacher_id ?? undefined, activeMembership?.guardian_id ?? undefined)
   const notifications = notificationsFor(scope)
   const unreadCount = notifications.filter((n) => !n.read).length
 

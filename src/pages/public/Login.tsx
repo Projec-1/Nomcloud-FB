@@ -9,7 +9,8 @@ import { isValidEmail } from '@/utils/validators'
 import { useToast } from '@/context/ToastContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { supabase } from '@/lib/supabase'
-import { fetchActiveMemberships } from '@/services/identityService'
+import { fetchActiveMemberships, fetchPlatformAdminStatus } from '@/services/identityService'
+import { workspacesForMembershipRoles } from '@/lib/roles'
 import type { Role } from '@/types'
 
 export default function Login() {
@@ -30,6 +31,7 @@ export default function Login() {
     const role = (['admin', 'teacher', 'parent'] as Role[]).find((candidate) => roles.includes(candidate))
     return role ? `/app/${role}` : null
   }
+
 
   const requestedPathForRoles = (roles: Role[]) => {
     const requested = location.state?.from
@@ -69,12 +71,20 @@ export default function Login() {
     }
 
     try {
+      // An unrevoked platform_admins row is the sole determinant of platform
+      // authority, and such an account holds no school membership by design.
+      if (await fetchPlatformAdminStatus(data.user.id)) {
+        showToast({ type: 'success', title: 'Welcome back!' })
+        navigate('/platform')
+        return
+      }
+
       const memberships = await fetchActiveMemberships(data.user.id)
-      const roles = memberships.map((membership) => membership.role)
+      const roles = workspacesForMembershipRoles(memberships.map((membership) => membership.role))
       const destination = requestedPathForRoles(roles) || destinationForRoles(roles)
 
       if (!destination) {
-        setError('Your account is not assigned an active school workspace.')
+        setError('Your account is not assigned an active school workspace or platform administrator role.')
         return
       }
 

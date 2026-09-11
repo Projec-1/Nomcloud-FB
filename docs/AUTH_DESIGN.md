@@ -19,8 +19,9 @@ auth.users → profiles → memberships → school_id + role → authorisation �
 - `profiles.school_id` is authoritative for the person's school. In V1, one human
   belongs to one school. A platform operator has `profiles.school_id = NULL`; that
   value alone does **not** grant platform authority.
-- `memberships` records the person's role at that school (`admin`, `teacher`, or
-  `parent`) and, where applicable, the linked teacher or guardian record.
+- `memberships` records the person's role at that school (`owner`, `director`,
+  `administrator`, `principal`, `teacher`, or `guardian`) and, where applicable,
+  the linked teacher or guardian record.
   `memberships.school_id` is a constrained projection of `profiles.school_id`, not
   an independent source of truth.
 - An unrevoked `platform_admins` row is the sole determinant of platform-admin
@@ -161,9 +162,25 @@ The provider maps each active membership to a view:
 
 | Membership role | View |
 |---|---|
-| `admin` | `/app/admin` |
+| `owner` | none yet |
+| `director` | none yet |
+| `administrator` | `/app/admin` |
+| `principal` | none yet |
 | `teacher` | `/app/teacher` |
-| `parent` | `/app/parent` |
+| `guardian` | `/app/parent` |
+
+Migration `20260908000002_membership_role_expansion` renamed `admin` to
+`administrator` and `parent` to `guardian`, and added `owner`, `director` and
+`principal`. The Phase 4 workspaces were deliberately not expanded
+(CAMPUS_ROLE_DESIGN.md section G), so `src/lib/roles.ts` translates a database
+role to a workspace at the identity boundary and nowhere else. Owner, Director
+and Principal map to no workspace on purpose: `admin` must never silently stand
+in for all four organisational roles. A member holding only those roles reaches
+the no-workspace message rather than an administrator view.
+
+A platform operator holds no membership at all. Sign-in checks the unrevoked
+`platform_admins` row first and routes to `/platform`; that check is the sole
+determinant of platform authority and never depends on a null `school_id`.
 
 The active role is UI state, not identity state. It is stored in the auth provider
 and may be persisted in a non-authoritative browser preference so a reload can

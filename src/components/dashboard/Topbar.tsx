@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Menu, Moon, Sun, ChevronDown, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import type { Role } from '@/types'
 import { useTheme } from '@/context/ThemeContext'
 import { useData } from '@/context/DataContext'
 import { roleLabelKey } from '@/components/dashboard/navConfig'
@@ -11,7 +12,7 @@ import Avatar from '@/components/ui/Avatar'
 import NotificationsDropdown from '@/components/dashboard/NotificationsDropdown'
 
 export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
-  const { profile, logout, memberships, activeRole, activeMembership, setActiveRole } = useAuth()
+  const { profile, logout, workspaces, activeRole, activeMembership, setActiveRole } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const { settings } = useData()
   const { t } = useLanguage()
@@ -29,10 +30,11 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   if (!profile || !activeMembership) return null
 
-  const availableRoles = memberships.map((membership) => membership.role)
-  const visibleRole = activeRole || activeMembership.role
+  const availableRoles = workspaces
+  const visibleRole = activeRole && availableRoles.includes(activeRole) ? activeRole : availableRoles[0]
+  if (!visibleRole) return null
   // The switcher is a convenience and NEVER a permission; Phase 7 RLS independently verifies every operation.
-  const switchRole = (role: typeof visibleRole) => {
+  const switchRole = (role: Role) => {
     setActiveRole(role)
     setMenuOpen(false)
     navigate(`/app/${role}`)
@@ -56,7 +58,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           <div className="relative">
             <select
               value={visibleRole}
-              onChange={(event) => switchRole(event.target.value as typeof visibleRole)}
+              onChange={(event) => switchRole(event.target.value as Role)}
               className="input h-9 w-auto min-w-28 appearance-none py-1 pl-3 pr-2 text-xs font-medium"
               aria-label="Switch workspace role"
             >

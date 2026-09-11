@@ -2,7 +2,16 @@ import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 export type AuthSessionUser = SupabaseUser
 
-export type MembershipRole = 'admin' | 'teacher' | 'parent'
+// Mirrors the public.user_role enum after migration 20260908000002 renamed
+// admin -> administrator and parent -> guardian. These are database values;
+// map them with workspaceForMembershipRole before routing on them.
+export type MembershipRole =
+  | 'owner'
+  | 'director'
+  | 'administrator'
+  | 'principal'
+  | 'teacher'
+  | 'guardian'
 export type MembershipStatus = 'active' | 'suspended'
 export type SchoolStatus = 'active' | 'suspended' | 'closed'
 
