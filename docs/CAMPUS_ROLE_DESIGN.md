@@ -329,7 +329,7 @@ No SQL is specified here.
 | 2 | `membership_role_expansion` | Add six-role vocabulary compatibility and replace the three-role positive membership check | `20260903000001_extensions_and_enums`, `20260904000003_identity` | **DONE** — applied as `20260908000002_membership_role_expansion`; also added the J2 owner partial unique index |
 | 3 | `membership_campus_scope` | Add explicit all/selected scope mode and `membership_campus_scopes` with composite tenancy | `membership_role_expansion`, `campuses` | **DONE** — applied as `20260911000002_membership_campus_scope` |
 | 4 | `classes_campus` | Add campus ownership to classes, composite campus FK, and campus-aware class uniqueness/indexes | `campuses`, `20260904000008_classes_and_timetable` | **DONE** — applied as `20260911000003_classes_campus`; class naming is now campus-aware with `NULLS NOT DISTINCT` |
-| 5 | `campus_scope_integrity` | Add or revise constraints/triggers needed to keep role, scope mode, and scope rows consistent | `membership_campus_scope`, `classes_campus` | NOT STARTED |
+| 5 | `campus_scope_integrity` | Add or revise constraints/triggers needed to keep role, scope mode, and scope rows consistent | `membership_campus_scope`, `classes_campus` | **DONE** — applied as `20260911000004_campus_scope_integrity`; resolves J open question 6 |
 | 6 | `invitation_role_scope_expansion` | Extend invitation role validation and store/validate invitation scope intent without storing bearer tokens | `membership_campus_scope`, `20260906000001_accept_invitation` | NOT STARTED |
 | 7 | `accept_invitation_role_scope` | Update `accept_invitation` to create six-role memberships and approved campus scopes transactionally | `invitation_role_scope_expansion`, `20260906000002_revoke_accept_invitation_anon` | NOT STARTED |
 | 8 | `campus_rls_and_grants` | Phase 7 authorization policies for school-wide, campus-scoped, and guardian-student access | All preceding migrations; existing Phase 3 grants | NOT STARTED |
@@ -359,8 +359,14 @@ never edited; corrections are new migrations.
    existing class assignments. A teacher's effective scope is whichever is broader,
    not either source exclusively. Phase 7 authorization logic must compute this
    union rather than checking only one source.
-6. **All-campus representation:** `scope_mode` is proposed, but the final
-   constraint behavior for selected-with-zero-rows needs approval.
+6. **J6 RESOLVED — All-campus representation:** `scope_mode = 'selected'` with
+   zero `membership_campus_scopes` rows is rejected. A membership scoped to
+   specific campuses that names none can act nowhere, silently, which is far
+   more likely a mistake than an intended lockout; `memberships.status` is the
+   explicit way to suspend someone. Enforced by a DEFERRABLE INITIALLY DEFERRED
+   constraint trigger in Migration 5, so a membership and its scope rows may be
+   written in either order within one transaction and are checked once at
+   commit.
 7. **Campus history:** Students and teachers may move campuses. This design
    deliberately avoids scalar campus columns on people, but a temporal
    assignment/history table may be required for reporting and authorization.
