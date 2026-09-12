@@ -1,8 +1,9 @@
 # Nom Cloud — Phase 7 Full RLS Rollout Plan
 
 **Status:** Batch 1 of 6 applied (`20260912000001_platform_and_identity_rls`,
-2026-09-12), plus corrective `20260912000002_restrict_anon_school_application_insert`.
-Seven of the 31 unprotected tables now carry RLS; 24 remain.
+2026-09-12), corrective `20260912000002_restrict_anon_school_application_insert`,
+and batch 2 (`20260912000003_school_people_rls`, 2026-09-12).
+Fifteen of the 31 unprotected tables now carry RLS; 16 remain.
 Sections A-D and F-H remain the design; §E carries live batch status.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md), especially §§A.2, B,
@@ -192,6 +193,40 @@ values.
   a controlled RPC/function; the editable field list is **approval required**.
 
 ## C.2 School-wide structure and people
+
+> **APPLIED as batch 2** (`20260912000003_school_people_rls`). The per-table text
+> below is retained for provenance. Where it differs from this note, **this note
+> wins** — four entries were corrected by evidence gathered while implementing.
+>
+> 1. **Principal campus scope is not expressible on people tables.** The entries
+>    for `teachers`, `guardians`, `students` and `student_guardians` describe
+>    P-selected access filtered through a campus chain. That chain is not total:
+>    measured, a student in a NULL-campus class, a newly admitted student, and a
+>    newly hired teacher all reach **no campus at all**. For writes it is
+>    impossible rather than merely lossy, since a person created by a principal
+>    has no assignment yet, so a campus-filtered `WITH CHECK` could never pass.
+>    Principal access on all eight tables is therefore **school-wide,
+>    independent of `scope_mode`**. Campus scope becomes a real boundary in batch
+>    3, on `classes`, which actually carries `campus_id`. Revisit under §J7.
+> 2. **Guardians do need read on `academic_years`, `terms` and `subjects`.**
+>    Those three entries say "Guardian no direct read", assuming labels arrive
+>    already joined. They do not: RLS filters every table in a query, joined ones
+>    included. Measured with those tables ODA-only, a guardian reading their own
+>    child's grade got **zero rows** through an inner join and a **NULL label**
+>    through a left join. Denying the read does not hide a label, it deletes the
+>    child's record from the parent's view. All three are reference data with no
+>    personal information, and every active member may now read them.
+> 3. **Teacher read is school-wide within the school**, not restricted to taught
+>    classes. The narrower rule the `students` and `guardians` entries recommend
+>    depends on `class_subjects` and `class_enrollments`, which batch 3 has not
+>    yet protected, so the predicate does not exist yet. Approved as school-wide
+>    read-only; revisit in batch 3 if the tighter rule is still wanted.
+> 4. **`school_subscriptions` is owner/director only**, not ODA. Entry 8 says
+>    "ODA own school". Applied on explicit instruction. For the record: no
+>    commercial-sensitivity note restricting billing by role exists in
+>    SCHEMA_DESIGN.md, and CAMPUS_ROLE_DESIGN §J3 leaves the Director/
+>    Administrator matrix open. This is the **first place the two roles diverge**
+>    and sets a precedent on J3. Nothing reads the table today.
 
 ### 8. `school_subscriptions` — SCHOOL-OWNED
 
@@ -491,8 +526,8 @@ access exists.
 | Order | Batch | Tables | Dependency / review goal |
 |---|---|---|---|
 | 1 | **Platform, public intake, profile boundary** — **DONE**, applied as `20260912000001_platform_and_identity_rls` | `subscription_plans`, `reserved_shortcodes`, `school_applications`, `contact_messages`, `platform_admins`, `profiles`, **`audit_logs`** | Applied. `audit_logs` was moved forward from batch 6 into this batch because its access model is platform/ODA-only and shares no predicate with the messaging tables. The reserved-shortcode trigger was made SECURITY DEFINER first, as this row required. Public INSERT-only forms preserved and re-verified. Both SECURITY DEFINER functions re-run end to end. PA governance and the profile self-edit field list are recorded below as still-open decisions. |
-| 2 | **People and Guardian boundary** | `teachers`, `guardians`, `students`, `student_guardians` | Depends on profile rules. Define current enrollment and prove Guardian discovery/link escalation is denied. |
-| 3 | **Academic structure, classes, roster, timetable** | `academic_years`, `terms`, `subjects`, `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` | Depends on people. Add/review shared campus/teaching helpers; prove selected scope, NULL-campus denial, and cross-campus move denial. |
+| 2 | **People and Guardian boundary** — **DONE**, applied as `20260912000003_school_people_rls` | `teachers`, `guardians`, `students`, `student_guardians`, **`school_subscriptions`, `academic_years`, `terms`, `subjects`** | Applied. The four school-structure tables were folded in from the old batch-3 row: they share the same predicates and carry no campus or guardian chain. "Current enrollment" proved not to be definable on people tables and was not needed; see the C.2 note. Guardian link escalation is denied and probed. |
+| 3 | **Classes, roster, timetable** | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (`academic_years`, `terms`, `subjects` moved to batch 2) | Depends on people. Add/review shared campus/teaching helpers; prove selected scope, NULL-campus denial, and cross-campus move denial. |
 | 4 | **Teaching records** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on class/assignment predicates. Approve attendance-marker rules first; prove teacher/Guardian boundaries and every WITH CHECK path. |
 | 5 | **Commercial and finance** | `school_subscriptions`, `fee_records`, `fee_payments` | Depends on people/terms. Approve finance corrections/voids; test Guardian own-student reads and all payment trigger cases. |
 | 6 | **Announcements, private delivery, messaging** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` (`audit_logs` moved to batch 1) | Depends on people/classes. Establish non-recursive participant helper, notification read receipt, audit trusted writer, and privacy governance before policy SQL. |
