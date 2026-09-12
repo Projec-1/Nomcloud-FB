@@ -2,9 +2,10 @@
 
 **Status:** Batch 1 of 6 applied (`20260912000001_platform_and_identity_rls`,
 2026-09-12), corrective `20260912000002_restrict_anon_school_application_insert`,
-batch 2 (`20260912000003_school_people_rls`) and batch 3
-(`20260912000004_classes_and_timetable_rls`), all 2026-09-12.
-Nineteen of the 31 unprotected tables now carry RLS; 12 remain.
+batch 2 (`20260912000003_school_people_rls`), batch 3
+(`20260912000004_classes_and_timetable_rls`) and batch 4
+(`20260912000005_teaching_records_rls`), all 2026-09-12.
+Twenty-four of the 31 unprotected tables now carry RLS; 7 remain.
 Sections A-D and F-H remain the design; §E carries live batch status.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md), especially §§A.2, B,
@@ -375,6 +376,31 @@ values.
 
 ## C.4 Teaching records
 
+> **APPLIED as batch 4** (`20260912000005_teaching_records_rls`). Per-table text
+> below retained for provenance; where it differs, **this note wins**.
+>
+> 1. **Decision 1 supersedes entry 20's recommendation.** That entry preferred
+>    class-teacher-only attendance marking and flagged the choice. The decision
+>    went the other way: any teacher of the class may mark it, homeroom or
+>    subject-only. `teaches_class` covers both arms and both are probed.
+> 2. **Writes on `grade_records`, `homework` and `exams` are subject-exact**, via
+>    the new `teaches_class_subject`. A homeroom teacher who teaches none of the
+>    class's subjects cannot enter marks in them.
+> 3. **Teacher READ is class-level, WRITE is subject-level.** Entry 21 recommended
+>    subject-exact read as well; that would hide a homeroom teacher's own class
+>    grades, and the harm entry 21 names is *changing* marks, which the write
+>    predicate closes. To tighten later, swap `teaches_class` for
+>    `teaches_class_subject` in the three `*_teacher_select` policies.
+> 4. **Decision 2: no guardian write path exists** on `homework` or
+>    `homework_submissions`. Guardians hold one policy on each, FOR SELECT.
+>    Entry 23's "approval required" on guardian submission is closed: homework is
+>    physical and the teacher records it, which is what the teacher write
+>    policies on `homework_submissions` are for.
+> 5. **Teacher write on `exams` is granted**, replacing entry 24's "ODA only
+>    initially / approval required".
+> 6. **Teacher DELETE withheld** on attendance, grades, submissions and exams;
+>    `homework` excepted.
+
 ### 20. `attendance_records` — SCHOOL-OWNED
 
 - **References:** `marked_by` attribution-only.
@@ -557,7 +583,7 @@ access exists.
 | 1 | **Platform, public intake, profile boundary** — **DONE**, applied as `20260912000001_platform_and_identity_rls` | `subscription_plans`, `reserved_shortcodes`, `school_applications`, `contact_messages`, `platform_admins`, `profiles`, **`audit_logs`** | Applied. `audit_logs` was moved forward from batch 6 into this batch because its access model is platform/ODA-only and shares no predicate with the messaging tables. The reserved-shortcode trigger was made SECURITY DEFINER first, as this row required. Public INSERT-only forms preserved and re-verified. Both SECURITY DEFINER functions re-run end to end. PA governance and the profile self-edit field list are recorded below as still-open decisions. |
 | 2 | **People and Guardian boundary** — **DONE**, applied as `20260912000003_school_people_rls` | `teachers`, `guardians`, `students`, `student_guardians`, **`school_subscriptions`, `academic_years`, `terms`, `subjects`** | Applied. The four school-structure tables were folded in from the old batch-3 row: they share the same predicates and carry no campus or guardian chain. "Current enrollment" proved not to be definable on people tables and was not needed; see the C.2 note. Guardian link escalation is denied and probed. |
 | 3 | **Classes, roster, timetable** — **DONE**, applied as `20260912000004_classes_and_timetable_rls` | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (`academic_years`, `terms`, `subjects` moved to batch 2) | Depends on people. Add/review shared campus/teaching helpers; prove selected scope, NULL-campus denial, and cross-campus move denial. |
-| 4 | **Teaching records** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on class/assignment predicates. Approve attendance-marker rules first; prove teacher/Guardian boundaries and every WITH CHECK path. |
+| 4 | **Teaching records** — **DONE**, applied as `20260912000005_teaching_records_rls` | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on class/assignment predicates. Approve attendance-marker rules first; prove teacher/Guardian boundaries and every WITH CHECK path. |
 | 5 | **Commercial and finance** | `school_subscriptions`, `fee_records`, `fee_payments` | Depends on people/terms. Approve finance corrections/voids; test Guardian own-student reads and all payment trigger cases. |
 | 6 | **Announcements, private delivery, messaging** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` (`audit_logs` moved to batch 1) | Depends on people/classes. Establish non-recursive participant helper, notification read receipt, audit trusted writer, and privacy governance before policy SQL. |
 
