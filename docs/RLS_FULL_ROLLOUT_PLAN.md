@@ -3,9 +3,10 @@
 **Status:** Batch 1 of 6 applied (`20260912000001_platform_and_identity_rls`,
 2026-09-12), corrective `20260912000002_restrict_anon_school_application_insert`,
 batch 2 (`20260912000003_school_people_rls`), batch 3
-(`20260912000004_classes_and_timetable_rls`) and batch 4
-(`20260912000005_teaching_records_rls`), all 2026-09-12.
-Twenty-four of the 31 unprotected tables now carry RLS; 7 remain.
+(`20260912000004_classes_and_timetable_rls`), batch 4
+(`20260912000005_teaching_records_rls`) and batch 5
+(`20260912000006_finance_rls`), all 2026-09-12.
+Twenty-six of the 31 unprotected tables now carry RLS; 5 remain.
 Sections A-D and F-H remain the design; §E carries live batch status.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md), especially §§A.2, B,
@@ -459,6 +460,33 @@ values.
 
 ## C.5 Commercial and financial tables
 
+> **APPLIED as batch 5** (`20260912000006_finance_rls`), for `fee_records` and
+> `fee_payments` only; `school_subscriptions` was taken in batch 2. Per-table
+> text retained for provenance; where it differs, **this note wins**.
+>
+> 1. **The `amount_paid` risk entry 25 names was real and is now closed.**
+>    Nothing had protected the column: `authenticated` held table-level UPDATE
+>    over every column and Phase 3 created no column grant. An administrator was
+>    measured forging a fully-paid balance with no payment behind it. A
+>    column-level grant omitting `amount_paid` now blocks it.
+> 2. **The trigger needed the change entry 26 said it might not.** Entry 26 says
+>    no function change is needed provided every writer has school-wide payment
+>    read, which is true of the ODA-only model. It is not true once the column
+>    grant exists: as SECURITY INVOKER the trigger's own write hit the new
+>    restriction and a legitimate payment insert failed 42501. The function is
+>    now SECURITY DEFINER, body and pinned `search_path` untouched. This also
+>    closes the filtered-aggregate hazard entry 26 flags.
+> 3. **Principal: no access.** Not merely conservative. Fees carry no campus
+>    dimension, so scoped access is not expressible and any grant would be
+>    school-wide, exceeding a principal's authority everywhere else.
+> 4. **Teacher: no access**, as entry 25 and 26 say. The alternative is recorded
+>    in the migration header with its cost.
+> 5. **`fee_payments` DELETE is granted** to owner, director and administrator
+>    per the locked decision, overriding entry 26's "approved correction/void
+>    process". No void process exists, so deletion is the only correction path
+>    today and the trigger does recalculate downwards correctly. Replacing it
+>    with a void workflow is still open.
+
 ### 25. `fee_records` — SCHOOL-OWNED, FIN
 
 - **References:** none.
@@ -584,7 +612,7 @@ access exists.
 | 2 | **People and Guardian boundary** — **DONE**, applied as `20260912000003_school_people_rls` | `teachers`, `guardians`, `students`, `student_guardians`, **`school_subscriptions`, `academic_years`, `terms`, `subjects`** | Applied. The four school-structure tables were folded in from the old batch-3 row: they share the same predicates and carry no campus or guardian chain. "Current enrollment" proved not to be definable on people tables and was not needed; see the C.2 note. Guardian link escalation is denied and probed. |
 | 3 | **Classes, roster, timetable** — **DONE**, applied as `20260912000004_classes_and_timetable_rls` | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (`academic_years`, `terms`, `subjects` moved to batch 2) | Depends on people. Add/review shared campus/teaching helpers; prove selected scope, NULL-campus denial, and cross-campus move denial. |
 | 4 | **Teaching records** — **DONE**, applied as `20260912000005_teaching_records_rls` | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on class/assignment predicates. Approve attendance-marker rules first; prove teacher/Guardian boundaries and every WITH CHECK path. |
-| 5 | **Commercial and finance** | `school_subscriptions`, `fee_records`, `fee_payments` | Depends on people/terms. Approve finance corrections/voids; test Guardian own-student reads and all payment trigger cases. |
+| 5 | **Finance** — **DONE**, applied as `20260912000006_finance_rls` | `fee_records`, `fee_payments` (`school_subscriptions` moved to batch 2) | Depends on people/terms. Approve finance corrections/voids; test Guardian own-student reads and all payment trigger cases. |
 | 6 | **Announcements, private delivery, messaging** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` (`audit_logs` moved to batch 1) | Depends on people/classes. Establish non-recursive participant helper, notification read receipt, audit trusted writer, and privacy governance before policy SQL. |
 
 The order follows actual dependencies: platform/profile authority; people;
