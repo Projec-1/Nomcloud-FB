@@ -1,7 +1,8 @@
 # Nom Cloud — Phase 7 Full RLS Rollout Plan
 
 **Status:** Batch 1 of 6 applied (`20260912000001_platform_and_identity_rls`,
-2026-09-12). Seven of the 31 unprotected tables now carry RLS; 24 remain.
+2026-09-12), plus corrective `20260912000002_restrict_anon_school_application_insert`.
+Seven of the 31 unprotected tables now carry RLS; 24 remain.
 Sections A-D and F-H remain the design; §E carries live batch status.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md), especially §§A.2, B,
@@ -541,24 +542,43 @@ here so the batch that implements them does not re-open the question.
 | 3 | Fee and payment write access is exactly the owner/director/administrator set, with no further restriction and no separate finance role. | Batch 5. Keeps `sync_fee_record_amount_paid()` sound as SECURITY INVOKER, per C.5/§D. |
 | 4 | Guardians never digitally submit homework. Homework is physical and a teacher marks it reviewed in person. No guardian submission write path is needed anywhere. | Batch 4, `homework_submissions`. Closes §G.7 and §H.6. |
 
-## E.3 Findings from batch 1 still open
+## E.3 Findings from batch 1 — both closed out
 
-Neither is a regression introduced by the policies; both are gaps the probes
-exposed. Applied migrations are never edited, so each needs a corrective
-migration if it is to be closed.
+Neither was a regression introduced by the policies; both were gaps the probes
+exposed. Applied migrations are never edited, so closing one required a
+corrective migration.
 
-1. **A signed-in user cannot submit the public sign-up form.** `/signup` is an
-   unguarded public route and `school_applications` has an INSERT policy for
-   `anon` only, so an authenticated visitor submitting the form is rejected with
-   42501. Either guard the route in the UI or add an authenticated INSERT policy.
-   Arguably the denial is correct and only the UI needs to change.
-2. **The anonymous INSERT policies use `with check (true)`.** `anon` can insert a
-   `school_applications` row already marked `approved` pointing at a real school,
-   or carrying a forged `reviewed_by`, and a `contact_messages` row marked
-   `handled`. No data becomes readable, so this is queue and metric poisoning
-   rather than an access escalation, but it is looser than the discipline applied
-   everywhere else. A tightened `with check` pinning the review columns to their
-   unset state would close it without affecting the real forms.
+1. **A signed-in user cannot submit the public sign-up form. ACCEPTED AS IS, no
+   fix.** `/signup` is an unguarded public route and `school_applications` has an
+   INSERT policy for `anon` only, so an authenticated visitor submitting the form
+   is rejected with 42501. Reviewed and accepted: this is not a real workflow, a
+   signed-in school user has no reason to apply for a new school, and the denial
+   is the correct outcome. No policy or UI change is planned. Recorded so a later
+   batch does not mistake it for a defect.
+2. **The anonymous INSERT policy on `school_applications` used
+   `with check (true)`. FIXED** by corrective
+   `20260912000002_restrict_anon_school_application_insert`. Before the fix an
+   anonymous caller could insert a row already marked `approved` pointing at a
+   real school, or carrying a forged `reviewed_by` or `reviewed_at`; all were
+   confirmed to return `OK rows=1` as `anon`. The policy now pins
+   `status = 'pending'`, `reviewed_by IS NULL`, `reviewed_at IS NULL` and
+   `approved_school_id IS NULL`, leaving every ordinary application field
+   settable. `status` is pinned by equality rather than left to the column
+   DEFAULT, because a DEFAULT only covers a caller that omits the column. Applied
+   with `ALTER POLICY`, so the policy's name, command, role list and permissive
+   flag are provably unchanged. Re-probed: the honest form payload still inserts,
+   including the variant that omits `status`; every forgery is rejected with
+   42501; and the platform-admin approval flow still writes all four decision
+   columns, because it is SECURITY DEFINER and this policy binds only `anon`.
+
+   **Residual, deliberately not closed.** Two further columns remain settable by
+   an anonymous submitter and were outside the approved scope of the corrective:
+   `rejection_reason`, which is inert while `status` is pinned to `pending` but
+   could show a pre-filled reason in the review queue, and `source_ip`, which is
+   a forgeable provenance field better set server-side. The equivalent
+   `contact_messages` anonymous INSERT policy also still uses `with check (true)`,
+   so `status` and `handled_by` remain forgeable there. None grants read access.
+   Each needs its own decision.
 
 ---
 
