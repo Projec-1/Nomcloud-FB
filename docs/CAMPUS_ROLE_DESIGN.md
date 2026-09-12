@@ -332,10 +332,26 @@ No SQL is specified here.
 | 5 | `campus_scope_integrity` | Add or revise constraints/triggers needed to keep role, scope mode, and scope rows consistent | `membership_campus_scope`, `classes_campus` | **DONE** — applied as `20260911000004_campus_scope_integrity`; resolves J open question 6 |
 | 6 | `invitation_role_scope_expansion` | Extend invitation role validation and store/validate invitation scope intent without storing bearer tokens | `membership_campus_scope`, `20260906000001_accept_invitation` | **DONE** — applied as `20260911000005_invitation_role_scope_expansion`; resolves J open question 11 |
 | 7 | `accept_invitation_role_scope` | Update `accept_invitation` to create six-role memberships and approved campus scopes transactionally | `invitation_role_scope_expansion`, `20260906000002_revoke_accept_invitation_anon` | **DONE** — applied as `20260911000006_accept_invitation_role_scope` |
-| 8 | `campus_rls_and_grants` | Phase 7 authorization policies for school-wide, campus-scoped, and guardian-student access | All preceding migrations; existing Phase 3 grants | NOT STARTED |
+| 8 | `campus_rls_and_grants` | Phase 7 authorization policies for school-wide, campus-scoped, and guardian-student access | All preceding migrations; existing Phase 3 grants | **DONE** — applied as `20260911000007_campus_rls_and_grants`, scoped to the six campus/role tables only |
 
 Migration ordering must preserve the repository rule that applied migrations are
 never edited; corrections are new migrations.
+
+**Status: the campus/role expansion is complete, 8 of 8 applied.** The applied
+filenames are `20260908000001_campuses`, `20260908000002_membership_role_expansion`,
+`20260911000002_membership_campus_scope`, `20260911000003_classes_campus`,
+`20260911000004_campus_scope_integrity`,
+`20260911000005_invitation_role_scope_expansion`,
+`20260911000006_accept_invitation_role_scope` and
+`20260911000007_campus_rls_and_grants`.
+
+Migration 8 deliberately covers only the six campus/role tables: `schools`,
+`campuses`, `memberships`, `membership_campus_scopes`, `invitations` and
+`invitation_campus_scopes`. **Full Phase 7 row-level security across the
+remaining 31 public tables is a separate future task.** Those tables still have
+RLS disabled and broad grants, so no real school data should be entered until
+that work is done. Campus scope does not filter the six tables above; it becomes
+an access predicate in that future work, on `classes` and its descendants.
 
 ## §J. RISKS AND OPEN QUESTIONS
 
