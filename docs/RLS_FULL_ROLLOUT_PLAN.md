@@ -2,8 +2,9 @@
 
 **Status:** Batch 1 of 6 applied (`20260912000001_platform_and_identity_rls`,
 2026-09-12), corrective `20260912000002_restrict_anon_school_application_insert`,
-and batch 2 (`20260912000003_school_people_rls`, 2026-09-12).
-Fifteen of the 31 unprotected tables now carry RLS; 16 remain.
+batch 2 (`20260912000003_school_people_rls`) and batch 3
+(`20260912000004_classes_and_timetable_rls`), all 2026-09-12.
+Nineteen of the 31 unprotected tables now carry RLS; 12 remain.
 Sections A-D and F-H remain the design; §E carries live batch status.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md), especially §§A.2, B,
@@ -305,6 +306,34 @@ values.
 
 ## C.3 Classes, roster, and timetable
 
+> **APPLIED as batch 3** (`20260912000004_classes_and_timetable_rls`). The
+> per-table text below is retained for provenance; where it differs, **this note
+> wins**.
+>
+> 1. **`campus_id IS NULL` is not visible to a selected-scope principal.**
+>    Migration 4 defines NULL as "no campus assigned yet" and §A.2 already said
+>    "NULL is not a campus grant". Applied symmetrically: such a principal also
+>    cannot create a NULL-campus class, nor NULL out an existing one to escape
+>    scope. ODA and `scope_mode='all'` retain full access, so unassigned classes
+>    are never orphaned.
+> 2. **"Assigned to teach" = `classes.class_teacher_id` OR
+>    `class_subjects.teacher_id`.** `timetable_slots.teacher_id` is excluded to
+>    avoid circularity; a cover teacher reads their own slot through a separate
+>    policy without that slot counting as an assignment.
+> 3. **Teacher `scope_mode='selected'` adds no restriction here.** §J5 defines
+>    teacher scope as the union of explicit and class-derived scope, whichever is
+>    broader, and assignment is already the narrower predicate.
+> 4. **Principal writes are granted** (approved), replacing the "ODA only
+>    initially / approval required" text on all four tables. The `classes` UPDATE
+>    policy names the same predicate in USING and WITH CHECK, giving the
+>    old-row/new-row test entry 18 asks for.
+> 5. **Teachers are read-only on all four tables**, as the entries say. This is
+>    load-bearing, not conservative: `class_subjects.teacher_id` is the batch-4
+>    attendance grant, so a writable teacher could self-assign to any class.
+> 6. **`class_enrollments` guardian access is per-student, not per-class**, via
+>    `is_guardian_of_student`. A class predicate here would have shown a parent
+>    the whole roster.
+
 ### 16. `classes` — SCHOOL-OWNED
 
 - **References:** no user reference; `class_teacher_id` is a person reference,
@@ -527,7 +556,7 @@ access exists.
 |---|---|---|---|
 | 1 | **Platform, public intake, profile boundary** — **DONE**, applied as `20260912000001_platform_and_identity_rls` | `subscription_plans`, `reserved_shortcodes`, `school_applications`, `contact_messages`, `platform_admins`, `profiles`, **`audit_logs`** | Applied. `audit_logs` was moved forward from batch 6 into this batch because its access model is platform/ODA-only and shares no predicate with the messaging tables. The reserved-shortcode trigger was made SECURITY DEFINER first, as this row required. Public INSERT-only forms preserved and re-verified. Both SECURITY DEFINER functions re-run end to end. PA governance and the profile self-edit field list are recorded below as still-open decisions. |
 | 2 | **People and Guardian boundary** — **DONE**, applied as `20260912000003_school_people_rls` | `teachers`, `guardians`, `students`, `student_guardians`, **`school_subscriptions`, `academic_years`, `terms`, `subjects`** | Applied. The four school-structure tables were folded in from the old batch-3 row: they share the same predicates and carry no campus or guardian chain. "Current enrollment" proved not to be definable on people tables and was not needed; see the C.2 note. Guardian link escalation is denied and probed. |
-| 3 | **Classes, roster, timetable** | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (`academic_years`, `terms`, `subjects` moved to batch 2) | Depends on people. Add/review shared campus/teaching helpers; prove selected scope, NULL-campus denial, and cross-campus move denial. |
+| 3 | **Classes, roster, timetable** — **DONE**, applied as `20260912000004_classes_and_timetable_rls` | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (`academic_years`, `terms`, `subjects` moved to batch 2) | Depends on people. Add/review shared campus/teaching helpers; prove selected scope, NULL-campus denial, and cross-campus move denial. |
 | 4 | **Teaching records** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on class/assignment predicates. Approve attendance-marker rules first; prove teacher/Guardian boundaries and every WITH CHECK path. |
 | 5 | **Commercial and finance** | `school_subscriptions`, `fee_records`, `fee_payments` | Depends on people/terms. Approve finance corrections/voids; test Guardian own-student reads and all payment trigger cases. |
 | 6 | **Announcements, private delivery, messaging** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` (`audit_logs` moved to batch 1) | Depends on people/classes. Establish non-recursive participant helper, notification read receipt, audit trusted writer, and privacy governance before policy SQL. |
