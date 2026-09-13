@@ -1,13 +1,14 @@
 # Nom Cloud — Phase 8 Frontend-to-Database Connection Plan
 
-**Status:** Discovery, amended 2026-09-13 with five locked decisions, and
-**Batch 0 applied 2026-09-13**. Sections A to F remain the survey of the distance
+**Status:** Discovery, amended 2026-09-13 with five locked decisions.
+**Batches 0, 1 and 2 applied 2026-09-13.** Sections A to F remain the survey of the distance
 between the prototype frontend and the finished database; §G carries live batch
 status.
 
 Batch 0 delivered the four-state contract, the decision 9 weekday and timezone
-fixes, and the demo-tenant marker and boundary. Migration
-`20260913000002_school_is_demo`. Batch 1 has not started.
+fixes, and the demo-tenant marker and boundary (migration
+`20260913000002_school_is_demo`). Batches 1 and 2 connected the school shell and
+academic structure; neither needed a migration. Batch 3 has not started.
 
 **Five of the twelve decisions in §I.1 are settled** and are recorded in §A.5.
 Sections D.5, D.6, E.2, F.7, G, H.1, H.5, H.9, I.1 and I.2 were revised to match
@@ -574,8 +575,8 @@ the same sequence.
 | Order | Batch | Tables | Why here, and what the locked decisions changed |
 |---|---|---|---|
 | 0 | **Foundations** — **DONE** 2026-09-13, migration `20260913000002_school_is_demo` | `schools.is_demo` | Applied. The four-state contract lives in `src/lib/resourceState.ts` and `src/components/ui/ResourceGate.tsx`, with the denied copy defined once as `ACCESS_DENIED_MESSAGE` and rendered by `src/components/ui/AccessDenied.tsx`. `RoleRoute` now renders it instead of redirecting to `/login`. Decision 9's weekday and timezone fixes landed here rather than in batch 1, since they are shared utilities. Demo tenant created and marked; indicator in `DemoModeBanner`, boundary in `src/lib/demoSchool.ts`. No screen's data-fetching changed. |
-| 1 | **School shell** | `schools` | Replaces the `settings` mock with the real row and retires the duplicate. Read-mostly, one writer (`admin/Settings`), no relations to unwind. Settles `currency` and `locale`. **Decision 2 removed `campuses` from this batch.** **The decision 9 weekday and timezone work moved into batch 0** and is already done: the three hardcoded sites and the UTC date bug are fixed, and `schools.timezone` is now read by the calendar helpers. What remains here is the settings object itself. |
-| 2 | **Academic structure** | `academic_years`, `terms`, `subjects` | Kills `CURRENT_TERM` and the nested `terms[]`, and turns subjects into entities. Everything downstream references `term_id` and `subject_id`, so this must precede them. Reference data, no personal information, readable by every member. Unchanged by the locked decisions. |
+| 1 | **School shell** — **DONE** 2026-09-13 | `schools` | Applied, no migration needed. `SchoolBrandLogo`, `Topbar`, `admin/Settings` and the school-name read in both fee pages now use the real row from `AuthContext`, which has fetched it since Phase 4. `admin/Settings` reads and writes through `src/services/schoolService.ts`, scoped by primary key rather than by RLS alone, and treats a null update result as a refusal because RLS filters rather than raises. Shortcode shown read-only. **The logo upload was removed, not connected**: it produced a base64 data URL that §F forbids persisting, and the real `logo_path` needs Storage, which does not exist (open decision 10). The badge now renders the derived initial. The mock `settings` slice is orphaned and retires in batch 8. |
+| 2 | **Academic structure** — **DONE (reads)** 2026-09-13 | `academic_years`, `terms`, `subjects` | Applied, no migration needed. `admin/AcademicYears` reads real years and terms through `useAcademicStructure`, scoped by `school_id` explicitly. **Current year and current term are derived differently and that distinction is now recorded in `academicService.ts`**: the active year is a stored fact (`status='active'`, enforced by a partial unique index), while the current term is NOT stored (no `terms.status`) and is computed by date containment in the school's timezone, returning null between terms. **Reads only.** The add-year and set-active controls were removed rather than left writing to a discarded mock store; activation needs two statements with no client transaction and is reported in §H.10. `fetchSubjects` exists but nothing consumes it until batches 3-5. `CURRENT_TERM` still feeds grades, exams and fees and retires with them. |
 | 3 | **People** | `teachers`, `guardians`, `students`, `student_guardians` | Unwinds `Student.parentId` and `Parent.studentIds` into the join that is the guardian access boundary. Fixes `useSelectedChild` and so **restores the parent workspace**, which §A.4 shows is currently broken. **Decision 1 removed** the principal-write variants. |
 | 4 | **Classes and roster** | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` | Unwinds `Student.classId`, `SchoolClass.studentIds` and `SchoolClass.subject[]`. Applies the two-link teaching model from §F.1 and so **restores the teacher workspace**. **Decision 2 removed campus filtering**: `classes.campus_id` is carried through the type but never used as a predicate. **Decision 1 removed** principal class management. |
 | 5 | **Teaching records** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on classes, students, subjects and terms all being real. Promotes embedded submissions to rows. Highest row volume. **Decision 1 removed** the principal variants. |
@@ -677,6 +678,40 @@ denial, are specified in §F.7 and belong to Batch 0.
 student's previous classes. Every screen currently assumes one current class per
 student. Which year a screen means, and whether a parent sees last year's
 records, is undecided.
+
+## H.10 Switching the active academic year needs a transaction
+
+Found in batch 2, not resolved there. `academic_years` carries
+
+```text
+CREATE UNIQUE INDEX academic_years_school_id_active_idx
+  ON public.academic_years (school_id) WHERE status = 'active'
+```
+
+so a school cannot hold two active years even for an instant. Switching the
+active year therefore means closing the current one and activating the next, and
+from a browser those are two separate statements with no transaction between
+them. If the first succeeds and the second fails, the school is left with **no
+active year at all** — and the active year is what every later batch derives the
+current term from, so that failure would silently break grades, exams and fees.
+
+The mock implementation did this as one synchronous array map, which is why the
+problem did not exist before. Options are a SECURITY DEFINER function that
+performs the swap atomically, or a deferred-constraint approach, or accepting a
+brief no-active-year window. Batch 2 shipped the page read-only rather than
+improvising. **Needs a decision before any UI can change the active year.**
+
+## H.11 Demo content has no reproducible home
+
+Batch 0 created the demo school in a migration. Batch 2 seeded its academic
+years, terms and subjects with direct SQL against the live database, because the
+batch needed real data to verify against.
+
+That seed is therefore **not reproducible from the repository**: a fresh
+environment would get the demo school with no content. Demo seeding needs a
+home — a migration, a `supabase/seed.sql`, or a script — before the demo tenant
+is relied on for sales. Deferred rather than guessed at, since each option has
+different consequences for production.
 
 ## H.9 Demo mode — DECIDED IN PRINCIPLE, MECHANISM AWAITING APPROVAL
 

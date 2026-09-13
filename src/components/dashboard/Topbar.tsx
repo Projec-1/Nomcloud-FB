@@ -4,7 +4,6 @@ import { Menu, Moon, Sun, ChevronDown, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import type { Role } from '@/types'
 import { useTheme } from '@/context/ThemeContext'
-import { useData } from '@/context/DataContext'
 import { roleLabelKey } from '@/components/dashboard/navConfig'
 import { useLanguage } from '@/context/LanguageContext'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher'
@@ -12,9 +11,8 @@ import Avatar from '@/components/ui/Avatar'
 import NotificationsDropdown from '@/components/dashboard/NotificationsDropdown'
 
 export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
-  const { profile, logout, workspaces, activeRole, activeMembership, setActiveRole } = useAuth()
+  const { profile, logout, workspaces, activeRole, activeMembership, setActiveRole, school } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const { settings } = useData()
   const { t } = useLanguage()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -47,7 +45,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           <Menu className="h-5 w-5" />
         </button>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink dark:text-white">{settings.name}</p>
+          <p className="truncate text-sm font-semibold text-ink dark:text-white">{school?.name ?? ''}</p>
           <p className="text-xs text-graphite">{t(roleLabelKey[visibleRole])} Workspace</p>
         </div>
       </div>

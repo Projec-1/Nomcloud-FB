@@ -27,8 +27,8 @@ const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'
 const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })
 
 export default function AdminFees() {
-  const { fees, students, classes, parents, recordPayment, createThread, currentTerm, settings } = useData()
-  const { profile } = useAuth()
+  const { fees, students, classes, parents, recordPayment, createThread, currentTerm } = useData()
+  const { profile, school } = useAuth()
   const { showToast } = useToast()
 
   const [search, setSearch] = useState('')
@@ -102,7 +102,7 @@ export default function AdminFees() {
   const openReminder = () => {
     setReminderMonth(currentMonthName)
     setReminderMessage(
-      `Dear parent, this is a reminder that your child's school fees for ${currentMonthName} are outstanding at ${settings.name}. Kindly settle the balance at your earliest convenience via the parent app. Thank you.`,
+      `Dear parent, this is a reminder that your child's school fees for ${currentMonthName} are outstanding at ${school?.name ?? ''}. Kindly settle the balance at your earliest convenience via the parent app. Thank you.`,
     )
     setReminderOpen(true)
   }

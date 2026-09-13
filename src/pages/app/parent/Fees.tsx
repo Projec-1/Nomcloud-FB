@@ -35,8 +35,8 @@ const paymentOptions: { value: PaymentMethod; label: string; description: string
 ]
 
 export default function ParentFees() {
-  const { classes, fees, recordPayment, settings } = useData()
-  const { profile } = useAuth()
+  const { classes, fees, recordPayment } = useData()
+  const { profile, school } = useAuth()
   const { showToast } = useToast()
   const { children, selectedChild, selectChild } = useSelectedChild()
 
@@ -89,7 +89,7 @@ export default function ParentFees() {
     if (!lastReceipt || !selectedChild) return
     downloadReceiptImage({
       reference: lastReceipt.reference,
-      schoolName: settings.name,
+      schoolName: school?.name ?? '',
       studentName: selectedChild.name,
       category: lastReceipt.category,
       amount: lastReceipt.amount,
