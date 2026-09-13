@@ -7,6 +7,7 @@ import { useSelectedChild } from '@/hooks/useSelectedChild'
 import PageHeader from '@/components/ui/PageHeader'
 import ChildSwitcher from '@/components/dashboard/ChildSwitcher'
 import EmptyState from '@/components/ui/EmptyState'
+import ResourceGate from '@/components/ui/ResourceGate'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
@@ -38,7 +39,7 @@ export default function ParentFees() {
   const { classes, fees, recordPayment } = useData()
   const { profile, school } = useAuth()
   const { showToast } = useToast()
-  const { children, selectedChild, selectChild } = useSelectedChild()
+  const { children, selectedChild, selectChild, state } = useSelectedChild()
 
   const [payTarget, setPayTarget] = useState<FeeRecord | null>(null)
   const [amount, setAmount] = useState('')
@@ -51,7 +52,13 @@ export default function ParentFees() {
     return (
       <div>
         <PageHeader title="Fees" description="Your child's fee balance and payment history." />
-        <EmptyState icon={Wallet} title="No children linked yet" description="Contact your school administrator to link your child's record." />
+        <ResourceGate
+          state={state}
+          empty={{ icon: Wallet, title: "No children linked yet", description: "Contact your school administrator to link your child's record." }}
+          deniedHint="Child records are available to a linked parent or guardian."
+        >
+          {() => null}
+        </ResourceGate>
       </div>
     )
   }

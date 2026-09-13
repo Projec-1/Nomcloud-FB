@@ -3,7 +3,7 @@ import { Users, CalendarCheck, BookOpen, Wallet } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import PageHeader from '@/components/ui/PageHeader'
-import EmptyState from '@/components/ui/EmptyState'
+import ResourceGate from '@/components/ui/ResourceGate'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import { formatDate, percentage } from '@/utils/format'
@@ -11,14 +11,20 @@ import { schoolDays } from '@/utils/schoolCalendar'
 
 export default function ParentChildren() {
   const { classes, attendance, grades, fees } = useData()
-  const { children, selectedChild, selectChild } = useSelectedChild()
+  const { children, selectedChild, selectChild, state } = useSelectedChild()
   const navigate = useNavigate()
 
   if (children.length === 0) {
     return (
       <div>
         <PageHeader title="My Children" description="Children linked to your account." />
-        <EmptyState icon={Users} title="No children linked yet" description="Contact your school administrator to link your child's record to this account." />
+        <ResourceGate
+          state={state}
+          empty={{ icon: Users, title: "No children linked yet", description: "Contact your school administrator to link your child's record to this account." }}
+          deniedHint="Child records are available to a linked parent or guardian."
+        >
+          {() => null}
+        </ResourceGate>
       </div>
     )
   }

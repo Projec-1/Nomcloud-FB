@@ -1,14 +1,15 @@
 # Nom Cloud — Phase 8 Frontend-to-Database Connection Plan
 
 **Status:** Discovery, amended 2026-09-13 with five locked decisions.
-**Batches 0, 1 and 2 applied 2026-09-13.** Sections A to F remain the survey of the distance
+**Batches 0, 1, 2 and 3 applied 2026-09-13.** Sections A to F remain the survey of the distance
 between the prototype frontend and the finished database; §G carries live batch
 status.
 
 Batch 0 delivered the four-state contract, the decision 9 weekday and timezone
 fixes, and the demo-tenant marker and boundary (migration
 `20260913000002_school_is_demo`). Batches 1 and 2 connected the school shell and
-academic structure; neither needed a migration. Batch 3 has not started.
+academic structure. Batch 3 fixed the §A.4 breakage and restored the parent
+workspace. None of batches 1 to 3 needed a migration. Batch 4 has not started.
 
 **Five of the twelve decisions in §I.1 are settled** and are recorded in §A.5.
 Sections D.5, D.6, E.2, F.7, G, H.1, H.5, H.9, I.1 and I.2 were revised to match
@@ -81,6 +82,14 @@ The practical consequence for planning: this is not a migration from a working
 prototype to a working product. Two of the three workspaces must be rebuilt
 against real data regardless, so there is little value in preserving their
 current data-access shape.
+
+> **PARENT HALF FIXED, batch 3, 2026-09-13.** `useSelectedChild` no longer
+> compares a UUID against `'p1'`. A guardian now resolves through
+> `memberships.guardian_id` to `student_guardians` to `students`, and a
+> cross-guardian probe confirms one family cannot reach another's child. The
+> **teacher half remains broken** and is batch 4: all seven teacher pages still
+> filter `classes[].teacherId === activeMembership.teacher_id`, comparing `'t1'`
+> against a UUID.
 
 **Does this change which batch goes first?** No, and the reason is worth stating
 because the intuition points the other way.
@@ -577,8 +586,8 @@ the same sequence.
 | 0 | **Foundations** — **DONE** 2026-09-13, migration `20260913000002_school_is_demo` | `schools.is_demo` | Applied. The four-state contract lives in `src/lib/resourceState.ts` and `src/components/ui/ResourceGate.tsx`, with the denied copy defined once as `ACCESS_DENIED_MESSAGE` and rendered by `src/components/ui/AccessDenied.tsx`. `RoleRoute` now renders it instead of redirecting to `/login`. Decision 9's weekday and timezone fixes landed here rather than in batch 1, since they are shared utilities. Demo tenant created and marked; indicator in `DemoModeBanner`, boundary in `src/lib/demoSchool.ts`. No screen's data-fetching changed. |
 | 1 | **School shell** — **DONE** 2026-09-13 | `schools` | Applied, no migration needed. `SchoolBrandLogo`, `Topbar`, `admin/Settings` and the school-name read in both fee pages now use the real row from `AuthContext`, which has fetched it since Phase 4. `admin/Settings` reads and writes through `src/services/schoolService.ts`, scoped by primary key rather than by RLS alone, and treats a null update result as a refusal because RLS filters rather than raises. Shortcode shown read-only. **The logo upload was removed, not connected**: it produced a base64 data URL that §F forbids persisting, and the real `logo_path` needs Storage, which does not exist (open decision 10). The badge now renders the derived initial. The mock `settings` slice is orphaned and retires in batch 8. |
 | 2 | **Academic structure** — **DONE (reads)** 2026-09-13 | `academic_years`, `terms`, `subjects` | Applied, no migration needed. `admin/AcademicYears` reads real years and terms through `useAcademicStructure`, scoped by `school_id` explicitly. **Current year and current term are derived differently and that distinction is now recorded in `academicService.ts`**: the active year is a stored fact (`status='active'`, enforced by a partial unique index), while the current term is NOT stored (no `terms.status`) and is computed by date containment in the school's timezone, returning null between terms. **Reads only.** The add-year and set-active controls were removed rather than left writing to a discarded mock store; activation needs two statements with no client transaction and is reported in §H.10. `fetchSubjects` exists but nothing consumes it until batches 3-5. `CURRENT_TERM` still feeds grades, exams and fees and retires with them. |
-| 3 | **People** | `teachers`, `guardians`, `students`, `student_guardians` | Unwinds `Student.parentId` and `Parent.studentIds` into the join that is the guardian access boundary. Fixes `useSelectedChild` and so **restores the parent workspace**, which §A.4 shows is currently broken. **Decision 1 removed** the principal-write variants. |
-| 4 | **Classes and roster** | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` | Unwinds `Student.classId`, `SchoolClass.studentIds` and `SchoolClass.subject[]`. Applies the two-link teaching model from §F.1 and so **restores the teacher workspace**. **Decision 2 removed campus filtering**: `classes.campus_id` is carried through the type but never used as a predicate. **Decision 1 removed** principal class management. |
+| 3 | **People (guardian half)** — **DONE** 2026-09-13 | `guardians`, `students`, `student_guardians` (read-only) | Applied, no migration. **Fixes the §A.4 breakage.** `useSelectedChild` now resolves the guardian from `memberships.guardian_id`, a real UUID written by `accept_invitation`, then reads `student_guardians` and `students` in two explicitly scoped queries. Nothing is compared against mock ids. The multi-child switcher is preserved and now validates the remembered selection against real ids. Six parent pages route their guard through `ResourceGate`. Proven by cross-guardian probe: Bashir cannot reach Amina's child by explicit id, and vice versa. **`teachers` was not touched** — that is the teacher half, batch 4. **Known intermediate state:** a child's class is null until batch 4 connects `class_enrollments`, so class names render blank and per-record sections stay empty until batches 4-6. |
+| 4 | **Classes and roster** (now also carries `teachers`, deferred from batch 3) | `teachers`, `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` | Unwinds `Student.classId`, `SchoolClass.studentIds` and `SchoolClass.subject[]`. Applies the two-link teaching model from §F.1 and so **restores the teacher workspace**. **Decision 2 removed campus filtering**: `classes.campus_id` is carried through the type but never used as a predicate. **Decision 1 removed** principal class management. |
 | 5 | **Teaching records** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on classes, students, subjects and terms all being real. Promotes embedded submissions to rows. Highest row volume. **Decision 1 removed** the principal variants. |
 | 6 | **Finance** | `fee_records`, `fee_payments` | Promotes embedded payments to rows, derives `status` at read, and must never write `amount_paid`. Deserves isolation for the same reason RLS batch 5 did. |
 | 7 | **Communication** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` | Participation-based rather than role-based, and the only batch that may need a new database function before it can work at all (§H.3). |

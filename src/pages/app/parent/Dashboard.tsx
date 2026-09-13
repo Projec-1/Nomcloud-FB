@@ -6,7 +6,7 @@ import { useSelectedChild } from '@/hooks/useSelectedChild'
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
 import ChildSwitcher from '@/components/dashboard/ChildSwitcher'
-import EmptyState from '@/components/ui/EmptyState'
+import ResourceGate from '@/components/ui/ResourceGate'
 import Badge from '@/components/ui/Badge'
 import { schoolDays } from '@/utils/schoolCalendar'
 import { formatCurrency, formatDate, percentage } from '@/utils/format'
@@ -14,17 +14,19 @@ import { formatCurrency, formatDate, percentage } from '@/utils/format'
 export default function ParentDashboard() {
   const { profile } = useAuth()
   const { classes, attendance, grades, homework, fees, announcements } = useData()
-  const { children, selectedChild, selectChild } = useSelectedChild()
+  const { children, selectedChild, selectChild, state } = useSelectedChild()
 
   if (!selectedChild) {
     return (
       <div>
         <PageHeader title={`Welcome, ${profile?.full_name.split(' ')[0]}`} description="Your children's information will appear here." />
-        <EmptyState
-          icon={Users}
-          title="No children linked to your account yet"
-          description="Contact your school administrator to have your child's record linked to this account."
-        />
+        <ResourceGate
+          state={state}
+          empty={{ icon: Users, title: "No children linked to your account yet", description: "Contact your school administrator to have your child's record linked to this account." }}
+          deniedHint="Child records are available to a linked parent or guardian."
+        >
+          {() => null}
+        </ResourceGate>
       </div>
     )
   }

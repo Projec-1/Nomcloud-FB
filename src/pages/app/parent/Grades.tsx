@@ -5,6 +5,7 @@ import { useSelectedChild } from '@/hooks/useSelectedChild'
 import PageHeader from '@/components/ui/PageHeader'
 import ChildSwitcher from '@/components/dashboard/ChildSwitcher'
 import EmptyState from '@/components/ui/EmptyState'
+import ResourceGate from '@/components/ui/ResourceGate'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
 import { formatDate } from '@/utils/format'
@@ -18,7 +19,7 @@ function gradeTone(grade: string): 'success' | 'info' | 'warning' | 'danger' {
 
 export default function ParentGrades() {
   const { classes, grades } = useData()
-  const { children, selectedChild, selectChild } = useSelectedChild()
+  const { children, selectedChild, selectChild, state } = useSelectedChild()
 
   const childGrades = useMemo(
     () => (selectedChild ? grades.filter((g) => g.studentId === selectedChild.id).sort((a, b) => (a.date < b.date ? 1 : -1)) : []),
@@ -40,7 +41,13 @@ export default function ParentGrades() {
     return (
       <div>
         <PageHeader title="Grades" description="Your child's academic performance." />
-        <EmptyState icon={BookOpen} title="No children linked yet" description="Contact your school administrator to link your child's record." />
+        <ResourceGate
+          state={state}
+          empty={{ icon: BookOpen, title: "No children linked yet", description: "Contact your school administrator to link your child's record." }}
+          deniedHint="Child records are available to a linked parent or guardian."
+        >
+          {() => null}
+        </ResourceGate>
       </div>
     )
   }

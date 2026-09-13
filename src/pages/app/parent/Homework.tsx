@@ -6,6 +6,7 @@ import { useSelectedChild } from '@/hooks/useSelectedChild'
 import PageHeader from '@/components/ui/PageHeader'
 import ChildSwitcher from '@/components/dashboard/ChildSwitcher'
 import EmptyState from '@/components/ui/EmptyState'
+import ResourceGate from '@/components/ui/ResourceGate'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { formatDate } from '@/utils/format'
@@ -15,7 +16,7 @@ const statusTone = { pending: 'warning', submitted: 'info', late: 'danger', grad
 export default function ParentHomework() {
   const { classes, homework, updateSubmission } = useData()
   const { showToast } = useToast()
-  const { children, selectedChild, selectChild } = useSelectedChild()
+  const { children, selectedChild, selectChild, state } = useSelectedChild()
 
   const childHomework = useMemo(
     () => (selectedChild ? homework.filter((h) => h.classId === selectedChild.classId).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)) : []),
@@ -26,7 +27,13 @@ export default function ParentHomework() {
     return (
       <div>
         <PageHeader title="Homework" description="Your child's homework and deadlines." />
-        <EmptyState icon={ClipboardCheck} title="No children linked yet" description="Contact your school administrator to link your child's record." />
+        <ResourceGate
+          state={state}
+          empty={{ icon: ClipboardCheck, title: "No children linked yet", description: "Contact your school administrator to link your child's record." }}
+          deniedHint="Child records are available to a linked parent or guardian."
+        >
+          {() => null}
+        </ResourceGate>
       </div>
     )
   }

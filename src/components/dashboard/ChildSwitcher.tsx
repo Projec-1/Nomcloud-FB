@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
 import Avatar from '@/components/ui/Avatar'
-import type { Student } from '@/types'
+import type { ChildSummary } from '@/services/guardianService'
 import { cn } from '@/utils/cn'
 
+// Phase 8 batch 3: takes real students resolved through student_guardians
+// rather than the mock Student type. Field names are unchanged, so the markup
+// below did not need to move.
 interface ChildSwitcherProps {
-  children: Student[]
+  children: ChildSummary[]
   selectedId?: string
   onSelect: (id: string) => void
-  classLabel?: (child: Student) => string
+  classLabel?: (child: ChildSummary) => string
 }
 
 export default function ChildSwitcher({ children, selectedId, onSelect, classLabel }: ChildSwitcherProps) {
