@@ -1,6 +1,16 @@
 # Nom Cloud — Phase 7 Full RLS Rollout Plan
 
-**Status:** Batch 1 of 6 applied (`20260912000001_platform_and_identity_rls`,
+**Status: THE PHASE 7 RLS ROLLOUT IS COMPLETE. All 37 public tables carry
+row-level security, across 197 policies, with no table left unprotected and no
+table enabled without a policy.** Batches 1-6 and one corrective were applied on
+2026-09-12 and 2026-09-13. Sections A-D and F-H remain the design; §E carries
+per-batch status and the corrections each batch made to it.
+
+Remaining hardening that RLS does not cover is unchanged and still open: §F.9 on
+column grants beyond the four already applied, and the TRUNCATE, REFERENCES and
+TRIGGER grants that §H records as outside RLS entirely.
+
+**Historical status line:** Batch 1 of 6 applied (`20260912000001_platform_and_identity_rls`,
 2026-09-12), corrective `20260912000002_restrict_anon_school_application_insert`,
 batch 2 (`20260912000003_school_people_rls`), batch 3
 (`20260912000004_classes_and_timetable_rls`), batch 4
@@ -516,6 +526,48 @@ values.
 
 ## C.6 Communication and personal delivery
 
+> **APPLIED as batch 6** (`20260913000001_communications_rls`), the final batch.
+> Per-table text retained for provenance; where it differs, **this note wins**.
+>
+> 1. **Messaging is not campus-scoped**, confirming entries 29, 30 and 31. There
+>    is no chain from a thread to a campus and participation is a complete
+>    boundary.
+> 2. **Announcements are campus-scoped only for `audience='class'`**, forced by
+>    the paired CHECK rather than merely permitted.
+> 3. **Announcement visibility follows the audience column.** Guardians see
+>    `all`, `parents` and their own child's class notices, never school-wide.
+>    `students` is ODA-only, since no student can sign in.
+> 4. **Principal write on class announcements is granted**, as entry 27
+>    recommended, with `audience='class'` in USING and WITH CHECK so it cannot be
+>    widened. Teacher authoring remains denied.
+> 5. **No notification write path was added.** Nothing creates notifications
+>    today, so entry 28's "trusted delivery writer" stays `service_role` and
+>    platform admin. A feature will need its own SECURITY DEFINER path.
+> 6. **The column-grant risks entries 28 and 30 name are closed**: UPDATE is
+>    restricted to `notifications.read_at` and
+>    `message_thread_participants.last_read_at`.
+> 7. **Messaging is participation-only for every role, entry 29 upheld.** The
+>    migration was first written with owner, director and administrator holding
+>    FOR ALL policies on the three messaging tables, giving school-wide read and
+>    write. That was **corrected to participation-only before commit**, on this
+>    section's own recommendation and on section 10's classification of messages
+>    as the highest-sensitivity content in the system. `is_thread_participant` is
+>    now the sole read predicate on all three tables, with no role exemption:
+>    an administrator cannot read a conversation they were not put into.
+>
+>    Two write-only capabilities stay with those three roles, because neither can
+>    be derived from participation and the feature is inert without them:
+>    `message_threads` INSERT, so a thread can be opened at all, and
+>    `message_thread_participants` INSERT and DELETE, so someone can decide who is
+>    in it. Both are expressed as INSERT/DELETE rather than ALL, so neither
+>    carries school-wide SELECT. Creating a thread confers no sight of it: an
+>    administrator who opens a thread and adds a teacher and a parent, without
+>    adding themselves, cannot read it. Probed.
+>
+>    The self-add prohibition is unchanged and is why participant INSERT is
+>    restricted at all. Announcements and notifications were not touched by the
+>    correction.
+
 ### 27. `announcements` — SCHOOL-OWNED
 
 - **References:** `created_by` attribution-only.
@@ -613,7 +665,7 @@ access exists.
 | 3 | **Classes, roster, timetable** — **DONE**, applied as `20260912000004_classes_and_timetable_rls` | `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (`academic_years`, `terms`, `subjects` moved to batch 2) | Depends on people. Add/review shared campus/teaching helpers; prove selected scope, NULL-campus denial, and cross-campus move denial. |
 | 4 | **Teaching records** — **DONE**, applied as `20260912000005_teaching_records_rls` | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on class/assignment predicates. Approve attendance-marker rules first; prove teacher/Guardian boundaries and every WITH CHECK path. |
 | 5 | **Finance** — **DONE**, applied as `20260912000006_finance_rls` | `fee_records`, `fee_payments` (`school_subscriptions` moved to batch 2) | Depends on people/terms. Approve finance corrections/voids; test Guardian own-student reads and all payment trigger cases. |
-| 6 | **Announcements, private delivery, messaging** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` (`audit_logs` moved to batch 1) | Depends on people/classes. Establish non-recursive participant helper, notification read receipt, audit trusted writer, and privacy governance before policy SQL. |
+| 6 | **Announcements, private delivery, messaging** — **DONE**, applied as `20260913000001_communications_rls` | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` (`audit_logs` moved to batch 1) | Depends on people/classes. Establish non-recursive participant helper, notification read receipt, audit trusted writer, and privacy governance before policy SQL. |
 
 The order follows actual dependencies: platform/profile authority; people;
 classes and assignments; teaching records; finance; then communications. Do not
