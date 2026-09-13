@@ -9,13 +9,11 @@ import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
 import Modal from '@/components/ui/Modal'
 import Avatar from '@/components/ui/Avatar'
-import { WEEKDAYS } from '@/components/dashboard/TimetableGrid'
-import { schoolDays } from '@/utils/schoolCalendar'
+import { schoolDays, isoDayOfWeek, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { formatDate, percentage } from '@/utils/format'
-import type { Weekday } from '@/types'
 
 export default function TeacherDashboard() {
-  const { profile, activeMembership } = useAuth()
+  const { profile, activeMembership, school } = useAuth()
   const { classes, students, attendance, homework, messageThreads, timetables } = useData()
   const [studentsModalOpen, setStudentsModalOpen] = useState(false)
 
@@ -64,25 +62,31 @@ export default function TeacherDashboard() {
   )
 
   // "Right now" — is there a lecture in progress for one of this teacher's classes?
+  //
+  // Previously WEEKDAYS[now.getDay() - 1], which assumed Monday was index 0 of a
+  // five-element Monday-to-Friday array. That yielded undefined on a Sunday, and
+  // Sunday is a school day in Somalia. isoDayOfWeek returns ISO 1-7 computed in
+  // the school's timezone, matching TimetableSlot.day (Phase 8 decision 9).
   const now = new Date()
-  const todayName = WEEKDAYS[now.getDay() - 1] as Weekday | undefined
+  const timeZone = school?.timezone ?? DEFAULT_TIME_ZONE
+  const todayIso = isoDayOfWeek(now, timeZone)
   const currentMinutes = now.getHours() * 60 + now.getMinutes()
   const toMinutes = (t: string) => {
     const [h, m] = t.split(':').map(Number)
     return h * 60 + m
   }
-  const liveSlot = todayName
+  const liveSlot = todayIso
     ? timetables.find(
         (t) =>
           myClassIds.includes(t.classId) &&
-          t.day === todayName &&
+          t.day === todayIso &&
           currentMinutes >= toMinutes(t.startTime) &&
           currentMinutes < toMinutes(t.endTime),
       )
     : undefined
-  const nextSlot = todayName
+  const nextSlot = todayIso
     ? timetables
-        .filter((t) => myClassIds.includes(t.classId) && t.day === todayName && toMinutes(t.startTime) > currentMinutes)
+        .filter((t) => myClassIds.includes(t.classId) && t.day === todayIso && toMinutes(t.startTime) > currentMinutes)
         .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))[0]
     : undefined
 

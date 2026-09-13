@@ -47,13 +47,22 @@ export interface Teacher {
   avatarColor: string
 }
 
-export type Weekday = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'
+/**
+ * ISO 8601 weekday: 1 = Monday through 7 = Sunday.
+ *
+ * Replaces a `'Monday' | … | 'Friday'` string union, which could not express a
+ * Friday-and-Saturday weekend and so could not represent the Somali school week
+ * at all (Phase 8 decision 9). Matches timetable_slots.day_of_week smallint and
+ * schools.weekend_days, so no translation is needed when batch 4 connects the
+ * real table. Use isoWeekdayLabel from @/utils/schoolCalendar to display one.
+ */
+export type IsoWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 export interface TimetableSlot {
   id: string
   classId: string
   teacherId: string
-  day: Weekday
+  day: IsoWeekday
   period: number
   startTime: string
   endTime: string

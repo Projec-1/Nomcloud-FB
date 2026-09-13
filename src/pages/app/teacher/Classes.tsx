@@ -12,7 +12,7 @@ import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import TimetableGrid, { PERIODS } from '@/components/dashboard/TimetableGrid'
 import { formatDate } from '@/utils/format'
-import type { SchoolClass, Weekday } from '@/types'
+import type { IsoWeekday, SchoolClass } from '@/types'
 
 export default function TeacherClasses() {
   const { activeMembership } = useAuth()
@@ -22,14 +22,14 @@ export default function TeacherClasses() {
 
   const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
   const [timetableClassId, setTimetableClassId] = useState(myClasses[0]?.id ?? '')
-  const [slotDraft, setSlotDraft] = useState<{ day: Weekday; period: number } | null>(null)
+  const [slotDraft, setSlotDraft] = useState<{ day: IsoWeekday; period: number } | null>(null)
   const [slotSubject, setSlotSubject] = useState('')
   const [slotRoom, setSlotRoom] = useState('')
 
   const activeClass = myClasses.find((c) => c.id === timetableClassId) ?? myClasses[0]
   const classSlots = timetables.filter((t) => t.classId === activeClass?.id)
 
-  const openSlot = (day: Weekday, period: number) => {
+  const openSlot = (day: IsoWeekday, period: number) => {
     setSlotDraft({ day, period })
     setSlotSubject(activeClass?.subject[0] ?? '')
     setSlotRoom(activeClass?.room ?? '')

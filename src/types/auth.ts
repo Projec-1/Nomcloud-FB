@@ -63,6 +63,7 @@ export interface SchoolRow {
   email_notifications: boolean
   sms_notifications: boolean
   parent_portal_enabled: boolean
+  is_demo: boolean
   suspended_at: string | null
   suspension_reason: string | null
   created_at: string

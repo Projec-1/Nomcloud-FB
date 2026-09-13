@@ -1,8 +1,8 @@
 import { Plus, X } from 'lucide-react'
-import type { TimetableSlot, Weekday } from '@/types'
+import { useAuth } from '@/context/AuthContext'
+import type { IsoWeekday, TimetableSlot } from '@/types'
 import { cn } from '@/utils/cn'
-
-export const WEEKDAYS: Weekday[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+import { DEFAULT_WEEKEND_DAYS, isoWeekdayLabel, schoolWeekdays } from '@/utils/schoolCalendar'
 
 export const PERIODS: { period: number; startTime: string; endTime: string }[] = [
   { period: 1, startTime: '08:00', endTime: '08:40' },
@@ -16,12 +16,18 @@ export const PERIODS: { period: number; startTime: string; endTime: string }[] =
 interface TimetableGridProps {
   slots: TimetableSlot[]
   editable?: boolean
-  onAddSlot?: (day: Weekday, period: number) => void
+  onAddSlot?: (day: IsoWeekday, period: number) => void
   onRemoveSlot?: (id: string) => void
 }
 
 export default function TimetableGrid({ slots, editable = false, onAddSlot, onRemoveSlot }: TimetableGridProps) {
-  const find = (day: Weekday, period: number) => slots.find((s) => s.day === day && s.period === period)
+  // Columns come from the signed-in school's weekend, not from a fixed
+  // Monday-to-Friday array (Phase 8 decision 9). With the Somali default of
+  // {5,6} this renders Monday, Tuesday, Wednesday, Thursday, Sunday.
+  const { school } = useAuth()
+  const days = schoolWeekdays(school?.weekend_days ?? DEFAULT_WEEKEND_DAYS)
+
+  const find = (day: IsoWeekday, period: number) => slots.find((s) => s.day === day && s.period === period)
 
   return (
     <div className="overflow-x-auto">
@@ -29,8 +35,8 @@ export default function TimetableGrid({ slots, editable = false, onAddSlot, onRe
         <thead>
           <tr>
             <th className="w-20 text-left font-medium text-graphite">Time</th>
-            {WEEKDAYS.map((day) => (
-              <th key={day} className="text-left font-medium text-graphite">{day}</th>
+            {days.map((day) => (
+              <th key={day} className="text-left font-medium text-graphite">{isoWeekdayLabel(day)}</th>
             ))}
           </tr>
         </thead>
@@ -42,7 +48,7 @@ export default function TimetableGrid({ slots, editable = false, onAddSlot, onRe
                 <br />
                 {p.endTime}
               </td>
-              {WEEKDAYS.map((day) => {
+              {days.map((day) => {
                 const slot = find(day, p.period)
                 return (
                   <td key={day} className="align-top">
