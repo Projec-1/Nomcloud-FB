@@ -72,3 +72,29 @@ export async function fetchRosterStudents(
     avatarColor: avatarColorForId(s.id),
   }))
 }
+
+/**
+ * Every active student in the school, ordered by name.
+ *
+ * Phase 8 batch 6. A fee record names a student directly, so the invoice form
+ * needs the school's roster rather than one class's. Scoped to the caller's own
+ * school explicitly; RLS narrows nothing here for management, who can already
+ * read every student in their school.
+ */
+export async function fetchSchoolStudents(schoolId: string): Promise<RosterStudent[]> {
+  const { data, error } = await supabase
+    .from('students')
+    .select('id, full_name, admission_no')
+    .eq('school_id', schoolId)
+    .eq('status', 'active')
+    .order('full_name', { ascending: true })
+
+  if (error) throw error
+
+  return ((data ?? []) as { id: string; full_name: string; admission_no: string }[]).map((s) => ({
+    id: s.id,
+    name: s.full_name,
+    admissionNo: s.admission_no,
+    avatarColor: avatarColorForId(s.id),
+  }))
+}

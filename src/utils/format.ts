@@ -54,3 +54,27 @@ export function percentage(value: number, max: number): number {
   if (max === 0) return 0
   return Math.round((value / max) * 100)
 }
+
+/**
+ * Money in the school's own currency.
+ *
+ * Phase 8 batch 6. `formatCurrency` and `formatCurrencyPrecise` hardcode USD,
+ * which was fine while every figure came from a mock seed. Real fee_records and
+ * fee_payments each carry their own `currency` column, defaulted from the
+ * school, so a school billing in SOS would otherwise have every amount labelled
+ * with a dollar sign. Both older helpers are left untouched for the screens that
+ * still use them.
+ */
+export function formatMoney(amount: number, currency: string, precise = false): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency || 'USD',
+      minimumFractionDigits: precise ? 2 : 0,
+      maximumFractionDigits: precise ? 2 : 0,
+    }).format(amount)
+  } catch {
+    // An unknown or malformed currency code must not blank out a balance.
+    return `${currency} ${amount.toFixed(precise ? 2 : 0)}`
+  }
+}

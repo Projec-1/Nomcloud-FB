@@ -1,7 +1,7 @@
 # Nom Cloud — Phase 8 Frontend-to-Database Connection Plan
 
 **Status:** Discovery, amended 2026-09-13 with five locked decisions.
-**Batches 0 through 5 applied; batch 5 on 2026-09-14.** Sections A to F remain the survey of the distance
+**Batches 0 through 6 applied; batches 5 and 6 on 2026-09-14.** Sections A to F remain the survey of the distance
 between the prototype frontend and the finished database; §G carries live batch
 status.
 
@@ -13,12 +13,15 @@ restored the parent and teacher workspaces. None of batches 1 to 4 needed a
 migration. Batch 5, the first write-enabled batch, connected the five teaching
 records tables and also needed no migration: the access model it needs was
 already enforced by RLS migration 12, and the five tables carry no
-trigger-maintained column. Batch 6 has not started.
+trigger-maintained column. Batch 6 connected finance and likewise needed no
+migration of its own, but it found an open money gap in the database. That gap
+was recorded as §H.13, approved, and closed by the corrective
+`20260914000001_restrict_fee_record_amount_paid_insert`.
 
-**Seven of the twelve decisions in §I.1 are settled** (batch 5 closed 5 and 10) and are recorded in §A.5.
+**Eight of the twelve decisions in §I.1 are settled** (batch 5 closed 5 and 10, batch 6 closed 4) and are recorded in §A.5.
 Sections D.5, D.6, E.2, F.7, G, H.1, H.5, H.9, I.1 and I.2 were revised to match
 them. The demo-mode separation mechanism recommended in §H.9 was approved and is
-built. Four decisions remain open, each blocking only the batch that touches it.
+built. Three decisions remain open, each blocking only the batch that touches it.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md) is the schema authority,
 [AUTH_DESIGN.md](./AUTH_DESIGN.md) the identity authority,
@@ -601,7 +604,7 @@ the same sequence.
 | 3 | **People (guardian half)** — **DONE** 2026-09-13 | `guardians`, `students`, `student_guardians` (read-only) | Applied, no migration. **Fixes the §A.4 breakage.** `useSelectedChild` now resolves the guardian from `memberships.guardian_id`, a real UUID written by `accept_invitation`, then reads `student_guardians` and `students` in two explicitly scoped queries. Nothing is compared against mock ids. The multi-child switcher is preserved and now validates the remembered selection against real ids. Six parent pages route their guard through `ResourceGate`. Proven by cross-guardian probe: Bashir cannot reach Amina's child by explicit id, and vice versa. **`teachers` was not touched** — that is the teacher half, batch 4. **Known intermediate state:** a child's class is null until batch 4 connects `class_enrollments`, so class names render blank and per-record sections stay empty until batches 4-6. |
 | 4 | **Teacher workspace, classes and roster** — **DONE** 2026-09-13 | `teachers`, `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (read-only) | Applied, no migration. **Fixes the teacher half of §A.4.** All seven teacher pages resolved classes with `classes.filter(c => c.teacherId === activeMembership.teacher_id)`, comparing `'t1'` against a UUID, so a real teacher saw nothing. Now resolved through `memberships.teacher_id` in `useTeacherClasses`. **"Assigned to teach" is reused, not re-derived**: `class_teacher_id` OR `class_subjects.teacher_id`, never `timetable_slots.teacher_id`, the definition settled in RLS batch 3 and reused by RLS batch 4. Proven on both arms: a subject-only teacher who is homeroom of nothing still sees her class. **The batch-3 gap is closed**: `ChildSummary` now carries `classId` and `className` resolved through `class_enrollments`, so a parent sees their child's real class name instead of blank. Read-only; no attendance, grade or timetable write path was added. |
 | 5 | **Teaching records** — **DONE** 2026-09-14 | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Applied, no migration needed. **The first batch that writes.** The access model is RLS migration 12's, restated in `src/services/teachingRecordsService.ts` rather than re-derived. **Subject-exact writes are enforced in the interface, not only by RLS**: `ClassSummary.writableSubjects` carries the `(class, subject)` pairs the signed-in user may write — a teacher's own `class_subjects` rows, and every subject of the class for management, whose policies key on the class-level `can_manage_class`. The grade, homework and exam subject selectors are built from it, so a homeroom-only teacher sees no subject and no score inputs instead of a form whose Save is refused. That matters because RLS filters rather than raises: a refused UPDATE returns zero rows and no error. **A real attribution bug was found and fixed**: the prototype passed `teacher_id` (and on one admin page a person's NAME) as `markedBy`/`recordedBy`/`createdBy`, but those columns are foreign keys to `profiles(id)`, the auth user id, and the policies compare them to `auth.uid()`. Attribution is now taken from the live session inside the service, so no caller can supply it. **No trigger is being built around** — confirmed against `pg_trigger` that all five tables carry only the generic `set_updated_at` timestamp trigger and no derived column, so a direct write is the normal path. Upserts target the real natural keys. **Guardian side is read-only by construction** and decision 5 is closed: the parent homework page's "Mark as Submitted" control is removed, matching the structural absence of any guardian write policy. Decision 10 is closed by removing the attachment count, which has no column and no bucket. Admin attendance, grades and homework moved off mock classes onto real ones through `useRecordableClasses`, since mock class ids could never satisfy the composite foreign keys. 39 rolled-back probes, all passing. |
-| 6 | **Finance** | `fee_records`, `fee_payments` | Promotes embedded payments to rows, derives `status` at read, and must never write `amount_paid`. Deserves isolation for the same reason RLS batch 5 did. |
+| 6 | **Finance** — **DONE** 2026-09-14 | `fee_records`, `fee_payments` | Applied, no migration. The access model is migration 13's, restated not re-derived: owner/director/administrator full read and write, guardian read-only on their own child, **principal and teacher nothing at all** — the design's own conclusion, since fees carry no campus dimension so a principal's scoped authority is not expressible and any grant would be school-wide. **`amount_paid` is displayed and never editable.** The fee form has six fields and no seventh; the only control that moves a balance is Record Payment, which writes `fee_payments` and lets the trigger recalculate. Proven against the real trigger, not inferred from the form: 0.00 → 400.00 → 1000.00 on two payments, then back to 400.00 when one was deleted. **Status is derived at read** by `deriveFeeStatus` over amount, amount_paid and due_date against the SCHOOL'S today; `fee_records` has no status column and nothing writes one. **The payment reference became required**: it was labelled optional and auto-generated as `REF<timestamp>`, but the column is NOT NULL under UNIQUE (school_id, reference), so the prototype would have manufactured fake receipt numbers; a duplicate now reports plainly rather than failing raw. **Decision 4 is closed by removing the parent Pay Now flow** — see §I.1. **The reminder feature was removed** and returns in batch 7: it wrote message threads to the mock store, so it would have reported parents notified while sending nothing. **One genuine gap found in the database**, not introduced here: §H.13. 54 rolled-back probes, all passing. |
 | 7 | **Communication** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` | Participation-based rather than role-based, and the only batch that may need a new database function before it can work at all (§H.3). |
 | 8 | **Retire the prototype** | none | Delete `mockData.ts`, `DataContext`, the `localStorage` blob, `scopeKey`, `resetDemoData`, and the duplicate `Role` type. **Decision 12 changes this batch**: the demo path is preserved behind the boundary agreed in §H.9 rather than deleted with the rest. |
 
@@ -721,6 +724,66 @@ problem did not exist before. Options are a SECURITY DEFINER function that
 performs the swap atomically, or a deferred-constraint approach, or accepting a
 brief no-active-year window. Batch 2 shipped the page read-only rather than
 improvising. **Needs a decision before any UI can change the active year.**
+
+## H.13 `amount_paid` could be set on INSERT — RESOLVED
+
+Found by batch 6 while probing that migration 13's fix still holds. It did, for
+UPDATE. It did not cover INSERT. Closed on 2026-09-14 by the corrective
+`20260914000001_restrict_fee_record_amount_paid_insert`.
+
+**What was wrong.** Migration 13's revoke named UPDATE only, so both `anon` and
+`authenticated` retained INSERT on all eleven columns of `fee_records`,
+`amount_paid` included. An administrator could create an invoice already marked
+settled, with no payment behind it and no audit trail. Measured before the fix:
+the insert succeeded, `amount_paid` read 500.00, backing payments 0.
+
+**Why it was narrower than the original gap.** It applied only at creation. A
+balance already under way could not be rewritten, and any fee that later received
+a payment had the seeded figure overwritten by the trigger, which recomputes the
+sum over `fee_payments` rather than incrementing. The exposure was an invoice
+born false and never touched again.
+
+**The mechanism chosen, and why.** A column-level INSERT grant, mirroring exactly
+what migration 13 did for UPDATE. A CHECK was never an option, since a CHECK
+cannot distinguish INSERT from UPDATE and the trigger must stay free to write the
+column on UPDATE. A BEFORE INSERT trigger forcing zero was possible but rejected:
+it would be a second, different instrument guarding a column that already has
+one, and it would bind the table owner too, blocking a privileged import of
+legacy fees carrying real opening balances — which the grant approach leaves open
+in the same way migration 13's UPDATE restriction already does.
+
+The grant was measured to close every route into the column, not merely the
+obvious one:
+
+| Route | Result |
+|---|---|
+| Named column list including `amount_paid` | DENIED 42501 |
+| No column list at all (positional, all columns) | DENIED 42501 |
+| `INSERT ... SELECT` naming the column | DENIED 42501 |
+| Column named but given the `DEFAULT` keyword | DENIED 42501 |
+| Upsert whose `DO UPDATE` sets the column | DENIED 42501 |
+| Legitimate insert omitting the column | OK, opens at 0.00 |
+| `anon` attempting any insert | DENIED 42501 |
+
+The fourth row is the one worth remembering: privilege is checked on the named
+COLUMN, not on the value expression, so even writing `DEFAULT` is refused. A
+client must omit the key entirely, which is what PostgREST does when the payload
+carries no such field — and `financeService.createFeeRecord` carries none.
+
+**Resulting state.** INSERT and UPDATE now say the same thing:
+
+| Privilege | Columns granted to `authenticated` |
+|---|---|
+| INSERT | id, school_id, student_id, term_id, category, amount, currency, due_date |
+| UPDATE | school_id, student_id, term_id, category, amount, currency, due_date |
+| SELECT | all eleven, `amount_paid` included — every fee screen reads it |
+
+`anon` holds neither INSERT nor UPDATE. Nothing else moved: all twelve migration
+13 policies, the `sync_fee_record_amount_paid` trigger and its SECURITY DEFINER
+context, and the three Phase 3 CHECK constraints were verified unchanged after
+the migration. Re-probed end to end: 0.00 → 400.00 → 1000.00 → 400.00 through the
+trigger, overpayment still 23514, UPDATE forgery still 42501, guardian reads
+unaffected.
 
 ## H.12 A student can hold only one attendance row per day, school-wide
 
@@ -880,6 +943,12 @@ only the batch that touches it.
 |---|---|---|
 | 12a | The demo-mode separation mechanism: a real demo school in the real database, a reserved shortcode, a persistent "Demo Mode" indicator, and an explicit marker column. | Batch 0, migration `20260913000002_school_is_demo`. Separation is by tenant, so demo data sits behind the same RLS boundary that separates two customers. Production unreachability is a compile-time boundary on `import.meta.env.DEV`. |
 
+### Closed by batch 6, 2026-09-14
+
+| # | Decision | Outcome |
+|---|---|---|
+| 4 | Parent payment initiation | **Control removed.** The prototype's Pay Now button simulated a gateway for 1.1 seconds, generated a reference, called the mock store, then showed "Payment successful" and offered a downloadable receipt. No money moved and none could: a guardian holds SELECT and nothing else on `fee_payments`, because C.5 states a guardian-initiated payment belongs to a real payment flow and never to a direct insert. Left in place against the real database it would have told a parent their fees were settled, and handed them a receipt as evidence, while the school's books still showed the balance outstanding. Deleted rather than disabled. **The receipt is kept and now means something**: it is attached to payments the school has actually recorded. Building a real payment flow reopens this as a Phase 11 payments question, alongside the `payment_events` table already deferred there. |
+
 ### Closed by batch 5, 2026-09-14
 
 | # | Decision | Outcome |
@@ -891,7 +960,6 @@ only the batch that touches it.
 
 | # | Decision | Blocks |
 |---|---|---|
-| 4 | Parent payment initiation: remove the control, or design a payment flow? | Batch 6 |
 | 6 | Teacher timetable editing and teacher announcement authoring: remove, or widen the policies? | Batches 4 and 7 |
 | 7 | Messaging: build the thread-creation function, or restrict conversation-starting to administrators in the interface too? | Batch 7 |
 | 8 | Notifications: build an emitter, or remove the surfaces until one exists? | Batch 7 |

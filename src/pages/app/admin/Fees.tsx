@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Wallet, CreditCard, Search, Send, FileText, TrendingUp, AlertTriangle } from 'lucide-react'
-import { useData } from '@/context/DataContext'
+import { useEffect, useMemo, useState } from 'react'
+import { Wallet, Search, FileText, TrendingUp, AlertTriangle, Plus, Pencil, Trash2, Lock } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -8,14 +7,61 @@ import SearchInput from '@/components/ui/SearchInput'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Input from '@/components/ui/Input'
-import Textarea from '@/components/ui/Textarea'
 import Badge from '@/components/ui/Badge'
 import StatCard from '@/components/ui/StatCard'
 import EmptyState from '@/components/ui/EmptyState'
 import Avatar from '@/components/ui/Avatar'
-import type { FeeRecord, FeeStatus } from '@/types'
-import { formatCurrency, formatCurrencyPrecise, formatDate } from '@/utils/format'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { useFinance } from '@/hooks/useFinance'
+import { useAcademicStructure } from '@/hooks/useAcademicStructure'
+import { fetchSchoolStudents, type RosterStudent } from '@/services/studentService'
+import {
+  createFeeRecord,
+  deleteFeeRecord,
+  deletePayment,
+  paymentMethodLabel,
+  recordPayment,
+  updateFeeRecord,
+  PAYMENT_METHODS,
+  type FeeRecordView,
+  type FeeStatus,
+  type PaymentMethod,
+} from '@/services/financeService'
+import type { FieldErrors } from '@/utils/validators'
+import { minLength } from '@/utils/validators'
+import { formatDate, formatMoney } from '@/utils/format'
+import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
+
+// ---------------------------------------------------------------------------
+// Phase 8 batch 6. Real fee_records and fee_payments.
+//
+// amount_paid IS NOWHERE EDITABLE ON THIS PAGE. It appears in the table and in
+// the statement as a READ-ONLY figure, and the only control that changes it is
+// "Record Payment", which writes a fee_payments row and lets the trigger
+// recalculate. The fee record form has six fields — student, term, category,
+// amount, currency, due date — and no seventh. Migration 13 made this
+// structural: the column-level UPDATE grant on fee_records omits amount_paid, so
+// an edit that tried to include it would fail 42501 rather than corrupt a
+// balance.
+//
+// STATUS IS DERIVED, NOT STORED. fee_records has no status column. The badge and
+// the filter both run `deriveFeeStatus` over amount, amount_paid and due_date
+// against the SCHOOL'S today. Nothing on this page writes a status.
+//
+// THE PAYMENT REFERENCE IS REQUIRED, NOT OPTIONAL. The prototype labelled it
+// optional and generated `REF<timestamp>` when blank. fee_payments.reference is
+// NOT NULL under UNIQUE (school_id, reference), so a generated value would have
+// manufactured a fake receipt number for a real payment, and a repeated real one
+// would fail. It is now a required field and a duplicate is reported plainly.
+//
+// THE "SEND PAYMENT REMINDER" FEATURE IS REMOVED HERE AND RETURNS IN BATCH 7.
+// It created message threads through the mock store. Its inputs are now real
+// (who owes money) but its output was not, so it would have reported "12 parents
+// notified" while sending nothing. Messaging is batch 7 and explicitly out of
+// scope for this one; the control returns when it can actually deliver.
+// ---------------------------------------------------------------------------
 
 const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
   paid: 'success',
@@ -24,123 +70,247 @@ const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'
   overdue: 'danger',
 }
 
-const currentMonthName = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })
+const categories = ['Tuition', 'Transport', 'Meals', 'Uniform', 'Examination', 'Activity', 'Other']
+
+const emptyFeeForm = { studentId: '', termId: '', category: 'Tuition', amount: '', dueDate: '' }
 
 export default function AdminFees() {
-  const { fees, students, classes, parents, recordPayment, createThread, currentTerm } = useData()
-  const { profile, school } = useAuth()
+  const { school } = useAuth()
   const { showToast } = useToast()
+  const { state, records, canManageFinance, schoolId, currency, reload } = useFinance()
+  const { state: academicState } = useAcademicStructure()
 
+  const timeZone = school?.timezone ?? DEFAULT_TIME_ZONE
+  const terms = academicState.status === 'ready' ? academicState.data.terms : []
+  const currentTermId = academicState.status === 'ready' ? (academicState.data.term?.id ?? '') : ''
+
+  const [students, setStudents] = useState<RosterStudent[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | FeeStatus>('all')
-  const [payTarget, setPayTarget] = useState<FeeRecord | null>(null)
-  const [statementTarget, setStatementTarget] = useState<string | null>(null)
-  const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState<'card' | 'bank_transfer' | 'cash' | 'mobile_money'>('mobile_money')
-  const [reference, setReference] = useState('')
 
-  const [reminderOpen, setReminderOpen] = useState(false)
-  const [reminderMonth, setReminderMonth] = useState(currentMonthName)
-  const [reminderMessage, setReminderMessage] = useState('')
+  const [feeModalOpen, setFeeModalOpen] = useState(false)
+  const [editing, setEditing] = useState<FeeRecordView | null>(null)
+  const [feeForm, setFeeForm] = useState(emptyFeeForm)
+  const [feeErrors, setFeeErrors] = useState<FieldErrors>({})
 
-  const totalDue = fees.reduce((sum, f) => sum + f.amount, 0)
-  const totalCollected = fees.reduce((sum, f) => sum + f.amountPaid, 0)
-  const totalOutstanding = totalDue - totalCollected
-  const overdueCount = fees.filter((f) => f.status === 'overdue').length
+  const [payTarget, setPayTarget] = useState<FeeRecordView | null>(null)
+  const [payAmount, setPayAmount] = useState('')
+  const [payMethod, setPayMethod] = useState<PaymentMethod>('cash')
+  const [payReference, setPayReference] = useState('')
+  const [payDate, setPayDate] = useState('')
+  const [payErrors, setPayErrors] = useState<FieldErrors>({})
 
-  // "This month" collected — payments recorded within the current calendar month.
-  const collectedThisMonth = useMemo(() => {
-    const now = new Date()
-    return fees.reduce((sum, f) => {
-      const monthPayments = f.payments.filter((p) => {
-        const d = new Date(p.date)
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+  const [statementTarget, setStatementTarget] = useState<FeeRecordView | null>(null)
+  const [deleteFeeTarget, setDeleteFeeTarget] = useState<FeeRecordView | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    if (!schoolId || !canManageFinance) return
+    let cancelled = false
+    fetchSchoolStudents(schoolId)
+      .then((rows) => {
+        if (!cancelled) setStudents(rows)
       })
-      return sum + monthPayments.reduce((s, p) => s + p.amount, 0)
-    }, 0)
-  }, [fees])
-
-  const unpaidParentIds = useMemo(() => {
-    const ids = new Set<string>()
-    fees
-      .filter((f) => f.status === 'unpaid' || f.status === 'overdue' || f.status === 'partial')
-      .forEach((f) => {
-        const student = students.find((s) => s.id === f.studentId)
-        if (student) ids.add(student.parentId)
+      .catch(() => {
+        // Non-fatal: the fee table still renders. Only the invoice form needs it.
       })
-    return Array.from(ids)
-  }, [fees, students])
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, canManageFinance])
+
+  const totals = useMemo(() => {
+    const billed = records.reduce((sum, f) => sum + f.amount, 0)
+    const collected = records.reduce((sum, f) => sum + f.amountPaid, 0)
+    const thisMonth = (() => {
+      const prefix = todayInTimeZone(timeZone).slice(0, 7)
+      return records.reduce(
+        (sum, f) => sum + f.payments.filter((p) => p.paidOn.startsWith(prefix)).reduce((s, p) => s + p.amount, 0),
+        0,
+      )
+    })()
+    return {
+      billed,
+      collected,
+      outstanding: billed - collected,
+      overdue: records.filter((f) => f.status === 'overdue').length,
+      thisMonth,
+    }
+  }, [records, timeZone])
 
   const filtered = useMemo(() => {
-    return fees.filter((f) => {
-      const student = students.find((s) => s.id === f.studentId)
-      const matchesSearch = student?.name.toLowerCase().includes(search.toLowerCase()) || f.category.toLowerCase().includes(search.toLowerCase())
+    const q = search.trim().toLowerCase()
+    return records.filter((f) => {
+      const matchesSearch =
+        q === '' || f.studentName.toLowerCase().includes(q) || f.category.toLowerCase().includes(q)
       const matchesStatus = statusFilter === 'all' || f.status === statusFilter
       return matchesSearch && matchesStatus
     })
-  }, [fees, students, search, statusFilter])
+  }, [records, search, statusFilter])
 
-  const openPay = (fee: FeeRecord) => {
-    setPayTarget(fee)
-    setAmount(String(fee.amount - fee.amountPaid))
-    setReference('')
-    setMethod('mobile_money')
+  const openCreate = () => {
+    setEditing(null)
+    setFeeForm({
+      ...emptyFeeForm,
+      studentId: students[0]?.id ?? '',
+      termId: currentTermId || (terms[terms.length - 1]?.id ?? ''),
+    })
+    setFeeErrors({})
+    setFeeModalOpen(true)
   }
 
-  const handleRecordPayment = () => {
-    if (!payTarget) return
-    const value = Number(amount)
-    if (!value || value <= 0) {
-      showToast({ type: 'error', title: 'Enter a valid amount' })
-      return
+  const openEdit = (fee: FeeRecordView) => {
+    setEditing(fee)
+    setFeeForm({
+      studentId: fee.studentId,
+      termId: fee.termId,
+      category: fee.category,
+      amount: String(fee.amount),
+      dueDate: fee.dueDate,
+    })
+    setFeeErrors({})
+    setFeeModalOpen(true)
+  }
+
+  const validateFee = () => {
+    const next: FieldErrors = {}
+    if (!feeForm.studentId) next.studentId = 'Select a student.'
+    if (!feeForm.termId) next.termId = 'Select a term.'
+    if (!minLength(feeForm.category, 2)) next.category = 'Select a category.'
+    const amount = Number(feeForm.amount)
+    // fee_records_amount_check enforces amount > 0 in the database.
+    if (!feeForm.amount || Number.isNaN(amount) || amount <= 0) next.amount = 'Enter an amount greater than zero.'
+    if (editing && amount < editing.amountPaid) {
+      next.amount = `Already paid ${formatMoney(editing.amountPaid, editing.currency, true)}. The amount cannot be lower.`
     }
-    recordPayment(payTarget.id, value, method, reference || `REF${Date.now().toString().slice(-6)}`)
-    showToast({ type: 'success', title: 'Payment recorded', description: `${formatCurrency(value)} recorded for ${payTarget.category}.` })
-    setPayTarget(null)
+    if (!feeForm.dueDate) next.dueDate = 'Select a due date.'
+    setFeeErrors(next)
+    return Object.keys(next).length === 0
   }
 
-  const openReminder = () => {
-    setReminderMonth(currentMonthName)
-    setReminderMessage(
-      `Dear parent, this is a reminder that your child's school fees for ${currentMonthName} are outstanding at ${school?.name ?? ''}. Kindly settle the balance at your earliest convenience via the parent app. Thank you.`,
-    )
-    setReminderOpen(true)
-  }
-
-  const sendReminders = () => {
-    if (unpaidParentIds.length === 0) {
-      showToast({ type: 'error', title: 'No unpaid parents to remind' })
-      return
+  const submitFee = async () => {
+    if (!validateFee() || !schoolId) return
+    setIsSaving(true)
+    const input = {
+      studentId: feeForm.studentId,
+      termId: feeForm.termId,
+      category: feeForm.category,
+      amount: Number(feeForm.amount),
+      currency: editing?.currency ?? currency,
+      dueDate: feeForm.dueDate,
+      // No amount_paid. See the header.
     }
-    unpaidParentIds.forEach((parentId) => {
-      const parent = parents.find((p) => p.id === parentId)
-      if (!parent) return
-      createThread({
-        participantIds: ['admin', parentId],
-        participantNames: [profile?.full_name ?? 'School Administration', parent.name],
-        subject: `Fee Reminder — ${reminderMonth}`,
-        firstMessage: {
-          senderId: 'admin',
-          senderName: profile?.full_name ?? 'School Administration',
-          body: reminderMessage,
-        },
+    try {
+      if (editing) {
+        await updateFeeRecord(schoolId, editing.id, input)
+        showToast({ type: 'success', title: 'Fee updated' })
+      } else {
+        await createFeeRecord(schoolId, input)
+        showToast({ type: 'success', title: 'Fee created', description: 'The invoice starts unpaid until a payment is recorded.' })
+      }
+      setFeeModalOpen(false)
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: editing ? 'Fee not updated' : 'Fee not created',
+        description: err instanceof Error ? err.message : String(err),
       })
-    })
-    showToast({
-      type: 'success',
-      title: 'Reminders sent',
-      description: `${unpaidParentIds.length} parent${unpaidParentIds.length === 1 ? '' : 's'} notified for ${reminderMonth}.`,
-    })
-    setReminderOpen(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const statementStudent = students.find((s) => s.id === statementTarget)
-  const statementFees = statementStudent ? fees.filter((f) => f.studentId === statementStudent.id && f.term === currentTerm) : []
-  const payable = statementFees.reduce((sum, f) => sum + f.amount, 0)
-  const paidSoFar = statementFees.reduce((sum, f) => sum + f.amountPaid, 0)
-  const debitBalance = Math.max(0, payable - paidSoFar)
-  const creditBalance = Math.max(0, paidSoFar - payable)
-  const percentPaid = payable > 0 ? Math.min(100, Math.round((paidSoFar / payable) * 100)) : 0
+  const openPay = (fee: FeeRecordView) => {
+    setPayTarget(fee)
+    setPayAmount(String(fee.balance))
+    setPayMethod('cash')
+    setPayReference('')
+    setPayDate(todayInTimeZone(timeZone))
+    setPayErrors({})
+  }
+
+  const validatePayment = () => {
+    const next: FieldErrors = {}
+    const value = Number(payAmount)
+    if (!payAmount || Number.isNaN(value) || value <= 0) next.amount = 'Enter an amount greater than zero.'
+    else if (payTarget && value > payTarget.balance) {
+      next.amount = `That is more than the outstanding balance of ${formatMoney(payTarget.balance, payTarget.currency, true)}.`
+    }
+    // Required, not generated. A reference is a real receipt number.
+    if (!minLength(payReference.trim(), 2)) next.reference = 'Enter the receipt or transaction reference.'
+    if (!payDate) next.paidOn = 'Select the payment date.'
+    setPayErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  const submitPayment = async () => {
+    if (!payTarget || !schoolId || !validatePayment()) return
+    setIsSaving(true)
+    try {
+      await recordPayment(schoolId, {
+        feeRecordId: payTarget.id,
+        amount: Number(payAmount),
+        currency: payTarget.currency,
+        method: payMethod,
+        reference: payReference.trim(),
+        paidOn: payDate,
+      })
+      showToast({
+        type: 'success',
+        title: 'Payment recorded',
+        description: `${formatMoney(Number(payAmount), payTarget.currency, true)} recorded for ${payTarget.category}.`,
+      })
+      setPayTarget(null)
+      reload()
+    } catch (err: unknown) {
+      // A duplicate reference lands here with a specific message rather than a
+      // raw constraint name.
+      showToast({
+        type: 'error',
+        title: 'Payment not recorded',
+        description: err instanceof Error ? err.message : String(err),
+      })
+      setPayErrors({ reference: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const confirmDeleteFee = async () => {
+    if (!deleteFeeTarget || !schoolId) return
+    try {
+      await deleteFeeRecord(schoolId, deleteFeeTarget.id)
+      showToast({ type: 'success', title: 'Fee removed' })
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Fee not removed',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setDeleteFeeTarget(null)
+    }
+  }
+
+  const removePayment = async (paymentId: string) => {
+    if (!schoolId) return
+    try {
+      await deletePayment(schoolId, paymentId)
+      showToast({ type: 'success', title: 'Payment removed', description: 'The balance has been recalculated.' })
+      setStatementTarget(null)
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Payment not removed',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  const canCreate = students.length > 0 && terms.length > 0
 
   return (
     <div>
@@ -148,194 +318,359 @@ export default function AdminFees() {
         title="Fees & Payments"
         description="Track balances, collections and outstanding fees across the school."
         actions={
-          <Button variant="outline" onClick={openReminder} icon={<Send className="h-4 w-4" />}>
-            Send Payment Reminder
-          </Button>
+          canManageFinance && canCreate ? (
+            <Button onClick={openCreate} icon={<Plus className="h-4 w-4" />}>
+              New Fee
+            </Button>
+          ) : undefined
         }
       />
 
-      <div className="mb-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label={`Collected — ${currentMonthName}`} value={formatCurrency(collectedThisMonth)} icon={TrendingUp} tint="#34A853" />
-        <StatCard label="Total Collected (Term)" value={formatCurrency(totalCollected)} icon={Wallet} tint="#0071E3" />
-        <StatCard label="Outstanding Balance" value={formatCurrency(totalOutstanding)} icon={Search} tint="#F59E0B" />
-        <StatCard label="Overdue Invoices" value={overdueCount} icon={AlertTriangle} tint="#EF4444" />
-      </div>
+      <ResourceGate
+        state={state}
+        empty={{
+          icon: Wallet,
+          title: 'No fee records yet',
+          description: 'Create a fee to begin tracking balances and payments.',
+        }}
+        deniedHint="Fees and payments are handled by the school office."
+      >
+        {(all) => (
+          <>
+            <div className="mb-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Collected this month" value={formatMoney(totals.thisMonth, currency)} icon={TrendingUp} tint="#34A853" />
+              <StatCard label="Total collected" value={formatMoney(totals.collected, currency)} icon={Wallet} tint="#0071E3" />
+              <StatCard label="Outstanding balance" value={formatMoney(totals.outstanding, currency)} icon={Search} tint="#F59E0B" />
+              <StatCard label="Overdue invoices" value={totals.overdue} icon={AlertTriangle} tint="#EF4444" />
+            </div>
 
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by student or fee category…" className="sm:w-80" />
-        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="sm:w-48">
-          <option value="all">All Statuses</option>
-          <option value="paid">Paid</option>
-          <option value="partial">Partial</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="overdue">Overdue</option>
-        </Select>
-      </div>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search by student or fee category…" className="sm:w-80" />
+              <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="sm:w-48">
+                <option value="all">All Statuses</option>
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="overdue">Overdue</option>
+              </Select>
+              <span className="text-xs text-graphite">
+                {filtered.length} of {all.length}
+              </span>
+            </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState icon={Wallet} title="No fee records found" description="Try adjusting your search or filters." />
-      ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
-            <thead>
-              <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
-                <th className="px-5 py-3.5 font-medium">Student</th>
-                <th className="px-5 py-3.5 font-medium">Category</th>
-                <th className="px-5 py-3.5 font-medium">Amount</th>
-                <th className="px-5 py-3.5 font-medium">Paid</th>
-                <th className="px-5 py-3.5 font-medium">Due Date</th>
-                <th className="px-5 py-3.5 font-medium">Status</th>
-                <th className="px-5 py-3.5 font-medium text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((f) => {
-                const student = students.find((s) => s.id === f.studentId)
-                const cls = classes.find((c) => c.id === student?.classId)
-                if (!student) return null
-                return (
-                  <tr key={f.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
-                    <td className="px-5 py-3.5">
-                      <button onClick={() => setStatementTarget(student.id)} className="flex items-center gap-3 text-left hover:opacity-80">
-                        <Avatar name={student.name} color={student.avatarColor} size="sm" />
-                        <div>
-                          <p className="font-medium text-ink dark:text-white">{student.name}</p>
-                          <p className="text-xs text-graphite">{cls?.name}</p>
-                        </div>
-                      </button>
-                    </td>
-                    <td className="px-5 py-3.5 text-graphite">{f.category}</td>
-                    <td className="px-5 py-3.5 text-ink dark:text-white">{formatCurrency(f.amount)}</td>
-                    <td className="px-5 py-3.5 text-graphite">{formatCurrency(f.amountPaid)}</td>
-                    <td className="px-5 py-3.5 text-graphite">{formatDate(f.dueDate)}</td>
-                    <td className="px-5 py-3.5">
-                      <Badge tone={statusTone[f.status]}>{f.status}</Badge>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setStatementTarget(student.id)}
-                          className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
-                          aria-label="View statement"
-                        >
-                          <FileText className="h-4 w-4" />
-                        </button>
-                        {f.status !== 'paid' && (
-                          <Button size="sm" variant="outline" onClick={() => openPay(f)}>
-                            Record Payment
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+            {filtered.length === 0 ? (
+              <EmptyState icon={Wallet} title="No fee records found" description="Try adjusting your search or filters." />
+            ) : (
+              <div className="card overflow-x-auto">
+                <table className="w-full min-w-[860px] text-sm">
+                  <thead>
+                    <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
+                      <th className="px-5 py-3.5 font-medium">Student</th>
+                      <th className="px-5 py-3.5 font-medium">Category</th>
+                      <th className="px-5 py-3.5 font-medium">Term</th>
+                      <th className="px-5 py-3.5 font-medium">Amount</th>
+                      <th className="px-5 py-3.5 font-medium">Paid</th>
+                      <th className="px-5 py-3.5 font-medium">Due Date</th>
+                      <th className="px-5 py-3.5 font-medium">Status</th>
+                      <th className="px-5 py-3.5 text-right font-medium">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((f) => (
+                      <tr key={f.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
+                        <td className="px-5 py-3.5">
+                          <button
+                            type="button"
+                            onClick={() => setStatementTarget(f)}
+                            className="flex items-center gap-3 text-left hover:opacity-80"
+                          >
+                            <Avatar name={f.studentName} size="sm" />
+                            <p className="font-medium text-ink dark:text-white">{f.studentName}</p>
+                          </button>
+                        </td>
+                        <td className="px-5 py-3.5 text-graphite">{f.category}</td>
+                        <td className="px-5 py-3.5 text-graphite">{f.termName}</td>
+                        <td className="px-5 py-3.5 text-ink dark:text-white">{formatMoney(f.amount, f.currency)}</td>
+                        {/* Trigger-maintained. Displayed, never editable. */}
+                        <td className="px-5 py-3.5 text-graphite">{formatMoney(f.amountPaid, f.currency)}</td>
+                        <td className="px-5 py-3.5 text-graphite">{formatDate(f.dueDate)}</td>
+                        <td className="px-5 py-3.5">
+                          <Badge tone={statusTone[f.status]}>{f.status}</Badge>
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setStatementTarget(f)}
+                              className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                              aria-label={`View payments for ${f.studentName}`}
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(f)}
+                              className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                              aria-label={`Edit ${f.category} fee for ${f.studentName}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteFeeTarget(f)}
+                              className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
+                              aria-label={`Delete ${f.category} fee for ${f.studentName}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                            {f.status !== 'paid' && (
+                              <Button size="sm" variant="outline" onClick={() => openPay(f)}>
+                                Record Payment
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </ResourceGate>
+
+      {/* Fee record form. Six fields. amount_paid is not one of them. */}
+      <Modal
+        open={feeModalOpen}
+        onClose={() => setFeeModalOpen(false)}
+        title={editing ? 'Edit Fee' : 'New Fee'}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setFeeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitFee} disabled={isSaving}>
+              {isSaving ? 'Saving…' : editing ? 'Save Changes' : 'Create Fee'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="Student"
+            required
+            value={feeForm.studentId}
+            onChange={(e) => setFeeForm({ ...feeForm, studentId: e.target.value })}
+            error={feeErrors.studentId}
+          >
+            {students.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} · {s.admissionNo}
+              </option>
+            ))}
+          </Select>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select
+              label="Term"
+              required
+              value={feeForm.termId}
+              onChange={(e) => setFeeForm({ ...feeForm, termId: e.target.value })}
+              error={feeErrors.termId}
+            >
+              {terms.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="Category"
+              required
+              value={feeForm.category}
+              onChange={(e) => setFeeForm({ ...feeForm, category: e.target.value })}
+              error={feeErrors.category}
+            >
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label={`Amount (${editing?.currency ?? currency})`}
+              type="number"
+              min={1}
+              step="0.01"
+              required
+              value={feeForm.amount}
+              onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })}
+              error={feeErrors.amount}
+            />
+            <Input
+              label="Due date"
+              type="date"
+              required
+              value={feeForm.dueDate}
+              onChange={(e) => setFeeForm({ ...feeForm, dueDate: e.target.value })}
+              error={feeErrors.dueDate}
+            />
+          </div>
+          {editing && (
+            <div className="flex items-start gap-2 rounded-xl bg-mist px-3 py-2.5 text-xs text-graphite dark:bg-white/5">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Paid to date is {formatMoney(editing.amountPaid, editing.currency, true)}. It is calculated from
+                recorded payments and cannot be edited here. Add or remove a payment to change it.
+              </span>
+            </div>
+          )}
         </div>
-      )}
+      </Modal>
 
+      {/* The only control that moves a balance. */}
       <Modal
         open={!!payTarget}
         onClose={() => setPayTarget(null)}
         title="Record Payment"
-        description={payTarget ? `${payTarget.category} — balance ${formatCurrency(payTarget.amount - payTarget.amountPaid)}` : undefined}
+        description={
+          payTarget
+            ? `${payTarget.studentName} · ${payTarget.category} · balance ${formatMoney(payTarget.balance, payTarget.currency, true)}`
+            : undefined
+        }
         footer={
           <>
             <Button variant="ghost" onClick={() => setPayTarget(null)}>
               Cancel
             </Button>
-            <Button onClick={handleRecordPayment}>Record Payment</Button>
+            <Button onClick={submitPayment} disabled={isSaving}>
+              {isSaving ? 'Recording…' : 'Record Payment'}
+            </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Input label="Amount (USD)" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <Select label="Payment method" value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
-            <option value="mobile_money">Mobile Money</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="card">Card</option>
-            <option value="cash">Cash</option>
+          <Input
+            label={`Amount (${payTarget?.currency ?? currency})`}
+            type="number"
+            min={0.01}
+            step="0.01"
+            required
+            value={payAmount}
+            onChange={(e) => setPayAmount(e.target.value)}
+            error={payErrors.amount}
+          />
+          <Select label="Payment method" value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}>
+            {PAYMENT_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
           </Select>
-          <Input label="Reference (optional)" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Transaction reference" />
+          <Input
+            label="Reference"
+            required
+            value={payReference}
+            onChange={(e) => setPayReference(e.target.value)}
+            error={payErrors.reference}
+            placeholder="Receipt or transaction number"
+          />
+          <Input
+            label="Payment date"
+            type="date"
+            required
+            value={payDate}
+            onChange={(e) => setPayDate(e.target.value)}
+            error={payErrors.paidOn}
+          />
+          <p className="text-xs text-graphite">
+            Each reference must be unique within the school, so the same receipt cannot be entered twice.
+          </p>
         </div>
       </Modal>
 
-      {/* Send reminder to all unpaid parents */}
-      <Modal
-        open={reminderOpen}
-        onClose={() => setReminderOpen(false)}
-        title="Send Payment Reminder"
-        description={`${unpaidParentIds.length} parent${unpaidParentIds.length === 1 ? '' : 's'} currently have an unpaid or overdue balance.`}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setReminderOpen(false)}>Cancel</Button>
-            <Button onClick={sendReminders} icon={<Send className="h-4 w-4" />}>Send to {unpaidParentIds.length} Parents</Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Input label="Billing month" value={reminderMonth} onChange={(e) => setReminderMonth(e.target.value)} />
-          <Textarea label="Reminder message" rows={5} value={reminderMessage} onChange={(e) => setReminderMessage(e.target.value)} />
-          <p className="text-xs text-graphite">This message will appear in the Messages inbox of every parent with an unpaid, partial or overdue balance.</p>
-        </div>
-      </Modal>
-
-      {/* Per-student billing statement */}
+      {/* Payment history for one fee. */}
       <Modal open={!!statementTarget} onClose={() => setStatementTarget(null)} title="Payments" size="sm">
-        {statementStudent && (
+        {statementTarget && (
           <div>
             <div className="mb-5 flex items-center gap-3">
-              <Avatar name={statementStudent.name} color={statementStudent.avatarColor} />
+              <Avatar name={statementTarget.studentName} />
               <div>
-                <p className="font-semibold text-ink dark:text-white">{statementStudent.name}</p>
-                <p className="text-xs font-semibold uppercase tracking-wider text-graphite">
-                  Billing Term: {currentTerm.toUpperCase()} {new Date().getFullYear()}
+                <p className="font-semibold text-ink dark:text-white">{statementTarget.studentName}</p>
+                <p className="text-xs text-graphite">
+                  {statementTarget.category} · {statementTarget.termName}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl bg-mist p-4 dark:bg-white/5">
-                <p className="text-lg font-semibold text-ink dark:text-white">{formatCurrencyPrecise(payable)}</p>
-                <p className="text-xs text-graphite">Total Fees Payable</p>
+                <p className="text-base font-semibold text-ink dark:text-white">
+                  {formatMoney(statementTarget.amount, statementTarget.currency, true)}
+                </p>
+                <p className="text-xs text-graphite">Billed</p>
               </div>
               <div className="rounded-2xl bg-mist p-4 dark:bg-white/5">
-                <p className="text-lg font-semibold text-ink dark:text-white">{formatCurrencyPrecise(paidSoFar)}</p>
-                <p className="text-xs text-graphite">Paid So Far</p>
+                <p className="text-base font-semibold text-emerald-600">
+                  {formatMoney(statementTarget.amountPaid, statementTarget.currency, true)}
+                </p>
+                <p className="text-xs text-graphite">Paid</p>
               </div>
               <div className="rounded-2xl bg-mist p-4 dark:bg-white/5">
-                <p className={`text-lg font-semibold ${debitBalance > 0 ? 'text-red-500' : 'text-ink dark:text-white'}`}>{formatCurrencyPrecise(debitBalance)}</p>
-                <p className="text-xs text-graphite">Debit Balance</p>
-              </div>
-              <div className="rounded-2xl bg-mist p-4 dark:bg-white/5">
-                <p className={`text-lg font-semibold ${creditBalance > 0 ? 'text-emerald-600' : 'text-ink dark:text-white'}`}>{formatCurrencyPrecise(creditBalance)}</p>
-                <p className="text-xs text-graphite">Credit Balance</p>
+                <p className={`text-base font-semibold ${statementTarget.balance > 0 ? 'text-red-500' : 'text-ink dark:text-white'}`}>
+                  {formatMoney(statementTarget.balance, statementTarget.currency, true)}
+                </p>
+                <p className="text-xs text-graphite">Balance</p>
               </div>
             </div>
-            <div className="mt-4 rounded-2xl border border-ink/5 p-4 dark:border-white/10">
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="font-medium text-ink dark:text-white">{percentPaid}%</span>
-                <span className="text-graphite">Paid So Far</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-ink/5 dark:bg-white/10">
-                <div className="h-full rounded-full bg-gradient-to-r from-brand to-accent transition-all duration-700" style={{ width: `${percentPaid}%` }} />
-              </div>
+
+            <div className="mt-5 space-y-2">
+              {statementTarget.payments.length === 0 ? (
+                <p className="text-sm text-graphite">No payments recorded against this fee yet.</p>
+              ) : (
+                statementTarget.payments.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between rounded-xl bg-mist px-3 py-2.5 dark:bg-white/5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-ink dark:text-white">
+                        {formatMoney(p.amount, p.currency, true)}
+                      </p>
+                      <p className="truncate text-xs text-graphite">
+                        {paymentMethodLabel(p.method)} · {p.reference} · {formatDate(p.paidOn)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePayment(p.id)}
+                      className="shrink-0 rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
+                      aria-label={`Remove payment ${p.reference}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
-            <Button
-              variant="outline"
-              className="mt-5 w-full justify-center"
-              icon={<CreditCard className="h-4 w-4" />}
-              onClick={() => {
-                const fee = statementFees.find((f) => f.status !== 'paid')
-                setStatementTarget(null)
-                if (fee) openPay(fee)
-              }}
-            >
-              Record a Payment
-            </Button>
+            <p className="mt-4 text-xs text-graphite">
+              Removing a payment recalculates the balance automatically. There is no way to set a paid amount directly.
+            </p>
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteFeeTarget}
+        title={`Delete ${deleteFeeTarget?.category} fee?`}
+        description={
+          deleteFeeTarget && deleteFeeTarget.payments.length > 0
+            ? 'This fee has payments recorded against it and cannot be deleted until they are removed.'
+            : 'This fee will be removed from the student record.'
+        }
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDeleteFee}
+        onCancel={() => setDeleteFeeTarget(null)}
+      />
     </div>
   )
 }

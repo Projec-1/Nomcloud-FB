@@ -1,22 +1,47 @@
-import { useState } from 'react'
-import { Wallet, CreditCard, CheckCircle2, Download, Smartphone, Landmark } from 'lucide-react'
-import { useData } from '@/context/DataContext'
+import { Wallet, CreditCard, CheckCircle2, Download } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { useToast } from '@/context/ToastContext'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
+import { useChildFees } from '@/hooks/useFinance'
 import PageHeader from '@/components/ui/PageHeader'
 import ChildSwitcher from '@/components/dashboard/ChildSwitcher'
-import EmptyState from '@/components/ui/EmptyState'
 import ResourceGate from '@/components/ui/ResourceGate'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
-import Modal from '@/components/ui/Modal'
-import Input from '@/components/ui/Input'
-import Button from '@/components/ui/Button'
-import { cn } from '@/utils/cn'
-import type { FeeRecord, FeeStatus } from '@/types'
-import { formatCurrency, formatDate } from '@/utils/format'
+import { paymentMethodLabel, type FeePaymentView, type FeeStatus } from '@/services/financeService'
+import { formatDate, formatMoney } from '@/utils/format'
 import { downloadReceiptImage } from '@/utils/receipt'
+
+// ---------------------------------------------------------------------------
+// Phase 8 batch 6. Real fee_records and fee_payments for the selected child.
+//
+// READ ONLY, AND THE "PAY NOW" FLOW IS REMOVED. This is the most consequential
+// deletion in Phase 8 so far, so the reasoning is recorded here in full.
+//
+// The prototype offered a Pay Now button which:
+//   1. waited 1.1 seconds to simulate a gateway,
+//   2. generated a reference as `PAY<timestamp>`,
+//   3. called the mock recordPayment,
+//   4. showed "Payment successful" and offered a receipt to download.
+//
+// No money moved at any point, and none could. A guardian holds SELECT and
+// nothing else on fee_payments — there is no guardian INSERT policy, by design:
+// C.5 states a guardian-initiated payment belongs to a real payment flow, never
+// to a direct row insert. Against the real database that write is refused.
+//
+// Left in place, the button would have told a parent their fees were paid, and
+// handed them a receipt as evidence, while the school's books showed the money
+// still outstanding. That is the worst failure available on this screen, so the
+// control is deleted rather than disabled. This closes open decision 4.
+//
+// THE RECEIPT IS KEPT, AND NOW MEANS SOMETHING. It is attached to payments the
+// school has actually recorded, read from fee_payments, instead of to a
+// simulated one. A parent downloading proof of a real receipted payment is a
+// legitimate read.
+//
+// Status is derived at read from amount, amount_paid and due_date against the
+// school's today, exactly as the admin page derives it. There is no status
+// column and nothing here writes one.
+// ---------------------------------------------------------------------------
 
 const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
   paid: 'success',
@@ -25,28 +50,10 @@ const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'
   overdue: 'danger',
 }
 
-type PaymentMethod = 'card' | 'mobile_money' | 'bank_transfer' | 'edahab' | 'evc_plus'
-
-const paymentOptions: { value: PaymentMethod; label: string; description: string; icon: typeof CreditCard }[] = [
-  { value: 'card', label: 'Credit / Debit Card', description: 'Visa, Mastercard', icon: CreditCard },
-  { value: 'mobile_money', label: 'Mobile Money', description: 'M-Pesa & partners', icon: Smartphone },
-  { value: 'evc_plus', label: 'EVC Plus', description: 'Hormuud Telecom', icon: Smartphone },
-  { value: 'edahab', label: 'eDahab', description: 'Telesom mobile wallet', icon: Smartphone },
-  { value: 'bank_transfer', label: 'Bank Transfer', description: 'Direct to school account', icon: Landmark },
-]
-
 export default function ParentFees() {
-  const { fees, recordPayment } = useData()
   const { profile, school } = useAuth()
-  const { showToast } = useToast()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
-
-  const [payTarget, setPayTarget] = useState<FeeRecord | null>(null)
-  const [amount, setAmount] = useState('')
-  const [method, setMethod] = useState<PaymentMethod>('card')
-  const [processing, setProcessing] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [lastReceipt, setLastReceipt] = useState<{ reference: string; amount: number; method: PaymentMethod; category: string; date: string } | null>(null)
+  const { state: feesState } = useChildFees(selectedChild?.id ?? null)
 
   if (!selectedChild) {
     return (
@@ -63,45 +70,16 @@ export default function ParentFees() {
     )
   }
 
-  const childFees = fees.filter((f) => f.studentId === selectedChild.id)
-  const totalDue = childFees.reduce((sum, f) => sum + f.amount, 0)
-  const totalPaid = childFees.reduce((sum, f) => sum + f.amountPaid, 0)
-  const balance = totalDue - totalPaid
-
-  const openPay = (fee: FeeRecord) => {
-    setPayTarget(fee)
-    setAmount(String(fee.amount - fee.amountPaid))
-    setMethod('card')
-    setSuccess(false)
-  }
-
-  const handlePay = async () => {
-    if (!payTarget) return
-    const value = Number(amount)
-    if (!value || value <= 0) {
-      showToast({ type: 'error', title: 'Enter a valid amount' })
-      return
-    }
-    setProcessing(true)
-    await new Promise((r) => setTimeout(r, 1100))
-    const reference = `PAY${Date.now().toString().slice(-6)}`
-    recordPayment(payTarget.id, value, method === 'evc_plus' || method === 'edahab' ? 'mobile_money' : method, reference)
-    setLastReceipt({ reference, amount: value, method, category: payTarget.category, date: new Date().toISOString() })
-    setProcessing(false)
-    setSuccess(true)
-  }
-
-  const handleDownloadReceipt = () => {
-    if (!lastReceipt || !selectedChild) return
+  const handleDownloadReceipt = (payment: FeePaymentView, category: string) => {
     downloadReceiptImage({
-      reference: lastReceipt.reference,
+      reference: payment.reference,
       schoolName: school?.name ?? '',
       studentName: selectedChild.name,
-      category: lastReceipt.category,
-      amount: lastReceipt.amount,
-      method: lastReceipt.method,
+      category,
+      amount: payment.amount,
+      method: payment.method,
       payerName: profile?.full_name ?? 'Parent',
-      date: lastReceipt.date,
+      date: payment.paidOn,
     })
   }
 
@@ -113,108 +91,93 @@ export default function ParentFees() {
         actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => c.className ?? ''} />}
       />
 
-      <div className="mb-6 grid gap-5 sm:grid-cols-3">
-        <StatCard label="Total Fees" value={formatCurrency(totalDue)} icon={Wallet} tint="#0071E3" />
-        <StatCard label="Amount Paid" value={formatCurrency(totalPaid)} icon={CheckCircle2} tint="#34A853" />
-        <StatCard label="Balance Due" value={formatCurrency(balance)} icon={CreditCard} tint={balance > 0 ? '#F59E0B' : '#34A853'} />
-      </div>
+      <ResourceGate
+        state={feesState}
+        empty={{
+          icon: Wallet,
+          title: 'No fee records yet',
+          description: "Fee records for your child will appear here once the school issues them.",
+        }}
+        deniedHint="Child records are available to a linked parent or guardian."
+      >
+        {(records) => {
+          const currency = records[0]?.currency ?? school?.currency ?? 'USD'
+          const totalDue = records.reduce((sum, f) => sum + f.amount, 0)
+          const totalPaid = records.reduce((sum, f) => sum + f.amountPaid, 0)
+          const balance = Math.max(0, totalDue - totalPaid)
 
-      {childFees.length === 0 ? (
-        <EmptyState icon={Wallet} title="No fee records found" description="Fee records for your child will appear here." />
-      ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[600px] text-sm">
-            <thead>
-              <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
-                <th className="px-5 py-3.5 font-medium">Category</th>
-                <th className="px-5 py-3.5 font-medium">Amount</th>
-                <th className="px-5 py-3.5 font-medium">Paid</th>
-                <th className="px-5 py-3.5 font-medium">Due Date</th>
-                <th className="px-5 py-3.5 font-medium">Status</th>
-                <th className="px-5 py-3.5 font-medium text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {childFees.map((f) => (
-                <tr key={f.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
-                  <td className="px-5 py-3.5 text-ink dark:text-white">{f.category}</td>
-                  <td className="px-5 py-3.5 text-graphite">{formatCurrency(f.amount)}</td>
-                  <td className="px-5 py-3.5 text-graphite">{formatCurrency(f.amountPaid)}</td>
-                  <td className="px-5 py-3.5 text-graphite">{formatDate(f.dueDate)}</td>
-                  <td className="px-5 py-3.5">
-                    <Badge tone={statusTone[f.status]}>{f.status}</Badge>
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    {f.status !== 'paid' && (
-                      <Button size="sm" onClick={() => openPay(f)}>
-                        Pay Now
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+          return (
+            <>
+              <div className="mb-6 grid gap-5 sm:grid-cols-3">
+                <StatCard label="Total fees" value={formatMoney(totalDue, currency)} icon={Wallet} tint="#0071E3" />
+                <StatCard label="Amount paid" value={formatMoney(totalPaid, currency)} icon={CheckCircle2} tint="#34A853" />
+                <StatCard
+                  label="Balance due"
+                  value={formatMoney(balance, currency)}
+                  icon={CreditCard}
+                  tint={balance > 0 ? '#F59E0B' : '#34A853'}
+                />
+              </div>
 
-      <Modal open={!!payTarget} onClose={() => setPayTarget(null)} title={success ? undefined : 'Pay Fee'} size="sm">
-        {success ? (
-          <div className="flex flex-col items-center py-4 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
-              <CheckCircle2 className="h-8 w-8" />
-            </div>
-            <h3 className="text-lg font-semibold text-ink dark:text-white">Payment successful</h3>
-            <p className="mt-2 text-sm text-graphite">
-              {formatCurrency(Number(amount))} was paid towards {payTarget?.category}.
-            </p>
-            <Button variant="outline" className="mt-6 w-full" icon={<Download className="h-4 w-4" />} onClick={handleDownloadReceipt}>
-              Download Receipt
-            </Button>
-            <Button className="mt-3 w-full" onClick={() => setPayTarget(null)}>
-              Done
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-graphite">
-              Balance for <span className="font-medium text-ink dark:text-white">{payTarget?.category}</span>:{' '}
-              {payTarget && formatCurrency(payTarget.amount - payTarget.amountPaid)}
-            </p>
-            <Input label="Amount (USD)" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <div>
-              <p className="label mb-2">Payment method</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {paymentOptions.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setMethod(opt.value)}
-                    className={cn(
-                      'flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors',
-                      method === opt.value
-                        ? 'border-accent bg-accent/5 dark:bg-accent/10'
-                        : 'border-ink/10 hover:border-ink/20 dark:border-white/10',
+              <div className="space-y-4">
+                {records.map((f) => (
+                  <div key={f.id} className="card p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                          <Badge tone={statusTone[f.status]}>{f.status}</Badge>
+                          <span className="text-xs text-graphite">{f.termName}</span>
+                        </div>
+                        <p className="font-medium text-ink dark:text-white">{f.category}</p>
+                        <p className="mt-1 text-xs text-graphite">Due {formatDate(f.dueDate)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-ink dark:text-white">{formatMoney(f.amount, f.currency, true)}</p>
+                        <p className="text-xs text-graphite">
+                          Paid {formatMoney(f.amountPaid, f.currency, true)}
+                          {f.balance > 0 ? ` · ${formatMoney(f.balance, f.currency, true)} outstanding` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    {f.payments.length > 0 && (
+                      <div className="mt-4 space-y-2 border-t border-ink/5 pt-4 dark:border-white/10">
+                        <p className="text-xs font-medium text-graphite">Payments received</p>
+                        {f.payments.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl bg-mist px-3 py-2.5 dark:bg-white/5">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-ink dark:text-white">
+                                {formatMoney(p.amount, p.currency, true)}
+                              </p>
+                              <p className="truncate text-xs text-graphite">
+                                {paymentMethodLabel(p.method)} · {p.reference} · {formatDate(p.paidOn)}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadReceipt(p, f.category)}
+                              className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                            >
+                              <Download className="h-3.5 w-3.5" /> Receipt
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  >
-                    <opt.icon className={cn('mt-0.5 h-4 w-4 flex-shrink-0', method === opt.value ? 'text-accent' : 'text-graphite')} />
-                    <span>
-                      <span className="block text-xs font-semibold text-ink dark:text-white">{opt.label}</span>
-                      <span className="block text-[11px] text-graphite">{opt.description}</span>
-                    </span>
-                  </button>
+                  </div>
                 ))}
               </div>
-            </div>
-            <Button className="w-full" size="lg" loading={processing} onClick={handlePay}>
-              Pay {amount ? formatCurrency(Number(amount)) : ''}
-            </Button>
-            <p className="text-center text-[11px] text-graphite">
-              This is a demo payment flow — no real money moves. A downloadable receipt is generated after payment.
-            </p>
-          </div>
-        )}
-      </Modal>
+
+              {balance > 0 && (
+                <p className="mt-5 rounded-2xl border border-ink/5 bg-white/60 px-4 py-3 text-xs text-graphite dark:border-white/10 dark:bg-white/[0.03]">
+                  To settle an outstanding balance, pay at the school office. Payments appear here once the office
+                  records them.
+                </p>
+              )}
+            </>
+          )
+        }}
+      </ResourceGate>
     </div>
   )
 }
