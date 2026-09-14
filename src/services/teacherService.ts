@@ -101,7 +101,30 @@ export interface ClassSummary {
   /** classes.class_teacher_id, the homeroom teacher. Null when unassigned. */
   teacherId: string | null
   studentIds: string[]
+  /** Every subject taught in this class, by name. */
   subject: string[]
+  /**
+   * The subjects the SIGNED-IN USER may record against in THIS class.
+   *
+   * Phase 8 batch 5. This is what lets the interface enforce subject-exact
+   * access itself rather than offering a field and letting RLS reject the write
+   * silently. RLS migration 12 made grade, homework and exam writes require the
+   * exact (class, subject) pair through teaches_class_subject; a UI that offered
+   * every subject of the class would invite a teacher to type marks that were
+   * always going to be refused, and a refused write is not visible to them,
+   * because RLS filters rather than raises.
+   *
+   * For a teacher this is their own class_subjects rows, so it is a SUBSET of
+   * `subject`. For management it is every subject of the class, because the
+   * matching policies key on can_manage_class, which is class-level rather than
+   * subject-exact. classService builds the management case; this file builds the
+   * teacher case. One field, one meaning on both sides: what you may write here.
+   *
+   * Empty for a homeroom-only teacher who teaches none of the class's subjects.
+   * That teacher can still mark attendance, which is class-level, but has no
+   * subject to enter marks against — exactly the split RLS batch 4 recorded.
+   */
+  writableSubjects: { id: string; name: string }[]
 }
 
 /** A timetable slot shaped for TimetableGrid, which batch 0 moved to ISO days. */
@@ -186,7 +209,11 @@ export async function fetchTeacherWorkspace(schoolId: string, teacherId: string)
       .eq('school_id', schoolId)
       .in('class_id', classIds)
       .is('left_on', null),
-    supabase.from('class_subjects').select('class_id, subject_id').eq('school_id', schoolId).in('class_id', classIds),
+    supabase
+      .from('class_subjects')
+      .select('class_id, subject_id, teacher_id')
+      .eq('school_id', schoolId)
+      .in('class_id', classIds),
     supabase.from('timetable_slots').select('*').eq('school_id', schoolId).in('class_id', classIds),
   ])
 
@@ -220,11 +247,19 @@ export async function fetchTeacherWorkspace(schoolId: string, teacherId: string)
   }
 
   const subjectsByClass = new Map<string, string[]>()
+  const writableByClass = new Map<string, { id: string; name: string }[]>()
   for (const row of classSubjects.data ?? []) {
-    const cs = row as { class_id: string; subject_id: string }
+    const cs = row as { class_id: string; subject_id: string; teacher_id: string | null }
     const name = subjectNames.get(cs.subject_id)
     if (!name) continue
     subjectsByClass.set(cs.class_id, [...(subjectsByClass.get(cs.class_id) ?? []), name])
+    // The subject-exact arm: only rows naming THIS teacher.
+    if (cs.teacher_id === teacherId) {
+      writableByClass.set(cs.class_id, [
+        ...(writableByClass.get(cs.class_id) ?? []),
+        { id: cs.subject_id, name },
+      ])
+    }
   }
 
   const classes: ClassSummary[] = (classRows.data ?? []).map((row) => {
@@ -247,6 +282,7 @@ export async function fetchTeacherWorkspace(schoolId: string, teacherId: string)
       teacherId: c.class_teacher_id,
       studentIds: rosterByClass.get(c.id) ?? [],
       subject: (subjectsByClass.get(c.id) ?? []).sort(),
+      writableSubjects: (writableByClass.get(c.id) ?? []).sort((x, y) => x.name.localeCompare(y.name)),
     }
   })
 

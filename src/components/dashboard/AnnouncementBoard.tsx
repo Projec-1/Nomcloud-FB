@@ -11,14 +11,22 @@ import Select from '@/components/ui/Select'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
 import type { Announcement, AnnouncementAudience, Role } from '@/types'
-import type { ClassSummary } from '@/services/teacherService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { formatDate } from '@/utils/format'
 import { cn } from '@/utils/cn'
 
 interface AnnouncementBoardProps {
   audienceOptions: { value: AnnouncementAudience; label: string }[]
-  classes: ClassSummary[]
+  /**
+   * Only the id and name are read, for the "specific class" audience selector.
+   *
+   * Batch 4 typed this as the full ClassSummary, which coupled the announcement
+   * board to a shape it never used and broke when batch 5 added writableSubjects
+   * to that type. Announcements are batch 7; narrowing the prop to what this
+   * component actually reads lets both the real class summaries and the
+   * still-mock array satisfy it without pulling batch 7 work forward.
+   */
+  classes: { id: string; name: string }[]
   authorName: string
   authorRole: Role
   visibleAnnouncements: Announcement[]

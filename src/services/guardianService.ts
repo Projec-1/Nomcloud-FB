@@ -40,7 +40,7 @@
 // ---------------------------------------------------------------------------
 
 import { supabase } from '@/lib/supabase'
-import { AVATAR_COLORS } from '@/constants/avatarColors'
+import { avatarColorForId } from '@/services/studentService'
 
 export interface GuardianRow {
   id: string
@@ -94,15 +94,6 @@ export interface ChildSummary {
   avatarColor: string
   classId: string | null
   className: string | null
-}
-
-/** Deterministic per-student colour, so a child looks the same on every screen. */
-function avatarColorForId(id: string): string {
-  let hash = 0
-  for (let i = 0; i < id.length; i += 1) {
-    hash = (hash * 31 + id.charCodeAt(i)) >>> 0
-  }
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
 export function toChildSummary(

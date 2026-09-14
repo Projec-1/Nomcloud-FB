@@ -1,25 +1,41 @@
+import { CalendarCheck } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import ResourceGate from '@/components/ui/ResourceGate'
-import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 import PageHeader from '@/components/ui/PageHeader'
-import EmptyState from '@/components/ui/EmptyState'
 import AttendanceMarker from '@/components/dashboard/AttendanceMarker'
-import { CalendarCheck } from 'lucide-react'
+import { useRecordableClasses } from '@/hooks/useRecordableClasses'
+import { DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
+
+// Phase 8 batch 5. Real attendance_records for the teacher's assigned classes.
+//
+// Attendance is CLASS-level, not subject-exact: attendance_records_teacher_insert
+// checks teaches_class. A homeroom teacher who teaches none of this class's
+// subjects can still mark this register, which is why no subject appears here.
 
 export default function TeacherAttendance() {
-  const { activeMembership } = useAuth()
-  const { state, classes: myClasses } = useTeacherClasses()
+  const { school } = useAuth()
+  const { state, schoolId } = useRecordableClasses()
 
   return (
     <div>
       <PageHeader title="Attendance" description="Mark daily attendance for your assigned classes." />
-      {<ResourceGate
-          state={state}
-          empty={{ icon: CalendarCheck, title: "No classes assigned yet", description: "You'll be able to mark attendance once a class is assigned to you." }}
-          deniedHint="Class records are available to an assigned teacher."
-        >
-          {() => <AttendanceMarker classes={myClasses} markedBy={activeMembership?.teacher_id ?? ''} />}
-        </ResourceGate>}
+      <ResourceGate
+        state={state}
+        empty={{
+          icon: CalendarCheck,
+          title: 'No classes assigned yet',
+          description: "You'll be able to mark attendance once a class is assigned to you.",
+        }}
+        deniedHint="Class records are available to an assigned teacher."
+      >
+        {(myClasses) => (
+          <AttendanceMarker
+            classes={myClasses}
+            schoolId={schoolId as string}
+            timeZone={school?.timezone ?? DEFAULT_TIME_ZONE}
+          />
+        )}
+      </ResourceGate>
     </div>
   )
 }

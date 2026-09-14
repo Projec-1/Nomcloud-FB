@@ -1,25 +1,33 @@
 import { ClipboardList } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
 import ResourceGate from '@/components/ui/ResourceGate'
-import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 import PageHeader from '@/components/ui/PageHeader'
-import EmptyState from '@/components/ui/EmptyState'
 import GradeBook from '@/components/dashboard/GradeBook'
+import { useRecordableClasses } from '@/hooks/useRecordableClasses'
+
+// Phase 8 batch 5. Real grade_records, with SUBJECT-EXACT writes.
+//
+// A teacher reads the whole class's grades but may enter marks only in subjects
+// they are assigned to teach. The subject selector inside GradeBook is built
+// from ClassSummary.writableSubjects for exactly that reason, so a subject this
+// teacher does not teach is never offered rather than being refused on save.
 
 export default function TeacherGrades() {
-  const { activeMembership } = useAuth()
-  const { state, classes: myClasses } = useTeacherClasses()
+  const { state, schoolId } = useRecordableClasses()
 
   return (
     <div>
-      <PageHeader title="Grades" description="Record assessment scores for your assigned classes." />
-      {<ResourceGate
-          state={state}
-          empty={{ icon: ClipboardList, title: "No classes assigned yet", description: "You'll be able to record grades once a class is assigned to you." }}
-          deniedHint="Class records are available to an assigned teacher."
-        >
-          {() => <GradeBook classes={myClasses} recordedBy={activeMembership?.teacher_id ?? ''} />}
-        </ResourceGate>}
+      <PageHeader title="Grades" description="Record assessment scores for the subjects you teach." />
+      <ResourceGate
+        state={state}
+        empty={{
+          icon: ClipboardList,
+          title: 'No classes assigned yet',
+          description: "You'll be able to record grades once a class is assigned to you.",
+        }}
+        deniedHint="Class records are available to an assigned teacher."
+      >
+        {(myClasses) => <GradeBook classes={myClasses} schoolId={schoolId as string} />}
+      </ResourceGate>
     </div>
   )
 }

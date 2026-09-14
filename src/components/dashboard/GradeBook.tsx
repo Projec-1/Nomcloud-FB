@@ -1,17 +1,54 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Save } from 'lucide-react'
-import { useData } from '@/context/DataContext'
+import { useCallback, useEffect, useState } from 'react'
+import { Save, Lock } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 import Select from '@/components/ui/Select'
-import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import Avatar from '@/components/ui/Avatar'
 import EmptyState from '@/components/ui/EmptyState'
-import type { SchoolClass } from '@/types'
+import { SkeletonRows } from '@/components/ui/Loader'
+import { useAcademicStructure } from '@/hooks/useAcademicStructure'
 import type { ClassSummary } from '@/services/teacherService'
+import { fetchRosterStudents, type RosterStudent } from '@/services/studentService'
+import { fetchGrades, saveGrades, type GradeEntry } from '@/services/teachingRecordsService'
 import { cn } from '@/utils/cn'
 
+// ---------------------------------------------------------------------------
+// Phase 8 batch 5. Reads and writes real grade_records.
+//
+// THIS SCREEN IS WHERE SUBJECT-EXACT ACCESS IS ENFORCED IN THE INTERFACE.
+//
+// grade_records_teacher_insert requires teaches_class_subject(school_id,
+// class_id, subject_id) — the exact (class, subject) pair, established in RLS
+// migration 12. A teacher READS the whole class's grades through
+// grade_records_teacher_select (teaches_class, class-level) but may WRITE only
+// their own subjects.
+//
+// So the subject selector is NOT selectedClass.subject, which is every subject
+// taught in the class. It is selectedClass.writableSubjects, which for a teacher
+// is only their own class_subjects rows and for management is every subject,
+// matching can_manage_class being class-level. A homeroom-only teacher therefore
+// sees an empty selector and NO SCORE INPUTS AT ALL, rather than a full form
+// whose Save is refused.
+//
+// That distinction matters because RLS filters rather than raises. Offering the
+// field and letting the database decide would, for an UPDATE, report zero rows
+// and no error — the teacher would type a column of marks, press Save, see a
+// success toast and lose the lot.
+//
+// WHY THE TERM IS A VISIBLE CONTROL. grade_records.term_id is NOT NULL and part
+// of the natural key, UNIQUE (school_id, student_id, subject_id, term_id,
+// assessment). The batch 2 academic hook resolves the current term by date and
+// returns NULL between terms, so a hidden default would silently write into the
+// wrong term or fail. The term is chosen explicitly, defaulted to the current
+// one when there is one.
+//
+// NO DELETE CONTROL. grade_records has no teacher DELETE policy; only management
+// can remove a mark, and no screen in this batch offers it.
+// ---------------------------------------------------------------------------
+
 const assessmentTypes = ['CAT 1', 'CAT 2', 'Mid-Term Exam', 'End-Term Exam', 'Assignment']
+
+const MAX_SCORE = 100
 
 function scoreToGrade(pct: number) {
   if (pct >= 90) return 'A'
@@ -30,88 +67,189 @@ function gradeTone(grade: string) {
   return 'text-red-500'
 }
 
-export default function GradeBook({ classes, recordedBy }: { classes: ClassSummary[]; recordedBy: string }) {
-  const { students, grades, addGrade, updateGrade, currentTerm } = useData()
+interface GradeBookProps {
+  classes: ClassSummary[]
+  schoolId: string
+}
+
+export default function GradeBook({ classes, schoolId }: GradeBookProps) {
   const { showToast } = useToast()
+  const { state: academicState } = useAcademicStructure()
 
   const [classId, setClassId] = useState(classes[0]?.id ?? '')
   const selectedClass = classes.find((c) => c.id === classId)
-  const [subject, setSubject] = useState(selectedClass?.subject[0] ?? '')
+
+  // The writable set, not the class's full subject list. This one line is the
+  // subject-exact restriction as the user experiences it.
+  const writable = selectedClass?.writableSubjects ?? []
+
+  const [subjectId, setSubjectId] = useState(writable[0]?.id ?? '')
+  const [termId, setTermId] = useState('')
   const [assessment, setAssessment] = useState(assessmentTypes[0])
+  const [students, setStudents] = useState<RosterStudent[]>([])
   const [scores, setScores] = useState<Record<string, string>>({})
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
+  const terms = academicState.status === 'ready' ? academicState.data.terms : []
+  const currentTermId = academicState.status === 'ready' ? (academicState.data.term?.id ?? '') : ''
+
+  // Changing class re-anchors the subject, because the writable set is per class:
+  // a teacher may teach Mathematics in one class and nothing in another.
+  //
+  // Keyed on the subject IDS rather than the array, so a re-render that hands
+  // back an equal-but-new array does not silently reset a subject the user
+  // chose. Only a genuine change of writable subjects re-anchors it.
+  const writableKey = writable.map((s) => s.id).join(',')
   useEffect(() => {
-    setSubject(selectedClass?.subject[0] ?? '')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId])
-
-  const classStudents = useMemo(
-    () => students.filter((s) => s.classId === classId).sort((a, b) => a.name.localeCompare(b.name)),
-    [students, classId],
-  )
-
-  useEffect(() => {
-    const next: Record<string, string> = {}
-    classStudents.forEach((s) => {
-      const existing = grades.find(
-        (g) => g.studentId === s.id && g.classId === classId && g.subject === subject && g.assessment === assessment && g.term === currentTerm,
-      )
-      next[s.id] = existing ? String(existing.score) : ''
+    setSubjectId((current) => {
+      if (current && writable.some((s) => s.id === current)) return current
+      return writable[0]?.id ?? ''
     })
-    setScores(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, subject, assessment, students.length])
+  }, [classId, writableKey])
 
-  const handleSave = () => {
-    if (!selectedClass) return
-    let count = 0
-    classStudents.forEach((s) => {
-      const raw = scores[s.id]
-      if (raw === undefined || raw === '') return
-      const score = Math.max(0, Math.min(100, Number(raw)))
-      const existing = grades.find(
-        (g) => g.studentId === s.id && g.classId === classId && g.subject === subject && g.assessment === assessment && g.term === currentTerm,
-      )
-      count += 1
-      if (existing) {
-        updateGrade(existing.id, { score, grade: scoreToGrade(score) })
-      } else {
-        addGrade({
-          studentId: s.id,
-          classId,
-          subject,
-          term: currentTerm,
-          assessment,
-          score,
-          maxScore: 100,
-          grade: scoreToGrade(score),
-          recordedBy,
-          date: new Date().toISOString().slice(0, 10),
+  // Default to the term containing today, falling back to the most recent
+  // defined term when today falls between terms.
+  useEffect(() => {
+    if (termId) return
+    if (currentTermId) setTermId(currentTermId)
+    else if (terms.length > 0) setTermId(terms[terms.length - 1].id)
+  }, [currentTermId, terms, termId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedClass) {
+      setStudents([])
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    const needsGrades = Boolean(subjectId && termId)
+
+    Promise.all([
+      fetchRosterStudents(schoolId, selectedClass.studentIds),
+      needsGrades
+        ? fetchGrades(schoolId, selectedClass.id, subjectId, termId, assessment)
+        : Promise.resolve(new Map<string, GradeEntry>()),
+    ])
+      .then(([roster, existing]) => {
+        if (cancelled) return
+        setStudents(roster)
+        const next: Record<string, string> = {}
+        for (const s of roster) {
+          const record = existing.get(s.id)
+          next[s.id] = record ? String(record.score) : ''
+        }
+        setScores(next)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        showToast({
+          type: 'error',
+          title: 'Could not load grades',
+          description: err instanceof Error ? err.message : String(err),
         })
-      }
-    })
-    showToast({ type: 'success', title: 'Grades saved', description: `${count} grade${count === 1 ? '' : 's'} recorded for ${subject}.` })
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, selectedClass, subjectId, termId, assessment, showToast])
+
+  const handleSave = useCallback(async () => {
+    if (!selectedClass || !subjectId || !termId) return
+    setIsSaving(true)
+
+    const entries: GradeEntry[] = []
+    for (const s of students) {
+      const raw = scores[s.id]
+      if (raw === undefined || raw.trim() === '') continue
+      const parsed = Number(raw)
+      if (Number.isNaN(parsed)) continue
+      // grade_records_score_check enforces 0 <= score <= max_score in the
+      // database. Clamping here only produces a better outcome than a raw
+      // constraint violation; the constraint is what guarantees it.
+      entries.push({ studentId: s.id, score: Math.max(0, Math.min(MAX_SCORE, parsed)), maxScore: MAX_SCORE })
+    }
+
+    if (entries.length === 0) {
+      setIsSaving(false)
+      showToast({ type: 'info', title: 'Nothing to save', description: 'Enter at least one score first.' })
+      return
+    }
+
+    try {
+      await saveGrades(schoolId, selectedClass.id, subjectId, termId, assessment, entries)
+      const subjectName = writable.find((s) => s.id === subjectId)?.name ?? 'this subject'
+      showToast({
+        type: 'success',
+        title: 'Grades saved',
+        description: `${entries.length} grade${entries.length === 1 ? '' : 's'} recorded for ${subjectName}.`,
+      })
+    } catch (err: unknown) {
+      // A subject this user does not teach raises 42501 here. Surfacing it is
+      // the point: a silent success toast over a refused write is exactly the
+      // failure this screen is designed to avoid.
+      showToast({
+        type: 'error',
+        title: 'Grades not saved',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }, [selectedClass, subjectId, termId, assessment, students, scores, schoolId, writable, showToast])
+
+  // The homeroom-only case: assigned to the class, teaching none of its
+  // subjects. Reading grades is allowed; writing any of them is not. Saying so
+  // is better than an empty dropdown the user cannot explain.
+  if (selectedClass && writable.length === 0) {
+    return (
+      <div>
+        <ClassPicker classes={classes} classId={classId} onChange={setClassId} />
+        <EmptyState
+          icon={Lock}
+          title="No subjects you can grade in this class"
+          description="Marks are entered by the teacher assigned to each subject. You can still mark this class's attendance."
+        />
+      </div>
+    )
   }
+
+  const canSave = Boolean(selectedClass && subjectId && termId) && !isSaving && !isLoading
 
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Select label="Class" value={classId} onChange={(e) => setClassId(e.target.value)} className="sm:w-52">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <Select label="Class" value={classId} onChange={(e) => setClassId(e.target.value)} className="sm:w-44">
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </Select>
-          <Select label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} className="sm:w-52">
-            {(selectedClass?.subject ?? []).map((s) => (
-              <option key={s} value={s}>
-                {s}
+          <Select label="Subject" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="sm:w-44">
+            {writable.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
               </option>
             ))}
           </Select>
-          <Select label="Assessment" value={assessment} onChange={(e) => setAssessment(e.target.value)} className="sm:w-48">
+          <Select label="Term" value={termId} onChange={(e) => setTermId(e.target.value)} className="sm:w-44">
+            {terms.length === 0 && <option value="">No terms defined</option>}
+            {terms.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+          <Select label="Assessment" value={assessment} onChange={(e) => setAssessment(e.target.value)} className="sm:w-44">
             {assessmentTypes.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -119,20 +257,27 @@ export default function GradeBook({ classes, recordedBy }: { classes: ClassSumma
             ))}
           </Select>
         </div>
-        <Button onClick={handleSave} icon={<Save className="h-4 w-4" />}>
-          Save Grades
+        <Button onClick={handleSave} disabled={!canSave} icon={<Save className="h-4 w-4" />}>
+          {isSaving ? 'Saving…' : 'Save Grades'}
         </Button>
       </div>
 
-      {classStudents.length === 0 ? (
+      {terms.length === 0 ? (
+        <EmptyState
+          title="No terms defined yet"
+          description="Grades are recorded against a term. Ask your administrator to set up the academic year first."
+        />
+      ) : isLoading ? (
+        <SkeletonRows />
+      ) : students.length === 0 ? (
         <EmptyState title="No students in this class" description="Add students to this class to begin recording grades." />
       ) : (
         <div className="card divide-y divide-ink/5 dark:divide-white/5">
           <div className="flex items-center justify-between px-5 py-3.5 text-xs font-medium text-graphite">
             <span>Student</span>
-            <span>Score / 100</span>
+            <span>Score / {MAX_SCORE}</span>
           </div>
-          {classStudents.map((s) => {
+          {students.map((s) => {
             const raw = scores[s.id] ?? ''
             const num = Number(raw)
             const grade = raw !== '' && !Number.isNaN(num) ? scoreToGrade(num) : null
@@ -147,7 +292,7 @@ export default function GradeBook({ classes, recordedBy }: { classes: ClassSumma
                   <input
                     type="number"
                     min={0}
-                    max={100}
+                    max={MAX_SCORE}
                     value={raw}
                     onChange={(e) => setScores((prev) => ({ ...prev, [s.id]: e.target.value }))}
                     className="input w-20 text-center"
@@ -159,6 +304,28 @@ export default function GradeBook({ classes, recordedBy }: { classes: ClassSumma
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function ClassPicker({
+  classes,
+  classId,
+  onChange,
+}: {
+  classes: ClassSummary[]
+  classId: string
+  onChange: (id: string) => void
+}) {
+  return (
+    <div className="mb-6">
+      <Select label="Class" value={classId} onChange={(e) => onChange(e.target.value)} className="sm:w-44">
+        {classes.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </Select>
     </div>
   )
 }

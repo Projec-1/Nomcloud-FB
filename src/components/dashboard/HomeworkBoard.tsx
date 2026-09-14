@@ -1,7 +1,5 @@
-import { useMemo, useState } from 'react'
-import type { ClassSummary } from '@/services/teacherService'
-import { Plus, Paperclip, Calendar, Users, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
-import { useData } from '@/context/DataContext'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Plus, Calendar, Users, Trash2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
@@ -12,37 +10,147 @@ import Textarea from '@/components/ui/Textarea'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
 import Avatar from '@/components/ui/Avatar'
-import type { Homework, SchoolClass } from '@/types'
+import { SkeletonRows } from '@/components/ui/Loader'
 import type { FieldErrors } from '@/utils/validators'
 import { minLength } from '@/utils/validators'
 import { formatDate, percentage } from '@/utils/format'
+import type { ClassSummary } from '@/services/teacherService'
+import { fetchRosterStudents, type RosterStudent } from '@/services/studentService'
+import {
+  createHomework,
+  deleteHomework,
+  fetchHomework,
+  setSubmissionStatus,
+  type HomeworkView,
+  type SubmissionStatus,
+} from '@/services/teachingRecordsService'
+import { todayInTimeZone } from '@/utils/schoolCalendar'
 
-const emptyForm = { classId: '', subject: '', title: '', description: '', dueDate: '', attachments: '0' }
+// ---------------------------------------------------------------------------
+// Phase 8 batch 5. Reads and writes real homework and homework_submissions.
+//
+// SUBJECT-EXACT, LIKE GRADES. homework_teacher_insert requires
+// teaches_class_subject, so the subject control in the assign dialog is a
+// SELECT over writableSubjects, not the free-text Input the prototype had. A
+// free-text subject could not work regardless of permissions: homework.subject_id
+// is a foreign key to subjects, not a string.
+//
+// THE ONE PLACE A TEACHER MAY DELETE. homework_teacher_delete exists and is
+// subject-exact. Attendance, grades, exams and submissions have no teacher
+// DELETE policy at all, which is why this is the only screen in the batch with a
+// delete control — and why it is shown only for a subject the user may write.
+//
+// ABSENCE MEANS PENDING. No trigger creates submission rows when homework is
+// assigned, and nothing in this batch bulk-inserts them: writing one row per
+// student purely to store the word "pending" would be a large write with no
+// information in it. The roster is the denominator and a student with no row is
+// pending, which is also why changing a status is an upsert.
+//
+// GUARDIANS DO NOT SUBMIT. Decision 4 of RLS batch 4 — homework is physical and
+// the teacher records it in person. The prototype's parent page called
+// updateSubmission; that path is gone, and nothing here is reachable by a
+// guardian.
+//
+// ATTACHMENTS REMOVED, NOT RESKINNED. The prototype carried an "attachments"
+// count. The homework table has no such column and there is no Storage bucket
+// (open decision 10), so the control is removed rather than left writing a
+// number nowhere.
+// ---------------------------------------------------------------------------
 
-export default function HomeworkBoard({ classes, createdBy }: { classes: ClassSummary[]; createdBy: string }) {
-  const { students, homework, addHomework, deleteHomework, updateSubmission } = useData()
+const emptyForm = { classId: '', subjectId: '', title: '', description: '', dueDate: '' }
+
+const submissionOptions: { value: SubmissionStatus; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'late', label: 'Late' },
+  { value: 'graded', label: 'Graded' },
+]
+
+interface HomeworkBoardProps {
+  classes: ClassSummary[]
+  schoolId: string
+  timeZone: string
+}
+
+export default function HomeworkBoard({ classes, schoolId, timeZone }: HomeworkBoardProps) {
   const { showToast } = useToast()
 
   const [classFilter, setClassFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [deleteTarget, setDeleteTarget] = useState<Homework | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<HomeworkView | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const visibleClassIds = classes.map((c) => c.id)
+  const [items, setItems] = useState<HomeworkView[]>([])
+  const [roster, setRoster] = useState<Map<string, RosterStudent[]>>(new Map())
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [nonce, setNonce] = useState(0)
+
+  const classIds = useMemo(() => classes.map((c) => c.id), [classes])
+
+  // Any class in which this user may assign something. A homeroom-only teacher
+  // has none, and the Assign button is withheld rather than opening a dialog
+  // with an empty subject list.
+  const assignableClasses = useMemo(() => classes.filter((c) => c.writableSubjects.length > 0), [classes])
+
+  useEffect(() => {
+    let cancelled = false
+    if (classIds.length === 0) {
+      setItems([])
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    Promise.all([
+      fetchHomework(schoolId, classIds),
+      // Rosters are fetched per class so the submission list can show every
+      // student, including those with no submission row yet.
+      Promise.all(
+        classes.map(async (c) => [c.id, await fetchRosterStudents(schoolId, c.studentIds)] as const),
+      ),
+    ])
+      .then(([homework, rosters]) => {
+        if (cancelled) return
+        setItems(homework)
+        setRoster(new Map(rosters))
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        showToast({
+          type: 'error',
+          title: 'Could not load homework',
+          description: err instanceof Error ? err.message : String(err),
+        })
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, classes, classIds, nonce, showToast])
+
+  const reload = useCallback(() => setNonce((n) => n + 1), [])
+
   const filtered = useMemo(
-    () =>
-      homework
-        .filter((h) => visibleClassIds.includes(h.classId))
-        .filter((h) => classFilter === 'all' || h.classId === classFilter)
-        .sort((a, b) => (a.dueDate < b.dueDate ? 1 : -1)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [homework, classFilter],
+    () => items.filter((h) => classFilter === 'all' || h.classId === classFilter),
+    [items, classFilter],
   )
 
+  const formClass = classes.find((c) => c.id === form.classId)
+  const formSubjects = formClass?.writableSubjects ?? []
+
   const openAdd = () => {
-    setForm({ ...emptyForm, classId: classes[0]?.id ?? '', subject: classes[0]?.subject[0] ?? '' })
+    const first = assignableClasses[0]
+    setForm({
+      ...emptyForm,
+      classId: first?.id ?? '',
+      subjectId: first?.writableSubjects[0]?.id ?? '',
+    })
     setErrors({})
     setModalOpen(true)
   }
@@ -50,35 +158,90 @@ export default function HomeworkBoard({ classes, createdBy }: { classes: ClassSu
   const validate = () => {
     const next: FieldErrors = {}
     if (!form.classId) next.classId = 'Select a class.'
-    if (!minLength(form.subject, 2)) next.subject = 'Enter a subject.'
+    if (!form.subjectId) next.subjectId = 'Select a subject you teach.'
     if (!minLength(form.title, 3)) next.title = 'Enter a homework title.'
     if (!form.dueDate) next.dueDate = 'Select a due date.'
     setErrors(next)
     return Object.keys(next).length === 0
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return
-    addHomework({
-      classId: form.classId,
-      subject: form.subject,
-      title: form.title,
-      description: form.description || 'No additional details provided.',
-      assignedDate: new Date().toISOString().slice(0, 10),
-      dueDate: form.dueDate,
-      attachments: Number(form.attachments) || 0,
-      createdBy,
-    })
-    showToast({ type: 'success', title: 'Homework assigned', description: `${form.title} was sent to the class.` })
-    setModalOpen(false)
+    setIsSaving(true)
+    const assignedDate = todayInTimeZone(timeZone)
+
+    try {
+      await createHomework(schoolId, {
+        classId: form.classId,
+        subjectId: form.subjectId,
+        title: form.title,
+        description: form.description,
+        assignedDate,
+        // homework_dates_check requires due_date >= assigned_date. A due date in
+        // the past is rejected here with a readable message rather than arriving
+        // as a raw constraint violation.
+        dueDate: form.dueDate,
+      })
+      showToast({ type: 'success', title: 'Homework assigned', description: `${form.title} was sent to the class.` })
+      setModalOpen(false)
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Homework not assigned',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteTarget) return
-    deleteHomework(deleteTarget.id)
-    showToast({ type: 'success', title: 'Homework removed' })
-    setDeleteTarget(null)
+    try {
+      await deleteHomework(schoolId, deleteTarget.id)
+      showToast({ type: 'success', title: 'Homework removed' })
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Homework not removed',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setDeleteTarget(null)
+    }
   }
+
+  const changeStatus = async (homeworkId: string, studentId: string, status: SubmissionStatus) => {
+    // Optimistic, then reconciled by reload. A refused write surfaces as a toast
+    // and the reload puts the real value back.
+    setItems((prev) =>
+      prev.map((h) =>
+        h.id !== homeworkId
+          ? h
+          : {
+              ...h,
+              submissions: [
+                ...h.submissions.filter((s) => s.studentId !== studentId),
+                { studentId, status },
+              ],
+            },
+      ),
+    )
+    try {
+      await setSubmissionStatus(schoolId, homeworkId, studentId, status)
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Status not updated',
+        description: err instanceof Error ? err.message : String(err),
+      })
+      reload()
+    }
+  }
+
+  if (isLoading) return <SkeletonRows />
 
   return (
     <div>
@@ -91,10 +254,19 @@ export default function HomeworkBoard({ classes, createdBy }: { classes: ClassSu
             </option>
           ))}
         </Select>
-        <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
-          Assign Homework
-        </Button>
+        {assignableClasses.length > 0 && (
+          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
+            Assign Homework
+          </Button>
+        )}
       </div>
+
+      {assignableClasses.length === 0 && classes.length > 0 && (
+        <div className="mb-5 flex items-center gap-2 rounded-2xl border border-ink/5 bg-white/60 px-4 py-3 text-xs text-graphite dark:border-white/10 dark:bg-white/[0.03]">
+          <Lock className="h-3.5 w-3.5 shrink-0" />
+          <span>Homework is assigned by the teacher of each subject. You can view what has been set here.</span>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <EmptyState title="No homework assigned" description="Assign your first homework to get started." />
@@ -102,14 +274,25 @@ export default function HomeworkBoard({ classes, createdBy }: { classes: ClassSu
         <div className="space-y-4">
           {filtered.map((hw) => {
             const cls = classes.find((c) => c.id === hw.classId)
-            const submitted = hw.submissions.filter((s) => s.status !== 'pending').length
+            const students = roster.get(hw.classId) ?? []
+            const statusByStudent = new Map(hw.submissions.map((s) => [s.studentId, s.status]))
+            const submitted = students.filter((s) => (statusByStudent.get(s.id) ?? 'pending') !== 'pending').length
             const isOpen = expanded === hw.id
+            // Delete and status edits are offered only where this user may write
+            // this subject. Both are refused by RLS otherwise, and a refused
+            // DELETE or UPDATE reports zero rows with no error.
+            const canWrite = (cls?.writableSubjects ?? []).some((s) => s.id === hw.subjectId)
+
             return (
               <div key={hw.id} className="card overflow-hidden">
-                <button onClick={() => setExpanded(isOpen ? null : hw.id)} className="flex w-full items-center justify-between gap-4 p-5 text-left">
+                <button
+                  type="button"
+                  onClick={() => setExpanded(isOpen ? null : hw.id)}
+                  className="flex w-full items-center justify-between gap-4 p-5 text-left"
+                >
                   <div className="min-w-0">
                     <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                      <Badge tone="info">{hw.subject}</Badge>
+                      <Badge tone="info">{hw.subjectName}</Badge>
                       <Badge tone="neutral">{cls?.name}</Badge>
                     </div>
                     <p className="truncate font-medium text-ink dark:text-white">{hw.title}</p>
@@ -118,54 +301,60 @@ export default function HomeworkBoard({ classes, createdBy }: { classes: ClassSu
                         <Calendar className="h-3 w-3" /> Due {formatDate(hw.dueDate)}
                       </span>
                       <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" /> {submitted}/{hw.submissions.length} submitted
+                        <Users className="h-3 w-3" /> {submitted}/{students.length} submitted
                       </span>
-                      {hw.attachments > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Paperclip className="h-3 w-3" /> {hw.attachments}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeleteTarget(hw)
-                      }}
-                      className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canWrite && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeleteTarget(hw)
+                        }}
+                        aria-label={`Delete homework: ${hw.title}`}
+                        className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                     {isOpen ? <ChevronUp className="h-4 w-4 text-graphite" /> : <ChevronDown className="h-4 w-4 text-graphite" />}
                   </div>
                 </button>
                 {isOpen && (
                   <div className="border-t border-ink/5 px-5 py-4 dark:border-white/10">
-                    <p className="mb-4 text-sm leading-relaxed text-graphite">{hw.description}</p>
+                    {hw.description && <p className="mb-4 text-sm leading-relaxed text-graphite">{hw.description}</p>}
                     <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-ink/5 dark:bg-white/10">
-                      <div className="h-full rounded-full bg-accent" style={{ width: `${percentage(submitted, hw.submissions.length)}%` }} />
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${percentage(submitted, students.length)}%` }} />
                     </div>
                     <div className="space-y-2">
-                      {hw.submissions.map((sub) => {
-                        const student = students.find((s) => s.id === sub.studentId)
-                        if (!student) return null
+                      {students.map((student) => {
+                        const status = statusByStudent.get(student.id) ?? 'pending'
                         return (
-                          <div key={sub.studentId} className="flex items-center justify-between rounded-xl bg-mist px-3 py-2.5 dark:bg-white/5">
+                          <div key={student.id} className="flex items-center justify-between rounded-xl bg-mist px-3 py-2.5 dark:bg-white/5">
                             <div className="flex items-center gap-2.5">
                               <Avatar name={student.name} color={student.avatarColor} size="xs" />
                               <span className="text-sm text-ink dark:text-white">{student.name}</span>
                             </div>
-                            <select
-                              value={sub.status}
-                              onChange={(e) => updateSubmission(hw.id, sub.studentId, { status: e.target.value as typeof sub.status })}
-                              className="rounded-lg border border-ink/10 bg-white px-2.5 py-1 text-xs dark:border-white/10 dark:bg-white/10"
-                            >
-                              <option value="pending">Pending</option>
-                              <option value="submitted">Submitted</option>
-                              <option value="late">Late</option>
-                              <option value="graded">Graded</option>
-                            </select>
+                            {canWrite ? (
+                              <select
+                                aria-label={`Submission status for ${student.name}`}
+                                value={status}
+                                onChange={(e) => changeStatus(hw.id, student.id, e.target.value as SubmissionStatus)}
+                                className="rounded-lg border border-ink/10 bg-white px-2.5 py-1 text-xs dark:border-white/10 dark:bg-white/10"
+                              >
+                                {submissionOptions.map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <Badge tone={status === 'pending' ? 'neutral' : 'success'}>
+                                {submissionOptions.find((o) => o.value === status)?.label ?? status}
+                              </Badge>
+                            )}
                           </div>
                         )
                       })}
@@ -187,27 +376,58 @@ export default function HomeworkBoard({ classes, createdBy }: { classes: ClassSu
             <Button variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>Assign to Class</Button>
+            <Button onClick={handleSubmit} disabled={isSaving}>
+              {isSaving ? 'Assigning…' : 'Assign to Class'}
+            </Button>
           </>
         }
       >
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Class" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} error={errors.classId}>
-              {classes.map((c) => (
+            <Select
+              label="Class"
+              required
+              value={form.classId}
+              onChange={(e) => {
+                const next = classes.find((c) => c.id === e.target.value)
+                setForm({ ...form, classId: e.target.value, subjectId: next?.writableSubjects[0]?.id ?? '' })
+              }}
+              error={errors.classId}
+            >
+              {assignableClasses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
             </Select>
-            <Input label="Subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} error={errors.subject} />
+            {/* A SELECT over writableSubjects, never free text: subject_id is a
+                foreign key, and only a subject this user teaches will be
+                accepted by teaches_class_subject. */}
+            <Select
+              label="Subject"
+              required
+              value={form.subjectId}
+              onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+              error={errors.subjectId}
+            >
+              {formSubjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
           </div>
           <Input label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} error={errors.title} />
           <Textarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Due date" type="date" required value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} error={errors.dueDate} />
-            <Input label="Attachments" type="number" min={0} value={form.attachments} onChange={(e) => setForm({ ...form, attachments: e.target.value })} />
-          </div>
+          <Input
+            label="Due date"
+            type="date"
+            required
+            min={todayInTimeZone(timeZone)}
+            value={form.dueDate}
+            onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+            error={errors.dueDate}
+          />
         </div>
       </Modal>
 

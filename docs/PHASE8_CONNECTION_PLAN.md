@@ -1,7 +1,7 @@
 # Nom Cloud — Phase 8 Frontend-to-Database Connection Plan
 
 **Status:** Discovery, amended 2026-09-13 with five locked decisions.
-**Batches 0 through 4 applied 2026-09-13.** Sections A to F remain the survey of the distance
+**Batches 0 through 5 applied; batch 5 on 2026-09-14.** Sections A to F remain the survey of the distance
 between the prototype frontend and the finished database; §G carries live batch
 status.
 
@@ -10,12 +10,15 @@ fixes, and the demo-tenant marker and boundary (migration
 `20260913000002_school_is_demo`). Batches 1 and 2 connected the school shell and
 academic structure. Batches 3 and 4 fixed both halves of the §A.4 breakage and
 restored the parent and teacher workspaces. None of batches 1 to 4 needed a
-migration. Batch 5 has not started.
+migration. Batch 5, the first write-enabled batch, connected the five teaching
+records tables and also needed no migration: the access model it needs was
+already enforced by RLS migration 12, and the five tables carry no
+trigger-maintained column. Batch 6 has not started.
 
-**Five of the twelve decisions in §I.1 are settled** and are recorded in §A.5.
+**Seven of the twelve decisions in §I.1 are settled** (batch 5 closed 5 and 10) and are recorded in §A.5.
 Sections D.5, D.6, E.2, F.7, G, H.1, H.5, H.9, I.1 and I.2 were revised to match
 them. The demo-mode separation mechanism recommended in §H.9 was approved and is
-built. Six decisions remain open, each blocking only the batch that touches it.
+built. Four decisions remain open, each blocking only the batch that touches it.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md) is the schema authority,
 [AUTH_DESIGN.md](./AUTH_DESIGN.md) the identity authority,
@@ -597,7 +600,7 @@ the same sequence.
 | 2 | **Academic structure** — **DONE (reads)** 2026-09-13 | `academic_years`, `terms`, `subjects` | Applied, no migration needed. `admin/AcademicYears` reads real years and terms through `useAcademicStructure`, scoped by `school_id` explicitly. **Current year and current term are derived differently and that distinction is now recorded in `academicService.ts`**: the active year is a stored fact (`status='active'`, enforced by a partial unique index), while the current term is NOT stored (no `terms.status`) and is computed by date containment in the school's timezone, returning null between terms. **Reads only.** The add-year and set-active controls were removed rather than left writing to a discarded mock store; activation needs two statements with no client transaction and is reported in §H.10. `fetchSubjects` exists but nothing consumes it until batches 3-5. `CURRENT_TERM` still feeds grades, exams and fees and retires with them. |
 | 3 | **People (guardian half)** — **DONE** 2026-09-13 | `guardians`, `students`, `student_guardians` (read-only) | Applied, no migration. **Fixes the §A.4 breakage.** `useSelectedChild` now resolves the guardian from `memberships.guardian_id`, a real UUID written by `accept_invitation`, then reads `student_guardians` and `students` in two explicitly scoped queries. Nothing is compared against mock ids. The multi-child switcher is preserved and now validates the remembered selection against real ids. Six parent pages route their guard through `ResourceGate`. Proven by cross-guardian probe: Bashir cannot reach Amina's child by explicit id, and vice versa. **`teachers` was not touched** — that is the teacher half, batch 4. **Known intermediate state:** a child's class is null until batch 4 connects `class_enrollments`, so class names render blank and per-record sections stay empty until batches 4-6. |
 | 4 | **Teacher workspace, classes and roster** — **DONE** 2026-09-13 | `teachers`, `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (read-only) | Applied, no migration. **Fixes the teacher half of §A.4.** All seven teacher pages resolved classes with `classes.filter(c => c.teacherId === activeMembership.teacher_id)`, comparing `'t1'` against a UUID, so a real teacher saw nothing. Now resolved through `memberships.teacher_id` in `useTeacherClasses`. **"Assigned to teach" is reused, not re-derived**: `class_teacher_id` OR `class_subjects.teacher_id`, never `timetable_slots.teacher_id`, the definition settled in RLS batch 3 and reused by RLS batch 4. Proven on both arms: a subject-only teacher who is homeroom of nothing still sees her class. **The batch-3 gap is closed**: `ChildSummary` now carries `classId` and `className` resolved through `class_enrollments`, so a parent sees their child's real class name instead of blank. Read-only; no attendance, grade or timetable write path was added. |
-| 5 | **Teaching records** | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Depends on classes, students, subjects and terms all being real. Promotes embedded submissions to rows. Highest row volume. **Decision 1 removed** the principal variants. |
+| 5 | **Teaching records** — **DONE** 2026-09-14 | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Applied, no migration needed. **The first batch that writes.** The access model is RLS migration 12's, restated in `src/services/teachingRecordsService.ts` rather than re-derived. **Subject-exact writes are enforced in the interface, not only by RLS**: `ClassSummary.writableSubjects` carries the `(class, subject)` pairs the signed-in user may write — a teacher's own `class_subjects` rows, and every subject of the class for management, whose policies key on the class-level `can_manage_class`. The grade, homework and exam subject selectors are built from it, so a homeroom-only teacher sees no subject and no score inputs instead of a form whose Save is refused. That matters because RLS filters rather than raises: a refused UPDATE returns zero rows and no error. **A real attribution bug was found and fixed**: the prototype passed `teacher_id` (and on one admin page a person's NAME) as `markedBy`/`recordedBy`/`createdBy`, but those columns are foreign keys to `profiles(id)`, the auth user id, and the policies compare them to `auth.uid()`. Attribution is now taken from the live session inside the service, so no caller can supply it. **No trigger is being built around** — confirmed against `pg_trigger` that all five tables carry only the generic `set_updated_at` timestamp trigger and no derived column, so a direct write is the normal path. Upserts target the real natural keys. **Guardian side is read-only by construction** and decision 5 is closed: the parent homework page's "Mark as Submitted" control is removed, matching the structural absence of any guardian write policy. Decision 10 is closed by removing the attachment count, which has no column and no bucket. Admin attendance, grades and homework moved off mock classes onto real ones through `useRecordableClasses`, since mock class ids could never satisfy the composite foreign keys. 39 rolled-back probes, all passing. |
 | 6 | **Finance** | `fee_records`, `fee_payments` | Promotes embedded payments to rows, derives `status` at read, and must never write `amount_paid`. Deserves isolation for the same reason RLS batch 5 did. |
 | 7 | **Communication** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` | Participation-based rather than role-based, and the only batch that may need a new database function before it can work at all (§H.3). |
 | 8 | **Retire the prototype** | none | Delete `mockData.ts`, `DataContext`, the `localStorage` blob, `scopeKey`, `resetDemoData`, and the duplicate `Role` type. **Decision 12 changes this batch**: the demo path is preserved behind the boundary agreed in §H.9 rather than deleted with the rest. |
@@ -718,6 +721,31 @@ problem did not exist before. Options are a SECURITY DEFINER function that
 performs the swap atomically, or a deferred-constraint approach, or accepting a
 brief no-active-year window. Batch 2 shipped the page read-only rather than
 improvising. **Needs a decision before any UI can change the active year.**
+
+## H.12 A student can hold only one attendance row per day, school-wide
+
+Found while building batch 5, not previously recorded.
+
+`attendance_records` is `UNIQUE (school_id, student_id, date)`. Note what is
+absent from that key: `class_id`. A student therefore has exactly one attendance
+state per day across the whole school, not one per class.
+
+For a school where each student sits in one class all day — the assumption the
+rest of the schema makes — this is correct and it is what makes re-saving the
+same register idempotent rather than an error. It has a consequence worth stating
+plainly before it is discovered in production:
+
+- A student enrolled in two classes cannot be marked present in one and absent in
+  the other on the same day.
+- A teacher of the second class attempting it is refused, because the UPDATE
+  policy tests the EXISTING row's `class_id` through `teaches_class`. The upsert
+  raises rather than silently reassigning the row to another class, which is the
+  safe outcome.
+
+This is a Phase 3 schema decision, not a batch 5 one, and nothing here works
+around it. It needs a decision only if the product ever supports per-period or
+per-subject attendance, which would mean widening the unique key and revisiting
+the attendance policies together.
 
 ## H.11 Demo content has no reproducible home
 
@@ -852,16 +880,21 @@ only the batch that touches it.
 |---|---|---|
 | 12a | The demo-mode separation mechanism: a real demo school in the real database, a reserved shortcode, a persistent "Demo Mode" indicator, and an explicit marker column. | Batch 0, migration `20260913000002_school_is_demo`. Separation is by tenant, so demo data sits behind the same RLS boundary that separates two customers. Production unreachability is a compile-time boundary on `import.meta.env.DEV`. |
 
+### Closed by batch 5, 2026-09-14
+
+| # | Decision | Outcome |
+|---|---|---|
+| 5 | Guardian homework submission | **Control removed.** Homework is physical and the teacher marks it reviewed in person, which is why `homework_submissions` carries no guardian write policy. The parent page's "Mark as Submitted" button is deleted rather than disabled: a refused UPDATE returns zero rows with no error, so leaving it would have shown parents a success message and no change. Probes d6 and d7 confirm both the insert and the update are refused. |
+| 10 | Homework attachments and photo upload | **Feature dropped for now.** `homework` has no attachment column and there is no Storage bucket (§H.6), so the prototype's attachment counter was writing a number nowhere. Removed from both the assign dialog and the parent view. Reopening it means building Storage first, the same conclusion batch 1 reached for the school logo. |
+
 ### Still open
 
 | # | Decision | Blocks |
 |---|---|---|
 | 4 | Parent payment initiation: remove the control, or design a payment flow? | Batch 6 |
-| 5 | Guardian homework submission: remove the control, given homework is physical? | Batch 5 |
 | 6 | Teacher timetable editing and teacher announcement authoring: remove, or widen the policies? | Batches 4 and 7 |
 | 7 | Messaging: build the thread-creation function, or restrict conversation-starting to administrators in the interface too? | Batch 7 |
 | 8 | Notifications: build an emitter, or remove the surfaces until one exists? | Batch 7 |
-| 10 | Homework attachments and photo upload: build Storage, or drop the feature? | Batch 5 |
 | 11 | Historical enrolment: which academic year does each screen mean, and do parents see prior years? | Batch 4 |
 
 ## I.2 Technical conclusions requiring no approval

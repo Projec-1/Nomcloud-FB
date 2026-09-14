@@ -1,27 +1,36 @@
-import { useMemo } from 'react'
-import { ClipboardCheck, Calendar, Paperclip, Check } from 'lucide-react'
-import { useData } from '@/context/DataContext'
-import { useToast } from '@/context/ToastContext'
+import { ClipboardCheck, Calendar } from 'lucide-react'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
+import { useChildHomework } from '@/hooks/useChildRecords'
 import PageHeader from '@/components/ui/PageHeader'
 import ChildSwitcher from '@/components/dashboard/ChildSwitcher'
-import EmptyState from '@/components/ui/EmptyState'
 import ResourceGate from '@/components/ui/ResourceGate'
 import Badge from '@/components/ui/Badge'
-import Button from '@/components/ui/Button'
 import { formatDate } from '@/utils/format'
+
+// Phase 8 batch 5. Real homework for the class the selected child is enrolled in.
+//
+// READ ONLY, AND THAT IS A DELIBERATE REMOVAL RATHER THAN AN OMISSION.
+//
+// The prototype rendered a "Mark as Submitted" button here that called
+// updateSubmission on the child's behalf. Decision 4 of RLS batch 4 settled the
+// opposite: guardians do NOT digitally submit homework. Homework is physical and
+// the teacher marks it reviewed in person, which is why no guardian write policy
+// exists on homework_submissions at all. The button is gone rather than
+// disabled, because leaving it visible would promise something the database
+// refuses — and a refused UPDATE returns zero rows with no error, so the parent
+// would have seen a success message and no change.
+//
+// The status shown is the teacher's own record. A child with no submission row
+// reads as `pending`, since nothing creates those rows at assignment time.
+//
+// The attachment count is gone too: homework has no such column, and there is no
+// Storage bucket for one to point at (open decision 10).
 
 const statusTone = { pending: 'warning', submitted: 'info', late: 'danger', graded: 'success' } as const
 
 export default function ParentHomework() {
-  const { homework, updateSubmission } = useData()
-  const { showToast } = useToast()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
-
-  const childHomework = useMemo(
-    () => (selectedChild ? homework.filter((h) => h.classId === selectedChild.classId).sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1)) : []),
-    [homework, selectedChild],
-  )
+  const { state: homeworkState } = useChildHomework(selectedChild?.id ?? null, selectedChild?.classId ?? null)
 
   if (!selectedChild) {
     return (
@@ -38,7 +47,6 @@ export default function ParentHomework() {
     )
   }
 
-
   return (
     <div>
       <PageHeader
@@ -47,52 +55,35 @@ export default function ParentHomework() {
         actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => c.className ?? ''} />}
       />
 
-      {childHomework.length === 0 ? (
-        <EmptyState icon={ClipboardCheck} title="No homework assigned" description="Homework assigned to your child's class will appear here." />
-      ) : (
-        <div className="space-y-4">
-          {childHomework.map((hw) => {
-            const submission = hw.submissions.find((s) => s.studentId === selectedChild.id)
-            return (
+      <ResourceGate
+        state={homeworkState}
+        empty={{
+          icon: ClipboardCheck,
+          title: 'No homework assigned',
+          description: "Homework assigned to your child's class will appear here.",
+        }}
+        deniedHint="Child records are available to a linked parent or guardian."
+      >
+        {(items) => (
+          <div className="space-y-4">
+            {items.map((hw) => (
               <div key={hw.id} className="card p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Badge tone="info">{hw.subject}</Badge>
-                      {submission && <Badge tone={statusTone[submission.status]}>{submission.status}</Badge>}
-                    </div>
-                    <p className="font-medium text-ink dark:text-white">{hw.title}</p>
-                    <p className="mt-1.5 text-sm text-graphite">{hw.description}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-graphite">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Due {formatDate(hw.dueDate)}
-                      </span>
-                      {hw.attachments > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Paperclip className="h-3 w-3" /> {hw.attachments} attachment{hw.attachments === 1 ? '' : 's'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {submission?.status === 'pending' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      icon={<Check className="h-3.5 w-3.5" />}
-                      onClick={() => {
-                        updateSubmission(hw.id, selectedChild.id, { status: 'submitted', submittedDate: new Date().toISOString().slice(0, 10) })
-                        showToast({ type: 'success', title: 'Marked as submitted', description: `${hw.title} was marked as submitted.` })
-                      }}
-                    >
-                      Mark as Submitted
-                    </Button>
-                  )}
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Badge tone="info">{hw.subjectName}</Badge>
+                  <Badge tone={statusTone[hw.status]}>{hw.status}</Badge>
+                </div>
+                <p className="font-medium text-ink dark:text-white">{hw.title}</p>
+                {hw.description && <p className="mt-1.5 text-sm text-graphite">{hw.description}</p>}
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-graphite">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" /> Due {formatDate(hw.dueDate)}
+                  </span>
                 </div>
               </div>
-            )
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </ResourceGate>
     </div>
   )
 }
