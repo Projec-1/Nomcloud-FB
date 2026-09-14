@@ -13,7 +13,7 @@ import { formatCurrency, formatDate, percentage } from '@/utils/format'
 
 export default function ParentDashboard() {
   const { profile } = useAuth()
-  const { classes, attendance, grades, homework, fees, announcements } = useData()
+  const { attendance, grades, homework, fees, announcements } = useData()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
 
   if (!selectedChild) {
@@ -31,7 +31,6 @@ export default function ParentDashboard() {
     )
   }
 
-  const cls = classes.find((c) => c.id === selectedChild.classId)
   const childAttendance = attendance.filter((a) => a.studentId === selectedChild.id && schoolDays.includes(a.date))
   const present = childAttendance.filter((a) => a.status === 'present' || a.status === 'late').length
   const childGrades = grades.filter((g) => g.studentId === selectedChild.id)
@@ -49,8 +48,8 @@ export default function ParentDashboard() {
     <div>
       <PageHeader
         title={`Welcome, ${profile?.full_name.split(' ')[0]}`}
-        description={`Here's how ${selectedChild.name.split(' ')[0]} is doing at ${cls?.name ?? 'school'}.`}
-        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => classes.find((cl) => cl.id === c.classId)?.name ?? ''} />}
+        description={`Here's how ${selectedChild.name.split(' ')[0]} is doing at ${selectedChild.className ?? 'school'}.`}
+        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => c.className ?? ''} />}
       />
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

@@ -14,7 +14,7 @@ import { formatDate } from '@/utils/format'
 const statusTone = { pending: 'warning', submitted: 'info', late: 'danger', graded: 'success' } as const
 
 export default function ParentHomework() {
-  const { classes, homework, updateSubmission } = useData()
+  const { homework, updateSubmission } = useData()
   const { showToast } = useToast()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
 
@@ -38,14 +38,13 @@ export default function ParentHomework() {
     )
   }
 
-  const cls = classes.find((c) => c.id === selectedChild.classId)
 
   return (
     <div>
       <PageHeader
         title="Homework"
-        description={`${selectedChild.name} · ${cls?.name ?? ''}`}
-        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => classes.find((cl) => cl.id === c.classId)?.name ?? ''} />}
+        description={`${selectedChild.name} · ${selectedChild.className ?? ''}`}
+        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => c.className ?? ''} />}
       />
 
       {childHomework.length === 0 ? (

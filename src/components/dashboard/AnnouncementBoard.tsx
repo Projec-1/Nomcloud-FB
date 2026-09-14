@@ -10,14 +10,15 @@ import Textarea from '@/components/ui/Textarea'
 import Select from '@/components/ui/Select'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
-import type { Announcement, AnnouncementAudience, Role, SchoolClass } from '@/types'
+import type { Announcement, AnnouncementAudience, Role } from '@/types'
+import type { ClassSummary } from '@/services/teacherService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { formatDate } from '@/utils/format'
 import { cn } from '@/utils/cn'
 
 interface AnnouncementBoardProps {
   audienceOptions: { value: AnnouncementAudience; label: string }[]
-  classes: SchoolClass[]
+  classes: ClassSummary[]
   authorName: string
   authorRole: Role
   visibleAnnouncements: Announcement[]

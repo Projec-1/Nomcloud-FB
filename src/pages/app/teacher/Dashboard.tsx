@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Users, CalendarCheck, ClipboardCheck, MessageSquare, ArrowRight, TrendingUp, Clock } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 import { useData } from '@/context/DataContext'
 import PageHeader from '@/components/ui/PageHeader'
 import StatCard from '@/components/ui/StatCard'
@@ -14,10 +15,10 @@ import { formatDate, percentage } from '@/utils/format'
 
 export default function TeacherDashboard() {
   const { profile, activeMembership, school } = useAuth()
-  const { classes, students, attendance, homework, messageThreads, timetables } = useData()
+  const { students, attendance, homework, messageThreads } = useData()
+  const { classes: myClasses, timetable: timetables } = useTeacherClasses()
   const [studentsModalOpen, setStudentsModalOpen] = useState(false)
 
-  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
   const myClassIds = myClasses.map((c) => c.id)
   const myStudentIds = myClasses.flatMap((c) => c.studentIds)
   const latestDay = schoolDays[schoolDays.length - 1]
@@ -125,12 +126,12 @@ export default function TeacherDashboard() {
                 {liveSlot ? (
                   <>
                     <p className="text-sm font-semibold text-emerald-600">You have a lecture right now</p>
-                    <p className="text-xs text-graphite">{liveSlot.subject} · {classes.find((c) => c.id === liveSlot.classId)?.name} · {liveSlot.room} · until {liveSlot.endTime}</p>
+                    <p className="text-xs text-graphite">{liveSlot.subject} · {myClasses.find((c) => c.id === liveSlot.classId)?.name} · {liveSlot.room} · until {liveSlot.endTime}</p>
                   </>
                 ) : nextSlot ? (
                   <>
                     <p className="text-sm font-semibold text-ink dark:text-white">No lecture right now</p>
-                    <p className="text-xs text-graphite">Next: {nextSlot.subject} · {classes.find((c) => c.id === nextSlot.classId)?.name} at {nextSlot.startTime}</p>
+                    <p className="text-xs text-graphite">Next: {nextSlot.subject} · {myClasses.find((c) => c.id === nextSlot.classId)?.name} at {nextSlot.startTime}</p>
                   </>
                 ) : (
                   <>
@@ -214,7 +215,7 @@ export default function TeacherDashboard() {
       <Modal open={studentsModalOpen} onClose={() => setStudentsModalOpen(false)} title="My Students" description={`${studentsWithPending.length} students across your classes`} size="lg">
         <div className="space-y-2">
           {studentsWithPending.map((s) => {
-            const cls = classes.find((c) => c.id === s.classId)
+            const cls = myClasses.find((c) => c.id === s.classId)
             return (
               <div key={s.id} className="flex items-center justify-between rounded-xl bg-mist px-4 py-3 dark:bg-white/5">
                 <div className="flex items-center gap-3">

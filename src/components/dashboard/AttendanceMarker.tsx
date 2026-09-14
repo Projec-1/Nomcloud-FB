@@ -9,6 +9,7 @@ import Avatar from '@/components/ui/Avatar'
 import EmptyState from '@/components/ui/EmptyState'
 import type { AttendanceStatus, SchoolClass } from '@/types'
 import { schoolDays } from '@/utils/schoolCalendar'
+import type { ClassSummary } from '@/services/teacherService'
 import { cn } from '@/utils/cn'
 
 const statusConfig: Record<AttendanceStatus, { label: string; icon: typeof Check; tone: string }> = {
@@ -18,7 +19,7 @@ const statusConfig: Record<AttendanceStatus, { label: string; icon: typeof Check
   excused: { label: 'Excused', icon: FileWarning, tone: 'bg-accent text-white' },
 }
 
-export default function AttendanceMarker({ classes, markedBy }: { classes: SchoolClass[]; markedBy: string }) {
+export default function AttendanceMarker({ classes, markedBy }: { classes: ClassSummary[]; markedBy: string }) {
   const { students, attendance, markAttendance } = useData()
   const { showToast } = useToast()
 

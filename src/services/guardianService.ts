@@ -79,10 +79,11 @@ export interface StudentRow {
  * presentation that would otherwise be "34 bytes of design system in every
  * people row", and students has no such column.
  *
- * `classId` is null until batch 4 connects class_enrollments. A student's class
- * is not a column on students; it is a time-scoped enrolment row. Null is
- * honest here, and the screens that show a class name render it blank rather
- * than inventing one.
+ * `classId` and `className` are resolved through class_enrollments, which batch
+ * 4 connected. A student's class is NOT a column on students; it is a
+ * time-scoped enrolment row, which is why SCHEMA_DESIGN gives students no
+ * class_id at all. Both stay null for a child with no open enrolment, which is
+ * a real state for a newly admitted pupil.
  */
 export interface ChildSummary {
   id: string
@@ -92,6 +93,7 @@ export interface ChildSummary {
   enrolledDate: string
   avatarColor: string
   classId: string | null
+  className: string | null
 }
 
 /** Deterministic per-student colour, so a child looks the same on every screen. */
@@ -103,7 +105,10 @@ function avatarColorForId(id: string): string {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
-export function toChildSummary(student: StudentRow): ChildSummary {
+export function toChildSummary(
+  student: StudentRow,
+  enrolledClass?: { id: string; name: string } | null,
+): ChildSummary {
   return {
     id: student.id,
     name: student.full_name,
@@ -111,8 +116,58 @@ export function toChildSummary(student: StudentRow): ChildSummary {
     status: student.status,
     enrolledDate: student.enrolled_date,
     avatarColor: avatarColorForId(student.id),
-    classId: null,
+    classId: enrolledClass?.id ?? null,
+    className: enrolledClass?.name ?? null,
   }
+}
+
+/**
+ * The open class enrolment for each of the given students, as id -> class.
+ *
+ * Phase 8 batch 4. This is what closed the gap batch 3 left: a parent could see
+ * their child but not the child's class, because a class is reached through
+ * class_enrollments rather than a column on students.
+ *
+ * `left_on IS NULL` is the available "still enrolled" signal. Plan section A.2
+ * records that it is not a complete definition of "current", since rows can stay
+ * open across academic years; tightening it needs the decision recorded there
+ * and is not invented here. A student with no open enrolment resolves to null
+ * rather than to a guessed class.
+ */
+export async function fetchEnrolledClasses(
+  schoolId: string,
+  studentIds: string[],
+): Promise<Map<string, { id: string; name: string }>> {
+  const result = new Map<string, { id: string; name: string }>()
+  if (studentIds.length === 0) return result
+
+  const { data: enrolments, error: enrolError } = await supabase
+    .from('class_enrollments')
+    .select('student_id, class_id')
+    .eq('school_id', schoolId)
+    .in('student_id', studentIds)
+    .is('left_on', null)
+
+  if (enrolError) throw enrolError
+  const rows = (enrolments ?? []) as { student_id: string; class_id: string }[]
+  if (rows.length === 0) return result
+
+  const classIds = Array.from(new Set(rows.map((r) => r.class_id)))
+  const { data: classes, error: classError } = await supabase
+    .from('classes')
+    .select('id, name')
+    .eq('school_id', schoolId)
+    .in('id', classIds)
+
+  if (classError) throw classError
+  const byId = new Map<string, string>()
+  for (const row of (classes ?? []) as { id: string; name: string }[]) byId.set(row.id, row.name)
+
+  for (const row of rows) {
+    const name = byId.get(row.class_id)
+    if (name) result.set(row.student_id, { id: row.class_id, name })
+  }
+  return result
 }
 
 /** The signed-in guardian's own guardians row. */

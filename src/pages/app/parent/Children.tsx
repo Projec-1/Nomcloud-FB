@@ -10,7 +10,7 @@ import { formatDate, percentage } from '@/utils/format'
 import { schoolDays } from '@/utils/schoolCalendar'
 
 export default function ParentChildren() {
-  const { classes, attendance, grades, fees } = useData()
+  const { attendance, grades, fees } = useData()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
   const navigate = useNavigate()
 
@@ -34,7 +34,6 @@ export default function ParentChildren() {
       <PageHeader title="My Children" description={`${children.length} child${children.length === 1 ? '' : 'ren'} linked to your account`} />
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {children.map((child) => {
-          const cls = classes.find((c) => c.id === child.classId)
           const childAttendance = attendance.filter((a) => a.studentId === child.id && schoolDays.includes(a.date))
           const present = childAttendance.filter((a) => a.status === 'present' || a.status === 'late').length
           const childGrades = grades.filter((g) => g.studentId === child.id)
@@ -48,7 +47,7 @@ export default function ParentChildren() {
                   <Avatar name={child.name} color={child.avatarColor} />
                   <div>
                     <p className="font-medium text-ink dark:text-white">{child.name}</p>
-                    <p className="text-xs text-graphite">{cls?.name} · {child.admissionNo}</p>
+                    <p className="text-xs text-graphite">{child.className} · {child.admissionNo}</p>
                   </div>
                 </div>
                 {selectedChild?.id === child.id && <Badge tone="brand">Selected</Badge>}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { ClassSummary } from '@/services/teacherService'
 import { Plus, Paperclip, Calendar, Users, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { useToast } from '@/context/ToastContext'
@@ -18,7 +19,7 @@ import { formatDate, percentage } from '@/utils/format'
 
 const emptyForm = { classId: '', subject: '', title: '', description: '', dueDate: '', attachments: '0' }
 
-export default function HomeworkBoard({ classes, createdBy }: { classes: SchoolClass[]; createdBy: string }) {
+export default function HomeworkBoard({ classes, createdBy }: { classes: ClassSummary[]; createdBy: string }) {
   const { students, homework, addHomework, deleteHomework, updateSubmission } = useData()
   const { showToast } = useToast()
 

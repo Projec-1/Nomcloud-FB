@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { deriveResourceState, type ResourceState } from '@/lib/resourceState'
-import { fetchLinkedStudents, toChildSummary, type ChildSummary } from '@/services/guardianService'
+import {
+  fetchEnrolledClasses,
+  fetchLinkedStudents,
+  toChildSummary,
+  type ChildSummary,
+} from '@/services/guardianService'
 
 const STORAGE_KEY = 'nomcloud_selected_child'
 
@@ -73,9 +78,16 @@ export function useSelectedChild(): UseSelectedChildResult {
     setError(null)
 
     fetchLinkedStudents(schoolId, guardianId)
-      .then((students) => {
+      .then(async (students) => {
         if (cancelled) return
-        setChildren(students.map(toChildSummary))
+        // Batch 4 closed the gap batch 3 left here: a child's class comes from
+        // class_enrollments, not from a column on students.
+        const classes = await fetchEnrolledClasses(
+          schoolId,
+          students.map((s) => s.id),
+        )
+        if (cancelled) return
+        setChildren(students.map((s) => toChildSummary(s, classes.get(s.id) ?? null)))
       })
       .catch((err: unknown) => {
         if (cancelled) return

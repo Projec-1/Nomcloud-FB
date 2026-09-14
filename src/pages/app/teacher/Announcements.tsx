@@ -1,5 +1,7 @@
 import { Megaphone } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 import { useData } from '@/context/DataContext'
 import PageHeader from '@/components/ui/PageHeader'
 import EmptyState from '@/components/ui/EmptyState'
@@ -9,8 +11,8 @@ const audienceOptions = [{ value: 'class' as const, label: 'My Class' }]
 
 export default function TeacherAnnouncements() {
   const { profile, activeMembership } = useAuth()
-  const { classes, announcements } = useData()
-  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
+  const { announcements } = useData()
+  const { state, classes: myClasses } = useTeacherClasses()
   const myClassIds = myClasses.map((c) => c.id)
 
   const visible = announcements.filter(
@@ -20,18 +22,20 @@ export default function TeacherAnnouncements() {
   return (
     <div>
       <PageHeader title="Announcements" description="Post updates to your class and stay informed on school-wide news." />
-      {myClasses.length === 0 ? (
-        <EmptyState icon={Megaphone} title="No classes assigned yet" description="You'll be able to post announcements once a class is assigned to you." />
-      ) : (
-        <AnnouncementBoard
+      {<ResourceGate
+          state={state}
+          empty={{ icon: Megaphone, title: "No classes assigned yet", description: "You'll be able to post announcements once a class is assigned to you." }}
+          deniedHint="Class records are available to an assigned teacher."
+        >
+          {() => <AnnouncementBoard
           audienceOptions={audienceOptions}
           classes={myClasses}
           authorName={profile?.full_name ?? 'Teacher'}
           authorRole="teacher"
           visibleAnnouncements={visible}
           canManage={(a) => a.createdBy === profile?.full_name}
-        />
-      )}
+        />}
+        </ResourceGate>}
     </div>
   )
 }

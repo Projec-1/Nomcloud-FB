@@ -18,7 +18,7 @@ function gradeTone(grade: string): 'success' | 'info' | 'warning' | 'danger' {
 }
 
 export default function ParentGrades() {
-  const { classes, grades } = useData()
+  const { grades } = useData()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
 
   const childGrades = useMemo(
@@ -53,14 +53,13 @@ export default function ParentGrades() {
   }
 
   const overallAvg = childGrades.length ? Math.round(childGrades.reduce((sum, g) => sum + g.score, 0) / childGrades.length) : 0
-  const cls = classes.find((c) => c.id === selectedChild.classId)
 
   return (
     <div>
       <PageHeader
         title="Grades"
-        description={`${selectedChild.name} · ${cls?.name ?? ''}`}
-        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => classes.find((cl) => cl.id === c.classId)?.name ?? ''} />}
+        description={`${selectedChild.name} · ${selectedChild.className ?? ''}`}
+        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => c.className ?? ''} />}
       />
 
       <div className="mb-6 grid gap-5 sm:grid-cols-3">

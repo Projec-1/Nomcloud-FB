@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Users, MapPin, BookOpen, CalendarRange } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 import { useData } from '@/context/DataContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -12,22 +14,23 @@ import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import TimetableGrid, { PERIODS } from '@/components/dashboard/TimetableGrid'
 import { formatDate } from '@/utils/format'
-import type { IsoWeekday, SchoolClass } from '@/types'
+import type { IsoWeekday } from '@/types'
+import type { ClassSummary } from '@/services/teacherService'
 
 export default function TeacherClasses() {
   const { activeMembership } = useAuth()
-  const { classes, students, timetables, addTimetableSlot, deleteTimetableSlot } = useData()
+  const { students, addTimetableSlot, deleteTimetableSlot } = useData()
+  const { state, classes: myClasses, timetable } = useTeacherClasses()
   const { showToast } = useToast()
-  const [viewing, setViewing] = useState<SchoolClass | null>(null)
+  const [viewing, setViewing] = useState<ClassSummary | null>(null)
 
-  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
   const [timetableClassId, setTimetableClassId] = useState(myClasses[0]?.id ?? '')
   const [slotDraft, setSlotDraft] = useState<{ day: IsoWeekday; period: number } | null>(null)
   const [slotSubject, setSlotSubject] = useState('')
   const [slotRoom, setSlotRoom] = useState('')
 
   const activeClass = myClasses.find((c) => c.id === timetableClassId) ?? myClasses[0]
-  const classSlots = timetables.filter((t) => t.classId === activeClass?.id)
+  const classSlots = timetable.filter((t) => t.classId === activeClass?.id)
 
   const openSlot = (day: IsoWeekday, period: number) => {
     setSlotDraft({ day, period })
@@ -59,7 +62,13 @@ export default function TeacherClasses() {
     return (
       <div>
         <PageHeader title="My Classes" description="Classes assigned to you by the school administrator." />
-        <EmptyState icon={BookOpen} title="No classes assigned yet" description="Reach out to your school administrator to get assigned to a class." />
+        <ResourceGate
+          state={state}
+          empty={{ icon: BookOpen, title: "No classes assigned yet", description: "Reach out to your school administrator to get assigned to a class." }}
+          deniedHint="Class records are available to an assigned teacher."
+        >
+          {() => null}
+        </ResourceGate>
       </div>
     )
   }

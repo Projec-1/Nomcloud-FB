@@ -1,14 +1,15 @@
 import { useAuth } from '@/context/AuthContext'
+import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 import { useData } from '@/context/DataContext'
 import PageHeader from '@/components/ui/PageHeader'
 import MessagesPanel from '@/components/dashboard/MessagesPanel'
 
 export default function TeacherMessages() {
   const { profile, activeMembership } = useAuth()
-  const { classes, students, parents, messageThreads } = useData()
+  const { students, parents, messageThreads } = useData()
+  const { classes: myClasses } = useTeacherClasses()
 
   const teacherId = activeMembership?.teacher_id ?? ''
-  const myClasses = classes.filter((c) => c.teacherId === teacherId)
   const myStudentIds = new Set(myClasses.flatMap((c) => c.studentIds))
   const myThreads = messageThreads.filter((t) => t.participantIds.includes(teacherId))
 

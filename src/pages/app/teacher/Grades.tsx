@@ -1,23 +1,25 @@
 import { ClipboardList } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { useData } from '@/context/DataContext'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 import PageHeader from '@/components/ui/PageHeader'
 import EmptyState from '@/components/ui/EmptyState'
 import GradeBook from '@/components/dashboard/GradeBook'
 
 export default function TeacherGrades() {
   const { activeMembership } = useAuth()
-  const { classes } = useData()
-  const myClasses = classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
+  const { state, classes: myClasses } = useTeacherClasses()
 
   return (
     <div>
       <PageHeader title="Grades" description="Record assessment scores for your assigned classes." />
-      {myClasses.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No classes assigned yet" description="You'll be able to record grades once a class is assigned to you." />
-      ) : (
-        <GradeBook classes={myClasses} recordedBy={activeMembership?.teacher_id ?? ''} />
-      )}
+      {<ResourceGate
+          state={state}
+          empty={{ icon: ClipboardList, title: "No classes assigned yet", description: "You'll be able to record grades once a class is assigned to you." }}
+          deniedHint="Class records are available to an assigned teacher."
+        >
+          {() => <GradeBook classes={myClasses} recordedBy={activeMembership?.teacher_id ?? ''} />}
+        </ResourceGate>}
     </div>
   )
 }

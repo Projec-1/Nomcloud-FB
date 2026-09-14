@@ -19,7 +19,7 @@ const statusMeta: Record<AttendanceStatus, { icon: typeof Check; tone: string; l
 }
 
 export default function ParentAttendance() {
-  const { classes, attendance } = useData()
+  const { attendance } = useData()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
 
   if (!selectedChild) {
@@ -37,7 +37,6 @@ export default function ParentAttendance() {
     )
   }
 
-  const cls = classes.find((c) => c.id === selectedChild.classId)
   const records = schoolDays
     .map((date) => attendance.find((a) => a.studentId === selectedChild.id && a.date === date))
     .filter((r): r is NonNullable<typeof r> => !!r)
@@ -50,8 +49,8 @@ export default function ParentAttendance() {
     <div>
       <PageHeader
         title="Attendance"
-        description={`${selectedChild.name} · ${cls?.name ?? ''}`}
-        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => classes.find((cl) => cl.id === c.classId)?.name ?? ''} />}
+        description={`${selectedChild.name} · ${selectedChild.className ?? ''}`}
+        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => c.className ?? ''} />}
       />
 
       <div className="mb-6 grid gap-5 sm:grid-cols-3">

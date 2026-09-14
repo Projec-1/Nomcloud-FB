@@ -8,6 +8,7 @@ import Button from '@/components/ui/Button'
 import Avatar from '@/components/ui/Avatar'
 import EmptyState from '@/components/ui/EmptyState'
 import type { SchoolClass } from '@/types'
+import type { ClassSummary } from '@/services/teacherService'
 import { cn } from '@/utils/cn'
 
 const assessmentTypes = ['CAT 1', 'CAT 2', 'Mid-Term Exam', 'End-Term Exam', 'Assignment']
@@ -29,7 +30,7 @@ function gradeTone(grade: string) {
   return 'text-red-500'
 }
 
-export default function GradeBook({ classes, recordedBy }: { classes: SchoolClass[]; recordedBy: string }) {
+export default function GradeBook({ classes, recordedBy }: { classes: ClassSummary[]; recordedBy: string }) {
   const { students, grades, addGrade, updateGrade, currentTerm } = useData()
   const { showToast } = useToast()
 

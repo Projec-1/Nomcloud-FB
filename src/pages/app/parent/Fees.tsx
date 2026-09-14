@@ -36,7 +36,7 @@ const paymentOptions: { value: PaymentMethod; label: string; description: string
 ]
 
 export default function ParentFees() {
-  const { classes, fees, recordPayment } = useData()
+  const { fees, recordPayment } = useData()
   const { profile, school } = useAuth()
   const { showToast } = useToast()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
@@ -67,7 +67,6 @@ export default function ParentFees() {
   const totalDue = childFees.reduce((sum, f) => sum + f.amount, 0)
   const totalPaid = childFees.reduce((sum, f) => sum + f.amountPaid, 0)
   const balance = totalDue - totalPaid
-  const cls = classes.find((c) => c.id === selectedChild.classId)
 
   const openPay = (fee: FeeRecord) => {
     setPayTarget(fee)
@@ -110,8 +109,8 @@ export default function ParentFees() {
     <div>
       <PageHeader
         title="Fees"
-        description={`${selectedChild.name} · ${cls?.name ?? ''}`}
-        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => classes.find((cl) => cl.id === c.classId)?.name ?? ''} />}
+        description={`${selectedChild.name} · ${selectedChild.className ?? ''}`}
+        actions={<ChildSwitcher children={children} selectedId={selectedChild.id} onSelect={selectChild} classLabel={(c) => c.className ?? ''} />}
       />
 
       <div className="mb-6 grid gap-5 sm:grid-cols-3">
