@@ -8,7 +8,7 @@
 //
 //   classes.filter((c) => c.teacherId === activeMembership?.teacher_id)
 //
-// where classes[].teacherId is 't1'..'t8' from mockData.ts and
+// where classes[].teacherId is 't1'..'t8' from the prototype seed and
 // activeMembership.teacher_id is a UUID. The comparison never matched, so a real
 // signed-in teacher saw an empty dashboard, an empty class list, and empty
 // everything else.
@@ -312,4 +312,91 @@ export async function fetchTeacherWorkspace(schoolId: string, teacherId: string)
   })
 
   return { teacher, classes, timetable }
+}
+
+// ===========================================================================
+// MANAGEMENT WRITES. Phase 8 batch 8.
+// ===========================================================================
+// teachers gates INSERT/UPDATE/DELETE on has_school_management_role. A teacher
+// cannot create or edit a teachers row, including their own: staff records are
+// administrative.
+
+export interface TeacherInput {
+  fullName: string
+  email: string | null
+  phone: string | null
+  staffNo: string | null
+  primarySubjectId: string | null
+  status: string
+}
+
+/** Every teacher in the school, for the management staff list. */
+export async function fetchSchoolTeachers(schoolId: string): Promise<TeacherRow[]> {
+  const { data, error } = await supabase
+    .from('teachers')
+    .select('*')
+    .eq('school_id', schoolId)
+    .order('full_name', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as TeacherRow[]
+}
+
+export async function createTeacher(schoolId: string, input: TeacherInput): Promise<string> {
+  const { data, error } = await supabase
+    .from('teachers')
+    .insert({
+      school_id: schoolId,
+      full_name: input.fullName,
+      email: input.email,
+      phone: input.phone,
+      staff_no: input.staffNo,
+      primary_subject_id: input.primarySubjectId,
+      status: input.status,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') throw new Error('That staff number or email is already used at this school.')
+    throw error
+  }
+  return (data as { id: string }).id
+}
+
+export async function updateTeacher(schoolId: string, id: string, input: TeacherInput): Promise<void> {
+  const { error } = await supabase
+    .from('teachers')
+    .update({
+      full_name: input.fullName,
+      email: input.email,
+      phone: input.phone,
+      staff_no: input.staffNo,
+      primary_subject_id: input.primarySubjectId,
+      status: input.status,
+    })
+    .eq('school_id', schoolId)
+    .eq('id', id)
+
+  if (error) {
+    if (error.code === '23505') throw new Error('That staff number or email is already used at this school.')
+    throw error
+  }
+}
+
+/**
+ * Removes a teacher.
+ *
+ * A teacher who is the homeroom of a class, or named on a class_subjects row,
+ * is protected by those foreign keys. The failure is surfaced rather than
+ * worked around: unassign them first, deliberately.
+ */
+export async function deleteTeacher(schoolId: string, id: string): Promise<void> {
+  const { error } = await supabase.from('teachers').delete().eq('school_id', schoolId).eq('id', id)
+  if (error) {
+    if (error.code === '23503') {
+      throw new Error('This teacher is still assigned to a class. Unassign them first.')
+    }
+    throw error
+  }
 }

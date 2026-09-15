@@ -1,7 +1,7 @@
 # Nom Cloud — Phase 8 Frontend-to-Database Connection Plan
 
-**Status:** Discovery, amended 2026-09-13 with five locked decisions.
-**Batches 0 through 6 applied; batches 5 and 6 on 2026-09-14.** Sections A to F remain the survey of the distance
+**Status:** PHASE 8 COMPLETE. Every batch, 0 through 8, is applied; batches 7 and 8 on 2026-09-15.
+The prototype mock data system is removed. Sections A to F remain the survey of the distance
 between the prototype frontend and the finished database; §G carries live batch
 status.
 
@@ -18,10 +18,16 @@ migration of its own, but it found an open money gap in the database. That gap
 was recorded as §H.13, approved, and closed by the corrective
 `20260914000001_restrict_fee_record_amount_paid_insert`.
 
-**Eight of the twelve decisions in §I.1 are settled** (batch 5 closed 5 and 10, batch 6 closed 4) and are recorded in §A.5.
+Batches 7 and 8 were delivered together and closed the phase. Batch 7 connected
+messaging, announcements and notifications against RLS migration 14 with no
+migration. Batch 8 connected the nine screens that still read the prototype
+store, then deleted `src/data/mockData.ts` and `src/context/DataContext.tsx`. No
+file in `src/` references either. The batch 0 demo school is untouched.
+
+**Eleven of the twelve decisions in §I.1 are settled** (batch 5 closed 5 and 10, batch 6 closed 4, batches 7 and 8 closed 6, 7 and 8) and are recorded in §A.5.
 Sections D.5, D.6, E.2, F.7, G, H.1, H.5, H.9, I.1 and I.2 were revised to match
 them. The demo-mode separation mechanism recommended in §H.9 was approved and is
-built. Three decisions remain open, each blocking only the batch that touches it.
+built. One decision remains open, decision 11, and it blocks no batch.
 
 **Authority:** [SCHEMA_DESIGN.md](./SCHEMA_DESIGN.md) is the schema authority,
 [AUTH_DESIGN.md](./AUTH_DESIGN.md) the identity authority,
@@ -605,8 +611,8 @@ the same sequence.
 | 4 | **Teacher workspace, classes and roster** — **DONE** 2026-09-13 | `teachers`, `classes`, `class_subjects`, `class_enrollments`, `timetable_slots` (read-only) | Applied, no migration. **Fixes the teacher half of §A.4.** All seven teacher pages resolved classes with `classes.filter(c => c.teacherId === activeMembership.teacher_id)`, comparing `'t1'` against a UUID, so a real teacher saw nothing. Now resolved through `memberships.teacher_id` in `useTeacherClasses`. **"Assigned to teach" is reused, not re-derived**: `class_teacher_id` OR `class_subjects.teacher_id`, never `timetable_slots.teacher_id`, the definition settled in RLS batch 3 and reused by RLS batch 4. Proven on both arms: a subject-only teacher who is homeroom of nothing still sees her class. **The batch-3 gap is closed**: `ChildSummary` now carries `classId` and `className` resolved through `class_enrollments`, so a parent sees their child's real class name instead of blank. Read-only; no attendance, grade or timetable write path was added. |
 | 5 | **Teaching records** — **DONE** 2026-09-14 | `attendance_records`, `grade_records`, `homework`, `homework_submissions`, `exams` | Applied, no migration needed. **The first batch that writes.** The access model is RLS migration 12's, restated in `src/services/teachingRecordsService.ts` rather than re-derived. **Subject-exact writes are enforced in the interface, not only by RLS**: `ClassSummary.writableSubjects` carries the `(class, subject)` pairs the signed-in user may write — a teacher's own `class_subjects` rows, and every subject of the class for management, whose policies key on the class-level `can_manage_class`. The grade, homework and exam subject selectors are built from it, so a homeroom-only teacher sees no subject and no score inputs instead of a form whose Save is refused. That matters because RLS filters rather than raises: a refused UPDATE returns zero rows and no error. **A real attribution bug was found and fixed**: the prototype passed `teacher_id` (and on one admin page a person's NAME) as `markedBy`/`recordedBy`/`createdBy`, but those columns are foreign keys to `profiles(id)`, the auth user id, and the policies compare them to `auth.uid()`. Attribution is now taken from the live session inside the service, so no caller can supply it. **No trigger is being built around** — confirmed against `pg_trigger` that all five tables carry only the generic `set_updated_at` timestamp trigger and no derived column, so a direct write is the normal path. Upserts target the real natural keys. **Guardian side is read-only by construction** and decision 5 is closed: the parent homework page's "Mark as Submitted" control is removed, matching the structural absence of any guardian write policy. Decision 10 is closed by removing the attachment count, which has no column and no bucket. Admin attendance, grades and homework moved off mock classes onto real ones through `useRecordableClasses`, since mock class ids could never satisfy the composite foreign keys. 39 rolled-back probes, all passing. |
 | 6 | **Finance** — **DONE** 2026-09-14 | `fee_records`, `fee_payments` | Applied, no migration. The access model is migration 13's, restated not re-derived: owner/director/administrator full read and write, guardian read-only on their own child, **principal and teacher nothing at all** — the design's own conclusion, since fees carry no campus dimension so a principal's scoped authority is not expressible and any grant would be school-wide. **`amount_paid` is displayed and never editable.** The fee form has six fields and no seventh; the only control that moves a balance is Record Payment, which writes `fee_payments` and lets the trigger recalculate. Proven against the real trigger, not inferred from the form: 0.00 → 400.00 → 1000.00 on two payments, then back to 400.00 when one was deleted. **Status is derived at read** by `deriveFeeStatus` over amount, amount_paid and due_date against the SCHOOL'S today; `fee_records` has no status column and nothing writes one. **The payment reference became required**: it was labelled optional and auto-generated as `REF<timestamp>`, but the column is NOT NULL under UNIQUE (school_id, reference), so the prototype would have manufactured fake receipt numbers; a duplicate now reports plainly rather than failing raw. **Decision 4 is closed by removing the parent Pay Now flow** — see §I.1. **The reminder feature was removed** and returns in batch 7: it wrote message threads to the mock store, so it would have reported parents notified while sending nothing. **One genuine gap found in the database**, not introduced here: §H.13. 54 rolled-back probes, all passing. |
-| 7 | **Communication** | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` | Participation-based rather than role-based, and the only batch that may need a new database function before it can work at all (§H.3). |
-| 8 | **Retire the prototype** | none | Delete `mockData.ts`, `DataContext`, the `localStorage` blob, `scopeKey`, `resetDemoData`, and the duplicate `Role` type. **Decision 12 changes this batch**: the demo path is preserved behind the boundary agreed in §H.9 rather than deleted with the rest. |
+| 7 | **Communication** — **DONE** 2026-09-15 | `announcements`, `notifications`, `message_threads`, `message_thread_participants`, `messages` | Applied, no migration, and no database function was needed after all (§H.3): the policies already let an administrator open a thread. **Participation-only for every role is preserved**: owners and directors who are in no thread read zero threads and zero messages. **Only owner, director and administrator can start a conversation**, because both thread INSERT and participant INSERT are `has_school_admin_role`; teachers and guardians reply in threads they are in. That closes decision 7. **An admin Messages page was added**, because the prototype routed messaging only to the two roles that cannot start a thread, which left the feature with no entry point. **Announcements apply no client audience filter**; the five SELECT policies decide readership. That removed a prototype misreading which showed guardians the `students` audience. **Teacher announcement authoring and teacher timetable editing are removed**, since neither table has a teacher write policy; that closes decision 6. **Notifications are read and mark-read only**; nothing creates one and no interface offers to, so every surface renders empty until an emitter exists. That closes decision 8 as "keep the surfaces, honestly empty". **The fee reminder is reconnected** to real threads, one per guardian, and reports guardians it cannot reach because they have no account. 43 rolled-back probes, all passing. |
+| 8 | **Retire the prototype** — **DONE** 2026-09-15 | none | Applied, no migration. Removing the store first required connecting the nine screens that still read it: admin Students, Teachers, Classes, Dashboard and Reports; parent Children and Dashboard; teacher Classes and Dashboard. Students, teachers, classes, enrolments, guardian links and timetable slots gained management write paths. **Then deleted**: `src/data/mockData.ts`, `src/context/DataContext.tsx`, its provider in `main.tsx`, `scopeKey`, `resetDemoData` and its sidebar button, and the deprecated `schoolDays` constant. **Not deleted**: the `Role` workspace type, which is still the routing vocabulary, not a duplicate. **The demo school survives untouched** (§H.9): `schools.is_demo`, the reserved shortcode and all seeded demo rows were verified intact after removal, and the production blocker is still in the bundle. The "Reset Demo Data" button only ever reset the client mock store, never the demo tenant. **Decision 1 still holds**: owner, director and principal map to no workspace, verified by executing the mapping, and this batch did not touch it. **Three dashboard quick-action forms became links**; they duplicated the dedicated forms and invented admission numbers. Every app page now routes loading, denied and error through the four-state contract. |
 
 **Acceptance criterion for every batch, per §A.4.** A batch is not done when the
 administrator screens still render. It is done when a real teacher and a real
@@ -943,6 +949,14 @@ only the batch that touches it.
 |---|---|---|
 | 12a | The demo-mode separation mechanism: a real demo school in the real database, a reserved shortcode, a persistent "Demo Mode" indicator, and an explicit marker column. | Batch 0, migration `20260913000002_school_is_demo`. Separation is by tenant, so demo data sits behind the same RLS boundary that separates two customers. Production unreachability is a compile-time boundary on `import.meta.env.DEV`. |
 
+### Closed by batches 7 and 8, 2026-09-15
+
+| # | Decision | Outcome |
+|---|---|---|
+| 6 | Teacher timetable editing and teacher announcement authoring | **Both removed.** `timetable_slots` writes are `can_manage_class` and `announcements` writes are admin or class-management; a teacher satisfies neither. The teacher screens are read-only and say who to ask. Timetable editing now lives on admin Classes, where the policy permits it. Widening either later is one policy each, and is a product decision. |
+| 7 | Messaging thread creation | **Restricted in the interface to match the policies.** No database function was built. Owner, director and administrator open threads, from a new admin Messages page; everyone replies in threads they participate in. |
+| 8 | Notifications | **Surfaces kept, read-only and honestly empty.** No interface creates a notification and no role holds an INSERT policy. Marking read touches only `read_at` on the caller's own rows. Building an emitter is future work, not a Phase 8 gap. |
+
 ### Closed by batch 6, 2026-09-14
 
 | # | Decision | Outcome |
@@ -960,9 +974,6 @@ only the batch that touches it.
 
 | # | Decision | Blocks |
 |---|---|---|
-| 6 | Teacher timetable editing and teacher announcement authoring: remove, or widen the policies? | Batches 4 and 7 |
-| 7 | Messaging: build the thread-creation function, or restrict conversation-starting to administrators in the interface too? | Batch 7 |
-| 8 | Notifications: build an emitter, or remove the surfaces until one exists? | Batch 7 |
 | 11 | Historical enrolment: which academic year does each screen mean, and do parents see prior years? | Batch 4 |
 
 ## I.2 Technical conclusions requiring no approval

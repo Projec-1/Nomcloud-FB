@@ -1,35 +1,42 @@
-import { useAuth } from '@/context/AuthContext'
-import { useTeacherClasses } from '@/hooks/useTeacherClasses'
-import { useData } from '@/context/DataContext'
+import { MessageSquare } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
+import ResourceGate from '@/components/ui/ResourceGate'
 import MessagesPanel from '@/components/dashboard/MessagesPanel'
+import { useMessageThreads } from '@/hooks/useCommunications'
+
+// Phase 8 batch 7. Real threads, for whoever is an actual participant.
+//
+// The prototype filtered mock threads by `participantIds.includes(teacherId)`,
+// comparing a teachers.id against what are really USER ids. Participation is now
+// resolved server-side by is_thread_participant against auth.uid(), which is the
+// only identity a participant row ever holds.
+//
+// A teacher cannot open a conversation, so MessagesPanel withholds the compose
+// control and says why. They can reply in any thread they are part of, because
+// messages INSERT is keyed on participation rather than on role.
 
 export default function TeacherMessages() {
-  const { profile, activeMembership } = useAuth()
-  const { students, parents, messageThreads } = useData()
-  const { classes: myClasses } = useTeacherClasses()
-
-  const teacherId = activeMembership?.teacher_id ?? ''
-  const myStudentIds = new Set(myClasses.flatMap((c) => c.studentIds))
-  const myThreads = messageThreads.filter((t) => t.participantIds.includes(teacherId))
-
-  const recipients = parents
-    .filter((p) => p.studentIds.some((sid) => myStudentIds.has(sid)))
-    .map((p) => {
-      const child = students.find((s) => p.studentIds.includes(s.id) && myStudentIds.has(s.id))
-      return { id: p.id, name: p.name, subLabel: child ? `Parent of ${child.name}` : undefined, studentId: child?.id }
-    })
+  const { state, schoolId, userId, canStartThread, reload } = useMessageThreads()
 
   return (
     <div>
-      <PageHeader title="Messages" description="Communicate directly with parents of your students." />
-      <MessagesPanel
-        currentId={teacherId}
-        currentName={profile?.full_name ?? ''}
-        threads={myThreads}
-        recipients={recipients}
-        recipientLabel="Parent"
-      />
+      <PageHeader title="Messages" description="Conversations you are part of." />
+      <ResourceGate
+        state={state}
+        empty={{ icon: MessageSquare, title: 'No conversations yet' }}
+        deniedHint="Messages are available to signed-in school members."
+      >
+        {(threads) => (
+          <MessagesPanel
+            threads={threads}
+            schoolId={schoolId as string}
+            currentUserId={userId as string}
+            canStartThread={canStartThread}
+            emptyDescription="When the school office starts a conversation with you, it will appear here."
+            onChanged={reload}
+          />
+        )}
+      </ResourceGate>
     </div>
   )
 }

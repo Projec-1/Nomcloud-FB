@@ -5,7 +5,7 @@
 //
 // The bug: useSelectedChild resolved the signed-in guardian by comparing
 // activeMembership.guardian_id, a real UUID, against mock parent ids 'p1' and
-// 'p2' from mockData.ts. The comparison never matched, so every parent page
+// 'p2' from the prototype seed. The comparison never matched, so every parent page
 // rendered as though the account had no children. It has been broken for every
 // real guardian since Phase 4 wired identity to Supabase while the data stayed
 // mock.
@@ -202,4 +202,71 @@ export async function fetchLinkedStudents(schoolId: string, guardianId: string):
 
   if (studentError) throw studentError
   return (students ?? []) as StudentRow[]
+}
+
+// ===========================================================================
+// MANAGEMENT WRITES. Phase 8 batch 8.
+// ===========================================================================
+// guardians and student_guardians gate writes on has_school_management_role.
+// student_guardians is management-only by design: RLS batch 2 made it so
+// precisely to stop a guardian attaching themselves to another family's child,
+// and nothing in the interface offers that.
+
+export interface GuardianInput {
+  fullName: string
+  email: string | null
+  phone: string
+}
+
+/** Every guardian in the school, for the student form's picker. */
+export async function fetchSchoolGuardians(schoolId: string): Promise<GuardianRow[]> {
+  const { data, error } = await supabase
+    .from('guardians')
+    .select('*')
+    .eq('school_id', schoolId)
+    .order('full_name', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as GuardianRow[]
+}
+
+export async function createGuardian(schoolId: string, input: GuardianInput): Promise<string> {
+  const { data, error } = await supabase
+    .from('guardians')
+    .insert({
+      school_id: schoolId,
+      full_name: input.fullName,
+      email: input.email,
+      phone: input.phone,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') throw new Error('A guardian with those details already exists at this school.')
+    throw error
+  }
+  return (data as { id: string }).id
+}
+
+/**
+ * Links a guardian to a student.
+ *
+ * Creating the guardian does not give them an account. They become able to sign
+ * in, and to be messaged, only once an invitation is accepted, which is why the
+ * fee reminder reports guardians it cannot reach.
+ */
+export async function linkGuardianToStudent(
+  schoolId: string,
+  studentId: string,
+  guardianId: string,
+  isPrimary = false,
+): Promise<void> {
+  const { error } = await supabase.from('student_guardians').insert({
+    school_id: schoolId,
+    student_id: studentId,
+    guardian_id: guardianId,
+    is_primary: isPrimary,
+  })
+  if (error && error.code !== '23505') throw error
 }

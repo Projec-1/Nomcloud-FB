@@ -1,371 +1,222 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Users,
-  GraduationCap,
-  Wallet,
-  CalendarCheck,
-  ArrowRight,
-  Bell,
-  Megaphone,
-  UserPlus,
-  BookPlus,
-  TrendingUp,
-} from 'lucide-react'
-import { useData } from '@/context/DataContext'
+import { Users, GraduationCap, CalendarCheck, Wallet, ArrowRight, Plus, Megaphone, BookOpen } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { useToast } from '@/context/ToastContext'
-import StatCard from '@/components/ui/StatCard'
 import PageHeader from '@/components/ui/PageHeader'
-import Avatar from '@/components/ui/Avatar'
+import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
-import Modal from '@/components/ui/Modal'
-import Input from '@/components/ui/Input'
-import Select from '@/components/ui/Select'
-import Textarea from '@/components/ui/Textarea'
-import Button from '@/components/ui/Button'
-import { formatCurrency, percentage, timeAgo } from '@/utils/format'
-import { schoolDays } from '@/utils/schoolCalendar'
-import type { AnnouncementAudience } from '@/types'
+import EmptyState from '@/components/ui/EmptyState'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { useRecordableClasses } from '@/hooks/useRecordableClasses'
+import { useAnnouncements } from '@/hooks/useCommunications'
+import { useFinance } from '@/hooks/useFinance'
+import { fetchSchoolStudents } from '@/services/studentService'
+import { fetchSchoolTeachers } from '@/services/teacherService'
+import { fetchAttendance } from '@/services/teachingRecordsService'
+import { formatDate, formatMoney, percentage } from '@/utils/format'
+import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 
-type QuickAction = 'student' | 'teacher' | 'announcement' | null
+// ---------------------------------------------------------------------------
+// Phase 8 batch 8. The management landing page, on real data throughout.
+//
+// THE THREE QUICK-ACTION FORMS ARE NOW LINKS. The prototype embedded miniature
+// add-a-student, add-a-teacher and post-an-announcement forms here, each a
+// simplified duplicate of the dedicated page's form. Against the real schema
+// those shortcuts were actively misleading: the student one invented an
+// admission number with Math.random and enrolled without an academic year, and
+// neither could express the relations the real tables need. They are links to
+// the pages that do it properly, which is one extra click and no duplicated
+// write path.
+//
+// THE ATTENDANCE SPARKLINE IS GONE for the same reason as on the teacher
+// dashboard: it plotted a fixed mock week, and reproducing it honestly means one
+// query per day, which is a lot of round trips for decoration. Today's rate is
+// real and carries the same message.
+// ---------------------------------------------------------------------------
 
 export default function AdminDashboard() {
-  const { profile } = useAuth()
-  const { students, teachers, classes, attendance, fees, announcements, parents, addStudent, addTeacher, addAnnouncement } = useData()
-  const { showToast } = useToast()
+  const { profile, school } = useAuth()
+  const { state, classes } = useRecordableClasses()
+  const { announcements } = useAnnouncements()
+  const { records: fees, canManageFinance } = useFinance()
 
-  const [action, setAction] = useState<QuickAction>(null)
-  const [studentForm, setStudentForm] = useState({ name: '', classId: classes[0]?.id ?? '', gender: 'Male' as 'Male' | 'Female', dateOfBirth: '', parentId: parents[0]?.id ?? '' })
-  const [teacherForm, setTeacherForm] = useState({ name: '', email: '', phone: '', subject: '' })
-  const [announcementForm, setAnnouncementForm] = useState({ title: '', body: '', audience: 'all' as AnnouncementAudience, priority: 'normal' as 'normal' | 'important' | 'urgent' })
+  const schoolId = school?.id ?? null
+  const timeZone = school?.timezone ?? DEFAULT_TIME_ZONE
+  const currency = school?.currency ?? 'USD'
+  const today = todayInTimeZone(timeZone)
 
-  const latestDay = schoolDays[schoolDays.length - 1]
-  const today = attendance.filter((a) => a.date === latestDay)
-  const presentToday = today.filter((a) => a.status === 'present' || a.status === 'late').length
-  const attendanceRate = today.length ? percentage(presentToday, today.length) : 0
+  const [counts, setCounts] = useState({ students: 0, teachers: 0 })
+  const [attendanceToday, setAttendanceToday] = useState<{ present: number; marked: number }>({ present: 0, marked: 0 })
+  const [rateByClass, setRateByClass] = useState<Map<string, number | null>>(new Map())
 
-  const totalDue = fees.reduce((sum, f) => sum + f.amount, 0)
-  const totalCollected = fees.reduce((sum, f) => sum + f.amountPaid, 0)
-
-  const recentAnnouncements = announcements.slice(0, 4)
-
-  // Daily attendance trend, derived from real seeded attendance records — recomputes
-  // to a fresh trailing window every time the app is opened on a new day.
-  const trend = useMemo(
-    () =>
-      schoolDays.map((day) => {
-        const records = attendance.filter((a) => a.date === day)
-        const present = records.filter((a) => a.status === 'present' || a.status === 'late').length
-        return records.length ? percentage(present, records.length) : 0
-      }),
-    [attendance],
-  )
-  const trendPath = trend
-    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * (240 / (trend.length - 1))).toFixed(1)} ${(56 - (v / 100) * 56).toFixed(1)}`)
-    .join(' ')
-
-  const classSummaries = classes.slice(0, 5).map((c) => {
-    const teacher = teachers.find((t) => t.id === c.teacherId)
-    const classAttendance = attendance.filter((a) => a.classId === c.id && a.date === latestDay)
-    const presentCount = classAttendance.filter((a) => a.status === 'present' || a.status === 'late').length
-    const rate = classAttendance.length ? percentage(presentCount, classAttendance.length) : 0
-    return { ...c, teacherName: teacher?.name ?? 'Unassigned', rate }
-  })
-
-  const closeModal = () => setAction(null)
-
-  const submitStudent = () => {
-    if (!studentForm.name.trim() || !studentForm.classId || !studentForm.dateOfBirth || !studentForm.parentId) {
-      showToast({ type: 'error', title: 'Fill in every field to enroll a student' })
-      return
+  useEffect(() => {
+    let cancelled = false
+    if (!schoolId) return
+    Promise.all([fetchSchoolStudents(schoolId), fetchSchoolTeachers(schoolId)])
+      .then(([students, teachers]) => {
+        if (!cancelled) setCounts({ students: students.length, teachers: teachers.length })
+      })
+      .catch(() => {
+        // Counts only.
+      })
+    return () => {
+      cancelled = true
     }
-    const targetClass = classes.find((c) => c.id === studentForm.classId)
-    if (targetClass && targetClass.studentIds.length >= 50) {
-      showToast({ type: 'error', title: `${targetClass.name} is full`, description: 'Classes are limited to 50 students. Choose another class.' })
-      return
-    }
-    addStudent({
-      name: studentForm.name,
-      admissionNo: `ADM-${Math.floor(1000 + Math.random() * 9000)}`,
-      classId: studentForm.classId,
-      gender: studentForm.gender,
-      dateOfBirth: studentForm.dateOfBirth,
-      parentId: studentForm.parentId,
-    })
-    showToast({ type: 'success', title: 'Student enrolled', description: `${studentForm.name} was added to the school.` })
-    setStudentForm({ name: '', classId: classes[0]?.id ?? '', gender: 'Male', dateOfBirth: '', parentId: parents[0]?.id ?? '' })
-    closeModal()
-  }
+  }, [schoolId])
 
-  const submitTeacher = () => {
-    if (!teacherForm.name.trim() || !teacherForm.email.trim() || !teacherForm.subject.trim()) {
-      showToast({ type: 'error', title: 'Fill in name, email and subject' })
-      return
+  useEffect(() => {
+    let cancelled = false
+    if (!schoolId || classes.length === 0) return
+    Promise.all(classes.map((c) => fetchAttendance(schoolId, c.id, today)))
+      .then((maps) => {
+        if (cancelled) return
+        let present = 0
+        let marked = 0
+        const byClass = new Map<string, number | null>()
+        maps.forEach((map, i) => {
+          let p = 0
+          for (const e of map.values()) {
+            if (e.status === 'present' || e.status === 'late') p += 1
+          }
+          present += p
+          marked += map.size
+          byClass.set(classes[i].id, map.size ? percentage(p, map.size) : null)
+        })
+        setAttendanceToday({ present, marked })
+        setRateByClass(byClass)
+      })
+      .catch(() => {
+        // Today's rate only.
+      })
+    return () => {
+      cancelled = true
     }
-    addTeacher(teacherForm)
-    showToast({ type: 'success', title: 'Teacher added', description: `${teacherForm.name} can now sign in once invited.` })
-    setTeacherForm({ name: '', email: '', phone: '', subject: '' })
-    closeModal()
-  }
+  }, [schoolId, classes, today])
 
-  const submitAnnouncement = () => {
-    if (!announcementForm.title.trim() || !announcementForm.body.trim()) {
-      showToast({ type: 'error', title: 'Add a title and message' })
-      return
-    }
-    addAnnouncement({
-      title: announcementForm.title,
-      body: announcementForm.body,
-      audience: announcementForm.audience,
-      priority: announcementForm.priority,
-      createdBy: profile?.full_name ?? 'School Administration',
-      createdByRole: 'admin',
-    })
-    showToast({ type: 'success', title: 'Announcement sent', description: 'It now appears across the relevant dashboards.' })
-    setAnnouncementForm({ title: '', body: '', audience: 'all', priority: 'normal' })
-    closeModal()
+  const collected = useMemo(() => fees.reduce((sum, f) => sum + f.amountPaid, 0), [fees])
+  const outstanding = useMemo(() => fees.reduce((sum, f) => sum + f.balance, 0), [fees])
+
+  // The four-state contract. loading, denied and error render through
+  // ResourceGate exactly as every other connected screen does; `denied` comes
+  // from the caller's role via the classes hook, never from a row count. The
+  // `ready` and `empty` cases fall through to the page below, which already
+  // handles a school with no classes.
+  if (state.status === 'loading' || state.status === 'denied' || state.status === 'error') {
+    return (
+      <div>
+        <PageHeader title="Dashboard" />
+        <ResourceGate state={state} empty={{ title: '' }} deniedHint="The school dashboard is available to school staff.">
+          {() => null}
+        </ResourceGate>
+      </div>
+    )
   }
 
   return (
     <div>
       <PageHeader
-        title={`Good to see you, ${profile?.full_name.split(' ')[0]}`}
-        description="Here's what's happening across Nom Cloud Demo Academy today."
+        title={`Welcome, ${profile?.full_name.split(' ')[0] ?? ''}`}
+        description={`Today at ${school?.name ?? 'your school'}.`}
         actions={
-          <Link to="/app/admin/announcements" className="btn-accent px-5 py-2.5 text-sm">
-            <Megaphone className="h-4 w-4" /> New Announcement
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/app/admin/students" className="btn-outline px-4 py-2 text-sm">
+              <Plus className="h-4 w-4" /> Student
+            </Link>
+            <Link to="/app/admin/announcements" className="btn-accent px-4 py-2 text-sm">
+              <Megaphone className="h-4 w-4" /> Announce
+            </Link>
+          </div>
         }
       />
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total Students" value={students.length} icon={Users} tint="#0071E3" trend={{ value: '+4.2%', positive: true }} />
-        <StatCard label="Total Teachers" value={teachers.length} icon={GraduationCap} tint="#FF5A1F" trend={{ value: '+1', positive: true }} />
-        <StatCard label="Attendance Today" value={`${attendanceRate}%`} icon={CalendarCheck} tint="#34A853" />
-        <StatCard label="Fees Collected" value={formatCurrency(totalCollected)} icon={Wallet} tint="#A855F7" />
+        <StatCard label="Students" value={counts.students} icon={Users} tint="#0071E3" />
+        <StatCard label="Teachers" value={counts.teachers} icon={GraduationCap} tint="#A855F7" />
+        <StatCard
+          label="Present Today"
+          value={attendanceToday.marked > 0 ? `${percentage(attendanceToday.present, attendanceToday.marked)}%` : '—'}
+          icon={CalendarCheck}
+          tint="#34A853"
+        />
+        <StatCard
+          label={canManageFinance ? 'Fees Outstanding' : 'Classes'}
+          value={canManageFinance ? formatMoney(outstanding, currency) : classes.length}
+          icon={canManageFinance ? Wallet : BookOpen}
+          tint="#F59E0B"
+        />
       </div>
 
-      {/* Quick actions */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <button
-          onClick={() => setAction('student')}
-          className="group flex items-center gap-3 rounded-2xl border border-ink/5 bg-white p-4 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card dark:border-white/10 dark:bg-[#161618]"
-        >
-          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent transition-transform group-hover:scale-110">
-            <UserPlus className="h-[18px] w-[18px]" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-ink dark:text-white">Add a Student</p>
-            <p className="text-xs text-graphite">Enroll instantly</p>
-          </div>
-        </button>
-        <button
-          onClick={() => setAction('teacher')}
-          className="group flex items-center gap-3 rounded-2xl border border-ink/5 bg-white p-4 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card dark:border-white/10 dark:bg-[#161618]"
-        >
-          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand transition-transform group-hover:scale-110">
-            <BookPlus className="h-[18px] w-[18px]" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-ink dark:text-white">Add a Teacher</p>
-            <p className="text-xs text-graphite">Grow your staff</p>
-          </div>
-        </button>
-        <button
-          onClick={() => setAction('announcement')}
-          className="group flex items-center gap-3 rounded-2xl border border-ink/5 bg-white p-4 text-left shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-card dark:border-white/10 dark:bg-[#161618]"
-        >
-          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 transition-transform group-hover:scale-110">
-            <Megaphone className="h-[18px] w-[18px]" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-ink dark:text-white">Make an Announcement</p>
-            <p className="text-xs text-graphite">Reach parents & staff</p>
-          </div>
-        </button>
-      </div>
+      {canManageFinance && (
+        <p className="mt-3 text-xs text-graphite">
+          {formatMoney(collected, currency)} collected so far this term.
+        </p>
+      )}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
         <div className="card p-6 lg:col-span-2">
-          <div className="mb-1 flex items-center justify-between">
-            <h3 className="font-semibold text-ink dark:text-white">Classes Overview</h3>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold text-ink dark:text-white">Classes</h3>
             <Link to="/app/admin/classes" className="link-underline flex items-center gap-1 text-xs font-medium text-accent">
               View all <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          <p className="mb-5 flex items-center gap-1.5 text-xs text-graphite">
-            <TrendingUp className="h-3 w-3 text-emerald-500" /> Live attendance trend · last {schoolDays.length} school days
-          </p>
-          <div className="relative mb-5 h-16 w-full overflow-hidden rounded-xl bg-mist p-2 dark:bg-white/5">
-            <svg viewBox="0 0 240 56" preserveAspectRatio="none" className="h-full w-full">
-              <defs>
-                <linearGradient id="dashTrendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#34A853" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#34A853" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d={`${trendPath} L 240 56 L 0 56 Z`} fill="url(#dashTrendFill)" />
-              <path d={trendPath} fill="none" stroke="#34A853" strokeWidth="2" strokeLinecap="round" strokeDasharray="500" className="animate-draw-line" />
-            </svg>
-          </div>
-          <div className="space-y-3">
-            {classSummaries.map((c) => (
-              <div key={c.id} className="rounded-xl border border-ink/5 px-4 py-3 dark:border-white/10">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-ink dark:text-white">{c.name}</p>
-                    <p className="text-xs text-graphite">{c.teacherName} · {c.room}</p>
+          {classes.length === 0 ? (
+            <EmptyState icon={BookOpen} title="No classes yet" description="Create a class to begin." />
+          ) : (
+            <div className="space-y-3">
+              {classes.slice(0, 6).map((c) => {
+                const rate = rateByClass.get(c.id)
+                return (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between rounded-xl border border-ink/5 px-4 py-3 dark:border-white/10"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-ink dark:text-white">{c.name}</p>
+                      <p className="text-xs text-graphite">
+                        {c.studentIds.length} students · {c.room ?? 'No room set'}
+                      </p>
+                    </div>
+                    <Badge tone={rate === null || rate === undefined ? 'neutral' : rate >= 90 ? 'success' : rate >= 75 ? 'warning' : 'danger'}>
+                      {rate === null || rate === undefined ? 'Not marked' : `${rate}% present`}
+                    </Badge>
                   </div>
-                  <Badge tone="neutral">{c.studentIds.length}/50 students</Badge>
-                </div>
-                <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-ink/5 dark:bg-white/10">
-                  <div className="h-full rounded-full bg-emerald-500 transition-all duration-700" style={{ width: `${c.rate}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div className="card p-6">
-          <div className="mb-5 flex items-center justify-between">
-            <h3 className="font-semibold text-ink dark:text-white">Recent Announcements</h3>
-            <Link to="/app/admin/announcements" className="text-accent">
-              <Bell className="h-4 w-4" />
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold text-ink dark:text-white">Announcements</h3>
+            <Link
+              to="/app/admin/announcements"
+              className="link-underline flex items-center gap-1 text-xs font-medium text-accent"
+            >
+              View all <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
           <div className="space-y-4">
-            {recentAnnouncements.map((a) => (
-              <div key={a.id} className="border-b border-ink/5 pb-4 last:border-b-0 last:pb-0 dark:border-white/10">
-                <div className="mb-1 flex items-center justify-between">
-                  <Badge tone={a.priority === 'urgent' ? 'danger' : a.priority === 'important' ? 'warning' : 'neutral'}>{a.priority}</Badge>
-                  <span className="text-[11px] text-graphite">{timeAgo(a.date)}</span>
+            {announcements.length === 0 ? (
+              <p className="text-sm text-graphite">Nothing published yet.</p>
+            ) : (
+              announcements.slice(0, 4).map((a) => (
+                <div key={a.id} className="border-b border-ink/5 pb-4 last:border-b-0 last:pb-0 dark:border-white/10">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <Badge tone={a.priority === 'urgent' ? 'danger' : a.priority === 'important' ? 'warning' : 'neutral'}>
+                      {a.priority}
+                    </Badge>
+                    <span className="text-[11px] text-graphite">{formatDate(a.publishedAt ?? a.createdAt)}</span>
+                  </div>
+                  <p className="text-sm font-medium text-ink dark:text-white">{a.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-graphite">{a.body}</p>
                 </div>
-                <p className="text-sm font-medium text-ink dark:text-white">{a.title}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="card p-6 lg:col-span-2">
-          <h3 className="mb-5 font-semibold text-ink dark:text-white">Fee Collection — Term 1</h3>
-          <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="text-graphite">{formatCurrency(totalCollected)} collected</span>
-            <span className="text-graphite">of {formatCurrency(totalDue)}</span>
-          </div>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-ink/5 dark:bg-white/10">
-            <div className="h-full rounded-full bg-gradient-to-r from-brand to-accent" style={{ width: `${percentage(totalCollected, totalDue)}%` }} />
-          </div>
-          <p className="mt-3 text-xs text-graphite">{percentage(totalCollected, totalDue)}% of total fees collected this term.</p>
-        </div>
-        <div className="card p-6">
-          <h3 className="mb-4 font-semibold text-ink dark:text-white">Teaching Staff</h3>
-          <div className="space-y-3">
-            {teachers.slice(0, 4).map((t) => (
-              <div key={t.id} className="flex items-center gap-3">
-                <Avatar name={t.name} color={t.avatarColor} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink dark:text-white">{t.name}</p>
-                  <p className="truncate text-xs text-graphite">{t.subject}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Quick-add: Student */}
-      <Modal
-        open={action === 'student'}
-        onClose={closeModal}
-        title="Add a Student"
-        description="Enroll a new student directly from the dashboard."
-        footer={
-          <>
-            <Button variant="ghost" onClick={closeModal}>Cancel</Button>
-            <Button onClick={submitStudent}>Add Student</Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Input label="Full name" required value={studentForm.name} onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Class" value={studentForm.classId} onChange={(e) => setStudentForm({ ...studentForm, classId: e.target.value })}>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>{c.name} ({c.studentIds.length}/50)</option>
-              ))}
-            </Select>
-            <Select label="Gender" value={studentForm.gender} onChange={(e) => setStudentForm({ ...studentForm, gender: e.target.value as 'Male' | 'Female' })}>
-              <option>Male</option>
-              <option>Female</option>
-            </Select>
-          </div>
-          <Input label="Date of birth" type="date" required value={studentForm.dateOfBirth} onChange={(e) => setStudentForm({ ...studentForm, dateOfBirth: e.target.value })} />
-          <Select label="Parent / Guardian" value={studentForm.parentId} onChange={(e) => setStudentForm({ ...studentForm, parentId: e.target.value })}>
-            <option value="">Select a parent…</option>
-            {parents.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} · {p.email}</option>
-            ))}
-          </Select>
-        </div>
-      </Modal>
-
-      {/* Quick-add: Teacher */}
-      <Modal
-        open={action === 'teacher'}
-        onClose={closeModal}
-        title="Add a Teacher"
-        description="Add a new teacher to your staff directory."
-        footer={
-          <>
-            <Button variant="ghost" onClick={closeModal}>Cancel</Button>
-            <Button onClick={submitTeacher}>Add Teacher</Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Input label="Full name" required value={teacherForm.name} onChange={(e) => setTeacherForm({ ...teacherForm, name: e.target.value })} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Email" type="email" required value={teacherForm.email} onChange={(e) => setTeacherForm({ ...teacherForm, email: e.target.value })} />
-            <Input label="Phone" value={teacherForm.phone} onChange={(e) => setTeacherForm({ ...teacherForm, phone: e.target.value })} />
-          </div>
-          <Input label="Subject" required value={teacherForm.subject} onChange={(e) => setTeacherForm({ ...teacherForm, subject: e.target.value })} placeholder="e.g. Mathematics" />
-        </div>
-      </Modal>
-
-      {/* Quick: Announcement */}
-      <Modal
-        open={action === 'announcement'}
-        onClose={closeModal}
-        title="New Announcement"
-        description="Send a message to the whole school, or a specific group."
-        footer={
-          <>
-            <Button variant="ghost" onClick={closeModal}>Cancel</Button>
-            <Button onClick={submitAnnouncement}>Send</Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Input label="Title" required value={announcementForm.title} onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })} />
-          <Textarea label="Message" required rows={4} value={announcementForm.body} onChange={(e) => setAnnouncementForm({ ...announcementForm, body: e.target.value })} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Audience" value={announcementForm.audience} onChange={(e) => setAnnouncementForm({ ...announcementForm, audience: e.target.value as AnnouncementAudience })}>
-              <option value="all">Entire School</option>
-              <option value="teachers">All Teachers</option>
-              <option value="parents">All Parents</option>
-              <option value="students">All Students</option>
-            </Select>
-            <Select label="Priority" value={announcementForm.priority} onChange={(e) => setAnnouncementForm({ ...announcementForm, priority: e.target.value as typeof announcementForm.priority })}>
-              <option value="normal">Normal</option>
-              <option value="important">Important</option>
-              <option value="urgent">Urgent</option>
-            </Select>
-          </div>
-        </div>
-      </Modal>
     </div>
   )
 }

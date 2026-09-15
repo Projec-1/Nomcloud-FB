@@ -1,18 +1,79 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, CalendarCheck, BookOpen, Wallet } from 'lucide-react'
-import { useData } from '@/context/DataContext'
+import { useAuth } from '@/context/AuthContext'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import PageHeader from '@/components/ui/PageHeader'
 import ResourceGate from '@/components/ui/ResourceGate'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import { formatDate, percentage } from '@/utils/format'
-import { schoolDays } from '@/utils/schoolCalendar'
+import { DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
+import { fetchChildAttendance, fetchChildGrades } from '@/services/teachingRecordsService'
+import { fetchChildFeeRecords } from '@/services/financeService'
+
+// Phase 8 batch 8. The last mock reader on the parent side.
+//
+// Each child's three summary figures are now real: attendance from
+// attendance_records, the average from grade_records computed against each
+// row's own max_score, and the balance from fee_records. All three are already
+// bounded to this guardian's own children by the policies that batches 5 and 6
+// connected, so this screen adds no access model of its own.
+//
+// The prototype counted attendance against a hardcoded `schoolDays` week. Real
+// records are counted as they exist.
+
+interface ChildSummaryStats {
+  attendanceRate: number | null
+  averageGrade: number | null
+  hasBalance: boolean
+}
 
 export default function ParentChildren() {
-  const { attendance, grades, fees } = useData()
+  const { school } = useAuth()
   const { children, selectedChild, selectChild, state } = useSelectedChild()
   const navigate = useNavigate()
+  const [stats, setStats] = useState<Record<string, ChildSummaryStats>>({})
+
+  const schoolId = school?.id ?? null
+  const timeZone = school?.timezone ?? DEFAULT_TIME_ZONE
+
+  useEffect(() => {
+    let cancelled = false
+    if (!schoolId || children.length === 0) return
+
+    Promise.all(
+      children.map(async (child) => {
+        const [attendance, grades, fees] = await Promise.all([
+          fetchChildAttendance(schoolId, child.id),
+          fetchChildGrades(schoolId, child.id),
+          fetchChildFeeRecords(schoolId, child.id, timeZone),
+        ])
+        const present = attendance.filter((a) => a.status === 'present' || a.status === 'late').length
+        const graded = grades.filter((g) => g.maxScore > 0)
+        return [
+          child.id,
+          {
+            attendanceRate: attendance.length ? percentage(present, attendance.length) : null,
+            averageGrade: graded.length
+              ? Math.round(graded.reduce((sum, g) => sum + (g.score / g.maxScore) * 100, 0) / graded.length)
+              : null,
+            hasBalance: fees.some((f) => f.balance > 0),
+          } satisfies ChildSummaryStats,
+        ] as const
+      }),
+    )
+      .then((entries) => {
+        if (!cancelled) setStats(Object.fromEntries(entries))
+      })
+      .catch(() => {
+        // Summary figures only. The child cards still render without them.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, children, timeZone])
 
   if (children.length === 0) {
     return (
@@ -20,7 +81,11 @@ export default function ParentChildren() {
         <PageHeader title="My Children" description="Children linked to your account." />
         <ResourceGate
           state={state}
-          empty={{ icon: Users, title: "No children linked yet", description: "Contact your school administrator to link your child's record to this account." }}
+          empty={{
+            icon: Users,
+            title: 'No children linked yet',
+            description: "Contact your school administrator to link your child's record to this account.",
+          }}
           deniedHint="Child records are available to a linked parent or guardian."
         >
           {() => null}
@@ -31,15 +96,13 @@ export default function ParentChildren() {
 
   return (
     <div>
-      <PageHeader title="My Children" description={`${children.length} child${children.length === 1 ? '' : 'ren'} linked to your account`} />
+      <PageHeader
+        title="My Children"
+        description={`${children.length} child${children.length === 1 ? '' : 'ren'} linked to your account`}
+      />
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {children.map((child) => {
-          const childAttendance = attendance.filter((a) => a.studentId === child.id && schoolDays.includes(a.date))
-          const present = childAttendance.filter((a) => a.status === 'present' || a.status === 'late').length
-          const childGrades = grades.filter((g) => g.studentId === child.id)
-          const avg = childGrades.length ? Math.round(childGrades.reduce((sum, g) => sum + g.score, 0) / childGrades.length) : 0
-          const balance = fees.filter((f) => f.studentId === child.id).reduce((sum, f) => sum + (f.amount - f.amountPaid), 0)
-
+          const s = stats[child.id]
           return (
             <div key={child.id} className="card p-6">
               <div className="flex items-center justify-between">
@@ -47,7 +110,9 @@ export default function ParentChildren() {
                   <Avatar name={child.name} color={child.avatarColor} />
                   <div>
                     <p className="font-medium text-ink dark:text-white">{child.name}</p>
-                    <p className="text-xs text-graphite">{child.className} · {child.admissionNo}</p>
+                    <p className="text-xs text-graphite">
+                      {child.className ?? 'No class yet'} · {child.admissionNo}
+                    </p>
                   </div>
                 </div>
                 {selectedChild?.id === child.id && <Badge tone="brand">Selected</Badge>}
@@ -55,19 +120,26 @@ export default function ParentChildren() {
               <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl bg-mist p-2.5 dark:bg-white/5">
                   <CalendarCheck className="mx-auto mb-1 h-3.5 w-3.5 text-emerald-500" />
-                  <p className="text-sm font-semibold text-ink dark:text-white">{childAttendance.length ? `${percentage(present, childAttendance.length)}%` : '—'}</p>
+                  <p className="text-sm font-semibold text-ink dark:text-white">
+                    {s?.attendanceRate === null || s?.attendanceRate === undefined ? '—' : `${s.attendanceRate}%`}
+                  </p>
                 </div>
                 <div className="rounded-xl bg-mist p-2.5 dark:bg-white/5">
                   <BookOpen className="mx-auto mb-1 h-3.5 w-3.5 text-accent" />
-                  <p className="text-sm font-semibold text-ink dark:text-white">{childGrades.length ? `${avg}%` : '—'}</p>
+                  <p className="text-sm font-semibold text-ink dark:text-white">
+                    {s?.averageGrade === null || s?.averageGrade === undefined ? '—' : `${s.averageGrade}%`}
+                  </p>
                 </div>
                 <div className="rounded-xl bg-mist p-2.5 dark:bg-white/5">
                   <Wallet className="mx-auto mb-1 h-3.5 w-3.5 text-brand" />
-                  <p className="text-sm font-semibold text-ink dark:text-white">{balance > 0 ? 'Due' : 'Paid'}</p>
+                  <p className="text-sm font-semibold text-ink dark:text-white">
+                    {s === undefined ? '—' : s.hasBalance ? 'Due' : 'Paid'}
+                  </p>
                 </div>
               </div>
               <p className="mt-4 text-xs text-graphite">Enrolled {formatDate(child.enrolledDate)}</p>
               <button
+                type="button"
                 onClick={() => {
                   selectChild(child.id)
                   navigate('/app/parent')

@@ -98,3 +98,228 @@ export async function fetchSchoolStudents(schoolId: string): Promise<RosterStude
     avatarColor: avatarColorForId(s.id),
   }))
 }
+
+// ===========================================================================
+// MANAGEMENT WRITES. Phase 8 batch 8.
+// ===========================================================================
+// students, guardians and student_guardians all gate INSERT/UPDATE/DELETE on
+// has_school_management_role, so these are reachable by owner, director,
+// administrator and principal. There is deliberately no teacher or guardian
+// path: RLS batch 2 made student_guardians management-only precisely so a
+// guardian cannot attach themselves to another family's child.
+
+export interface StudentInput {
+  fullName: string
+  admissionNo: string
+  gender: string | null
+  dateOfBirth: string | null
+  status: string
+}
+
+export async function createStudent(schoolId: string, input: StudentInput): Promise<string> {
+  const { data, error } = await supabase
+    .from('students')
+    .insert({
+      school_id: schoolId,
+      full_name: input.fullName,
+      admission_no: input.admissionNo,
+      gender: input.gender,
+      date_of_birth: input.dateOfBirth,
+      status: input.status,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') throw new Error('That admission number is already used at this school.')
+    throw error
+  }
+  return (data as { id: string }).id
+}
+
+export async function updateStudent(schoolId: string, id: string, input: StudentInput): Promise<void> {
+  const { error } = await supabase
+    .from('students')
+    .update({
+      full_name: input.fullName,
+      admission_no: input.admissionNo,
+      gender: input.gender,
+      date_of_birth: input.dateOfBirth,
+      status: input.status,
+    })
+    .eq('school_id', schoolId)
+    .eq('id', id)
+
+  if (error) {
+    if (error.code === '23505') throw new Error('That admission number is already used at this school.')
+    throw error
+  }
+}
+
+/**
+ * Removes a student.
+ *
+ * Fees, attendance, grades and enrolments cascade with the student, which is
+ * what SCHEMA_DESIGN intends for a record that was created in error. A student
+ * who has simply left should be given status 'inactive' instead, which is why
+ * status is an editable field on the form.
+ */
+export async function deleteStudent(schoolId: string, id: string): Promise<void> {
+  const { error } = await supabase.from('students').delete().eq('school_id', schoolId).eq('id', id)
+  if (error) throw error
+}
+
+/** Enrols a student in a class for an academic year. */
+export async function enrolStudent(
+  schoolId: string,
+  studentId: string,
+  classId: string,
+  academicYearId: string,
+): Promise<void> {
+  const { error } = await supabase.from('class_enrollments').insert({
+    school_id: schoolId,
+    class_id: classId,
+    student_id: studentId,
+    academic_year_id: academicYearId,
+  })
+  if (error) throw error
+}
+
+/**
+ * Closes a student's open enrolments.
+ *
+ * `left_on` rather than a delete, because an enrolment is history. Plan section
+ * A.2 records that `left_on IS NULL` is the available "still enrolled" signal.
+ */
+export async function endEnrolment(schoolId: string, studentId: string, leftOn: string): Promise<void> {
+  const { error } = await supabase
+    .from('class_enrollments')
+    .update({ left_on: leftOn })
+    .eq('school_id', schoolId)
+    .eq('student_id', studentId)
+    .is('left_on', null)
+  if (error) throw error
+}
+
+// ===========================================================================
+// THE MANAGEMENT STUDENT DIRECTORY. Phase 8 batch 8.
+// ===========================================================================
+
+export interface DirectoryStudent {
+  id: string
+  name: string
+  admissionNo: string
+  gender: string | null
+  dateOfBirth: string | null
+  status: string
+  enrolledDate: string
+  avatarColor: string
+  /** Resolved through class_enrollments, not a column. Null when unenrolled. */
+  classId: string | null
+  className: string | null
+  /** Every linked guardian, through student_guardians. */
+  guardians: { id: string; name: string }[]
+}
+
+/**
+ * Every student in the school with their class and guardians.
+ *
+ * Four scoped reads rather than embedded selects, for the reason every batch
+ * since 3 has given: these tables reach one another through COMPOSITE foreign
+ * keys, and a silent PostgREST embedding failure would look like a school with
+ * no students.
+ */
+export async function fetchStudentDirectory(schoolId: string): Promise<DirectoryStudent[]> {
+  const { data, error } = await supabase
+    .from('students')
+    .select('id, full_name, admission_no, gender, date_of_birth, status, enrolled_date')
+    .eq('school_id', schoolId)
+    .order('full_name', { ascending: true })
+
+  if (error) throw error
+
+  const rows = (data ?? []) as {
+    id: string
+    full_name: string
+    admission_no: string
+    gender: string | null
+    date_of_birth: string | null
+    status: string
+    enrolled_date: string
+  }[]
+  if (rows.length === 0) return []
+
+  const studentIds = rows.map((r) => r.id)
+
+  const [enrolments, links] = await Promise.all([
+    supabase
+      .from('class_enrollments')
+      .select('student_id, class_id')
+      .eq('school_id', schoolId)
+      .in('student_id', studentIds)
+      .is('left_on', null),
+    supabase
+      .from('student_guardians')
+      .select('student_id, guardian_id')
+      .eq('school_id', schoolId)
+      .in('student_id', studentIds),
+  ])
+
+  if (enrolments.error) throw enrolments.error
+  if (links.error) throw links.error
+
+  const enrolRows = (enrolments.data ?? []) as { student_id: string; class_id: string }[]
+  const linkRows = (links.data ?? []) as { student_id: string; guardian_id: string }[]
+
+  const classNames = new Map<string, string>()
+  const classIds = Array.from(new Set(enrolRows.map((e) => e.class_id)))
+  if (classIds.length > 0) {
+    const { data: cls, error: clsErr } = await supabase
+      .from('classes')
+      .select('id, name')
+      .eq('school_id', schoolId)
+      .in('id', classIds)
+    if (clsErr) throw clsErr
+    for (const c of (cls ?? []) as { id: string; name: string }[]) classNames.set(c.id, c.name)
+  }
+
+  const guardianNames = new Map<string, string>()
+  const guardianIds = Array.from(new Set(linkRows.map((l) => l.guardian_id)))
+  if (guardianIds.length > 0) {
+    const { data: gs, error: gErr } = await supabase
+      .from('guardians')
+      .select('id, full_name')
+      .eq('school_id', schoolId)
+      .in('id', guardianIds)
+    if (gErr) throw gErr
+    for (const g of (gs ?? []) as { id: string; full_name: string }[]) guardianNames.set(g.id, g.full_name)
+  }
+
+  const classByStudent = new Map<string, string>()
+  for (const e of enrolRows) classByStudent.set(e.student_id, e.class_id)
+
+  const guardiansByStudent = new Map<string, { id: string; name: string }[]>()
+  for (const l of linkRows) {
+    guardiansByStudent.set(l.student_id, [
+      ...(guardiansByStudent.get(l.student_id) ?? []),
+      { id: l.guardian_id, name: guardianNames.get(l.guardian_id) ?? 'Guardian' },
+    ])
+  }
+
+  return rows.map((r) => {
+    const classId = classByStudent.get(r.id) ?? null
+    return {
+      id: r.id,
+      name: r.full_name,
+      admissionNo: r.admission_no,
+      gender: r.gender,
+      dateOfBirth: r.date_of_birth,
+      status: r.status,
+      enrolledDate: r.enrolled_date,
+      avatarColor: avatarColorForId(r.id),
+      classId,
+      className: classId ? (classNames.get(classId) ?? null) : null,
+      guardians: guardiansByStudent.get(r.id) ?? [],
+    }
+  })
+}

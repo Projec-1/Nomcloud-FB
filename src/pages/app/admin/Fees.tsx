@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Wallet, Search, FileText, TrendingUp, AlertTriangle, Plus, Pencil, Trash2, Lock } from 'lucide-react'
+import { Wallet, Search, FileText, TrendingUp, AlertTriangle, Plus, Pencil, Trash2, Lock, Send } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -29,6 +29,12 @@ import {
   type FeeStatus,
   type PaymentMethod,
 } from '@/services/financeService'
+import Textarea from '@/components/ui/Textarea'
+import {
+  resolveReminderRecipients,
+  sendFeeReminders,
+  type ReminderRecipient,
+} from '@/services/communicationService'
 import type { FieldErrors } from '@/utils/validators'
 import { minLength } from '@/utils/validators'
 import { formatDate, formatMoney } from '@/utils/format'
@@ -56,11 +62,16 @@ import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 // manufactured a fake receipt number for a real payment, and a repeated real one
 // would fail. It is now a required field and a duplicate is reported plainly.
 //
-// THE "SEND PAYMENT REMINDER" FEATURE IS REMOVED HERE AND RETURNS IN BATCH 7.
-// It created message threads through the mock store. Its inputs are now real
-// (who owes money) but its output was not, so it would have reported "12 parents
-// notified" while sending nothing. Messaging is batch 7 and explicitly out of
-// scope for this one; the control returns when it can actually deliver.
+// THE "SEND PAYMENT REMINDER" FEATURE IS BACK, AND NOW ACTUALLY SENDS.
+// Batch 6 removed it because it wrote message threads to the mock store and
+// would have reported "12 parents notified" while sending nothing. Batch 7 made
+// threads real and confirmed an administrator holds all three writes a
+// conversation needs, so it is rebuilt on those.
+//
+// It reports two things honestly rather than rounding them away: how many
+// reminders were actually sent, and which guardians cannot be reached at all
+// because they have never accepted their invitation and so have no user account
+// to put in a thread.
 // ---------------------------------------------------------------------------
 
 const statusTone: Record<FeeStatus, 'success' | 'warning' | 'danger' | 'neutral'> = {
@@ -99,6 +110,13 @@ export default function AdminFees() {
   const [payReference, setPayReference] = useState('')
   const [payDate, setPayDate] = useState('')
   const [payErrors, setPayErrors] = useState<FieldErrors>({})
+
+  const [reminderOpen, setReminderOpen] = useState(false)
+  const [reminderSubject, setReminderSubject] = useState('')
+  const [reminderBody, setReminderBody] = useState('')
+  const [reminderRecipients, setReminderRecipients] = useState<ReminderRecipient[]>([])
+  const [reminderUnreachable, setReminderUnreachable] = useState<string[]>([])
+  const [reminderLoading, setReminderLoading] = useState(false)
 
   const [statementTarget, setStatementTarget] = useState<FeeRecordView | null>(null)
   const [deleteFeeTarget, setDeleteFeeTarget] = useState<FeeRecordView | null>(null)
@@ -310,6 +328,68 @@ export default function AdminFees() {
     }
   }
 
+  // Everyone who still owes something, derived from the same real records the
+  // table shows, so a reminder cannot disagree with the balance on screen.
+  const openReminder = async () => {
+    if (!schoolId) return
+    const owing = records.filter((f) => f.status !== 'paid')
+    const studentIds = Array.from(new Set(owing.map((f) => f.studentId)))
+
+    setReminderSubject('Outstanding school fees')
+    setReminderBody(
+      'Dear parent, our records show an outstanding balance for school fees at ' +
+        (school?.name ?? 'the school') +
+        '. Please settle it at the school office at your earliest convenience. Thank you.',
+    )
+    setReminderOpen(true)
+    setReminderLoading(true)
+    try {
+      const { recipients, unreachable } = await resolveReminderRecipients(schoolId, studentIds)
+      setReminderRecipients(recipients)
+      setReminderUnreachable(unreachable)
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Could not work out who to remind',
+        description: err instanceof Error ? err.message : String(err),
+      })
+      setReminderOpen(false)
+    } finally {
+      setReminderLoading(false)
+    }
+  }
+
+  const submitReminders = async () => {
+    if (!schoolId || reminderRecipients.length === 0) return
+    setIsSaving(true)
+    try {
+      const result = await sendFeeReminders(
+        schoolId,
+        reminderRecipients,
+        reminderSubject.trim() || 'Outstanding school fees',
+        reminderBody.trim(),
+        reminderUnreachable,
+      )
+      const parts = [result.sent + ' reminder' + (result.sent === 1 ? '' : 's') + ' sent']
+      if (result.failed > 0) parts.push(result.failed + ' failed')
+      if (result.unreachable.length > 0) parts.push(result.unreachable.length + ' have no account yet')
+      showToast({
+        type: result.failed > 0 ? 'error' : 'success',
+        title: 'Reminders processed',
+        description: parts.join(' \u00b7 '),
+      })
+      setReminderOpen(false)
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Reminders not sent',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const canCreate = students.length > 0 && terms.length > 0
 
   return (
@@ -318,10 +398,17 @@ export default function AdminFees() {
         title="Fees & Payments"
         description="Track balances, collections and outstanding fees across the school."
         actions={
-          canManageFinance && canCreate ? (
-            <Button onClick={openCreate} icon={<Plus className="h-4 w-4" />}>
-              New Fee
-            </Button>
+          canManageFinance ? (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={openReminder} icon={<Send className="h-4 w-4" />}>
+                Send Payment Reminder
+              </Button>
+              {canCreate && (
+                <Button onClick={openCreate} icon={<Plus className="h-4 w-4" />}>
+                  New Fee
+                </Button>
+              )}
+            </div>
           ) : undefined
         }
       />
@@ -656,6 +743,48 @@ export default function AdminFees() {
             </p>
           </div>
         )}
+      </Modal>
+
+      {/* Real message threads, one per guardian. See the header. */}
+      <Modal
+        open={reminderOpen}
+        onClose={() => setReminderOpen(false)}
+        title="Send Payment Reminder"
+        description={
+          reminderLoading
+            ? 'Working out who to remind...'
+            : reminderRecipients.length + ' parent(s) can be messaged.'
+        }
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setReminderOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={submitReminders}
+              disabled={isSaving || reminderLoading || reminderRecipients.length === 0}
+              icon={<Send className="h-4 w-4" />}
+            >
+              {isSaving ? 'Sending...' : 'Send to ' + reminderRecipients.length}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input label="Subject" value={reminderSubject} onChange={(e) => setReminderSubject(e.target.value)} />
+          <Textarea label="Message" rows={5} value={reminderBody} onChange={(e) => setReminderBody(e.target.value)} />
+          <p className="text-xs text-graphite">
+            Each parent receives their own private conversation. It appears in their Messages inbox.
+          </p>
+          {reminderUnreachable.length > 0 && (
+            <div className="rounded-xl bg-mist px-3 py-2.5 text-xs text-graphite dark:bg-white/5">
+              <span className="font-medium text-ink dark:text-white">
+                {reminderUnreachable.length} guardian(s) cannot be messaged yet
+              </span>{' '}
+              because they have not accepted their invitation: {reminderUnreachable.join(', ')}.
+            </div>
+          )}
+        </div>
       </Modal>
 
       <ConfirmDialog

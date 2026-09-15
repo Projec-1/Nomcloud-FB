@@ -117,3 +117,127 @@ export async function fetchManagedClasses(schoolId: string): Promise<ClassSummar
     }
   })
 }
+
+// ===========================================================================
+// MANAGEMENT WRITES. Phase 8 batch 8.
+// ===========================================================================
+// classes gates writes on has_campus_scoped_management(school_id, campus_id),
+// which is the one place campus genuinely bites. Locked decision 2 keeps the
+// frontend campus-unaware, so these functions never send a campus_id: a class
+// created here has campus_id NULL, and RLS batch 3 settled that an unassigned
+// class is visible and manageable by every principal. Assigning a class to a
+// campus is a feature that arrives with campus awareness, not before it.
+//
+// timetable_slots gates INSERT/UPDATE/DELETE on can_manage_class — management
+// only. A TEACHER CANNOT EDIT A TIMETABLE, which closes the other half of open
+// decision 6.
+
+export interface ClassInput {
+  name: string
+  grade: string
+  section: string | null
+  room: string | null
+  capacity: number | null
+  academicYearId: string
+  classTeacherId: string | null
+}
+
+export async function createClass(schoolId: string, input: ClassInput): Promise<string> {
+  const { data, error } = await supabase
+    .from('classes')
+    .insert({
+      school_id: schoolId,
+      academic_year_id: input.academicYearId,
+      name: input.name,
+      grade: input.grade,
+      section: input.section,
+      room: input.room,
+      capacity: input.capacity,
+      class_teacher_id: input.classTeacherId,
+      // campus_id deliberately omitted. See the header.
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') throw new Error('A class with that name already exists for this academic year.')
+    throw error
+  }
+  return (data as { id: string }).id
+}
+
+export async function updateClass(schoolId: string, id: string, input: ClassInput): Promise<void> {
+  const { error } = await supabase
+    .from('classes')
+    .update({
+      academic_year_id: input.academicYearId,
+      name: input.name,
+      grade: input.grade,
+      section: input.section,
+      room: input.room,
+      capacity: input.capacity,
+      class_teacher_id: input.classTeacherId,
+    })
+    .eq('school_id', schoolId)
+    .eq('id', id)
+
+  if (error) {
+    if (error.code === '23505') throw new Error('A class with that name already exists for this academic year.')
+    throw error
+  }
+}
+
+export async function deleteClass(schoolId: string, id: string): Promise<void> {
+  const { error } = await supabase.from('classes').delete().eq('school_id', schoolId).eq('id', id)
+  if (error) {
+    if (error.code === '23503') {
+      throw new Error('This class still has records attached to it and cannot be removed.')
+    }
+    throw error
+  }
+}
+
+/** Assigns the homeroom teacher of a class. */
+export async function assignClassTeacher(schoolId: string, classId: string, teacherId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('classes')
+    .update({ class_teacher_id: teacherId })
+    .eq('school_id', schoolId)
+    .eq('id', classId)
+  if (error) throw error
+}
+
+export interface TimetableSlotInput {
+  classId: string
+  subjectId: string | null
+  teacherId: string | null
+  dayOfWeek: number
+  period: number
+  startTime: string
+  endTime: string
+  room: string | null
+}
+
+/** Adds a timetable slot. Management only, per can_manage_class. */
+export async function createTimetableSlot(schoolId: string, input: TimetableSlotInput): Promise<void> {
+  const { error } = await supabase.from('timetable_slots').insert({
+    school_id: schoolId,
+    class_id: input.classId,
+    subject_id: input.subjectId,
+    teacher_id: input.teacherId,
+    day_of_week: input.dayOfWeek,
+    period: input.period,
+    start_time: input.startTime,
+    end_time: input.endTime,
+    room: input.room,
+  })
+  if (error) {
+    if (error.code === '23505') throw new Error('That class already has a slot in this period.')
+    throw error
+  }
+}
+
+export async function deleteTimetableSlot(schoolId: string, id: string): Promise<void> {
+  const { error } = await supabase.from('timetable_slots').delete().eq('school_id', schoolId).eq('id', id)
+  if (error) throw error
+}

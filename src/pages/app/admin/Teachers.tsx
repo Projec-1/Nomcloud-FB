@@ -1,57 +1,134 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, GraduationCap, Mail, Phone, UserPlus, X } from 'lucide-react'
-import { useData } from '@/context/DataContext'
-import { useToast } from '@/context/ToastContext'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { GraduationCap, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchInput from '@/components/ui/SearchInput'
+import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Input from '@/components/ui/Input'
-import Select from '@/components/ui/Select'
-import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
-import type { Teacher } from '@/types'
-import { createInvitation, listLiveInvitations, revokeInvitation, type InvitationRow } from '@/services/invitationService'
-import type { MembershipRole } from '@/types/auth'
-import type { FieldErrors } from '@/utils/validators'
-import { isValidEmail, minLength } from '@/utils/validators'
+import Avatar from '@/components/ui/Avatar'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { deriveResourceState } from '@/lib/resourceState'
+import { useRecordableClasses } from '@/hooks/useRecordableClasses'
+import {
+  createTeacher,
+  deleteTeacher,
+  fetchSchoolTeachers,
+  updateTeacher,
+  type TeacherRow,
+} from '@/services/teacherService'
+import { fetchSubjects, type SubjectRow } from '@/services/academicService'
+import { minLength, type FieldErrors } from '@/utils/validators'
+import { formatDate } from '@/utils/format'
 
-const emptyForm = { name: '', email: '', phone: '', subject: '' }
-const emptyInvitation = { email: '', role: 'teacher' as MembershipRole }
+// ---------------------------------------------------------------------------
+// Phase 8 batch 8. Real teachers.
+//
+// A TEACHERS ROW IS NOT AN ACCOUNT. Creating one here records a member of
+// staff; it does not let them sign in. The link between a teachers row and a
+// user is memberships.teacher_id, written by accept_invitation when they redeem
+// an invitation. The form says so, because the prototype's silence on this is
+// how an administrator ends up wondering why a new teacher cannot log in.
+//
+// "Classes taught" is derived here rather than stored. The prototype carried a
+// classIds array on the teacher; the real relation runs the other way, through
+// classes.class_teacher_id and class_subjects.teacher_id — the same OR that
+// defines "assigned to teach" everywhere else in this codebase.
+// ---------------------------------------------------------------------------
+
+const emptyForm = {
+  fullName: '',
+  email: '',
+  phone: '',
+  staffNo: '',
+  primarySubjectId: '',
+  status: 'active',
+}
 
 export default function AdminTeachers() {
-  const { teachers, classes, addTeacher, updateTeacher, deleteTeacher } = useData()
-  const { profile } = useAuth()
+  const { school } = useAuth()
   const { showToast } = useToast()
+  const { classes } = useRecordableClasses()
+
+  const schoolId = school?.id ?? null
+
+  const [teachers, setTeachers] = useState<TeacherRow[]>([])
+  const [subjects, setSubjects] = useState<SubjectRow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+  const [nonce, setNonce] = useState(0)
 
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<Teacher | null>(null)
+  const [editing, setEditing] = useState<TeacherRow | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [deleteTarget, setDeleteTarget] = useState<Teacher | null>(null)
-  const [invitationForm, setInvitationForm] = useState(emptyInvitation)
-  const [invitations, setInvitations] = useState<InvitationRow[]>([])
-  const [invitationError, setInvitationError] = useState('')
-  const [invitationLoading, setInvitationLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<TeacherRow | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const filtered = useMemo(
-    () =>
-      teachers.filter(
-        (t) => t.name.toLowerCase().includes(search.toLowerCase()) || t.subject.toLowerCase().includes(search.toLowerCase()),
-      ),
-    [teachers, search],
-  )
+  const reload = useCallback(() => setNonce((n) => n + 1), [])
 
   useEffect(() => {
-    if (!profile?.school_id) return
-    void listLiveInvitations(profile.school_id)
-      .then(setInvitations)
-      .catch(() => setInvitationError('Unable to load live invitations.'))
-  }, [profile?.school_id])
+    let cancelled = false
+    if (!schoolId) {
+      setIsLoading(false)
+      return
+    }
+    setIsLoading(true)
+    setError(null)
+    Promise.all([fetchSchoolTeachers(schoolId), fetchSubjects(schoolId)])
+      .then(([rows, subs]) => {
+        if (cancelled) return
+        setTeachers(rows)
+        setSubjects(subs)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, nonce])
+
+  const state = deriveResourceState<TeacherRow[]>({
+    isLoading,
+    canAccess: schoolId !== null,
+    error,
+    data: teachers,
+    retry: reload,
+  })
+
+  const subjectNames = useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects])
+
+  // The same OR that defines "assigned to teach" everywhere else: homeroom on
+  // classes, or a subject link on class_subjects. Both arms are already carried
+  // by the class summaries.
+  const classesByTeacher = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const c of classes) {
+      if (c.teacherId) map.set(c.teacherId, [...(map.get(c.teacherId) ?? []), c.name])
+    }
+    return map
+  }, [classes])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return teachers.filter(
+      (t) =>
+        q === '' ||
+        t.full_name.toLowerCase().includes(q) ||
+        (t.staff_no ?? '').toLowerCase().includes(q) ||
+        (t.email ?? '').toLowerCase().includes(q),
+    )
+  }, [teachers, search])
 
   const openAdd = () => {
     setEditing(null)
@@ -60,77 +137,77 @@ export default function AdminTeachers() {
     setModalOpen(true)
   }
 
-  const openEdit = (teacher: Teacher) => {
-    setEditing(teacher)
-    setForm({ name: teacher.name, email: teacher.email, phone: teacher.phone, subject: teacher.subject })
+  const openEdit = (t: TeacherRow) => {
+    setEditing(t)
+    setForm({
+      fullName: t.full_name,
+      email: t.email ?? '',
+      phone: t.phone ?? '',
+      staffNo: t.staff_no ?? '',
+      primarySubjectId: t.primary_subject_id ?? '',
+      status: t.status,
+    })
     setErrors({})
     setModalOpen(true)
   }
 
   const validate = () => {
     const next: FieldErrors = {}
-    if (!minLength(form.name, 2)) next.name = 'Enter the teacher\'s full name.'
-    if (!isValidEmail(form.email)) next.email = 'Enter a valid email address.'
-    if (!minLength(form.subject, 2)) next.subject = 'Enter the subject taught.'
+    if (!minLength(form.fullName, 2)) next.fullName = "Enter the teacher's full name."
     setErrors(next)
     return Object.keys(next).length === 0
   }
 
-  const handleSubmit = () => {
-    if (!validate()) return
-    if (editing) {
-      updateTeacher(editing.id, form)
-      showToast({ type: 'success', title: 'Teacher updated', description: `${form.name}'s profile was saved.` })
-    } else {
-      addTeacher(form)
-      showToast({ type: 'success', title: 'Teacher added', description: `${form.name} was added to the staff directory.` })
+  const handleSubmit = async () => {
+    if (!validate() || !schoolId) return
+    setIsSaving(true)
+    const input = {
+      fullName: form.fullName,
+      email: form.email || null,
+      phone: form.phone || null,
+      staffNo: form.staffNo || null,
+      primarySubjectId: form.primarySubjectId || null,
+      status: form.status,
     }
-    setModalOpen(false)
-  }
-
-  const confirmDelete = () => {
-    if (!deleteTarget) return
-    deleteTeacher(deleteTarget.id)
-    showToast({ type: 'success', title: 'Teacher removed' })
-    setDeleteTarget(null)
-  }
-
-  const handleCreateInvitation = async () => {
-    if (!profile?.school_id) {
-      setInvitationError('Your account is not assigned to a school.')
-      return
-    }
-    if (!isValidEmail(invitationForm.email)) {
-      setInvitationError('Enter a valid email address.')
-      return
-    }
-    setInvitationError('')
-    setInvitationLoading(true)
     try {
-      const invitation = await createInvitation({
-        schoolId: profile.school_id,
-        email: invitationForm.email,
-        role: invitationForm.role,
-        invitedBy: profile.id,
+      if (editing) {
+        await updateTeacher(schoolId, editing.id, input)
+        showToast({ type: 'success', title: 'Teacher updated' })
+      } else {
+        await createTeacher(schoolId, input)
+        showToast({
+          type: 'success',
+          title: 'Teacher added',
+          description: 'Invite them separately so they can sign in.',
+        })
+      }
+      setModalOpen(false)
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: editing ? 'Teacher not updated' : 'Teacher not added',
+        description: err instanceof Error ? err.message : String(err),
       })
-      setInvitations((current) => [invitation, ...current])
-      setInvitationForm(emptyInvitation)
-      showToast({ type: 'success', title: 'Invitation created', description: 'Email delivery is pending configuration.' })
-    } catch (error) {
-      setInvitationError(error instanceof Error ? error.message : 'Unable to create invitation.')
     } finally {
-      setInvitationLoading(false)
+      setIsSaving(false)
     }
   }
 
-  const handleRevokeInvitation = async (invitation: InvitationRow) => {
-    if (!profile?.school_id) return
+  const confirmDelete = async () => {
+    if (!deleteTarget || !schoolId) return
     try {
-      await revokeInvitation(invitation.id, profile.school_id)
-      setInvitations((current) => current.filter((item) => item.id !== invitation.id))
-      showToast({ type: 'success', title: 'Invitation revoked' })
-    } catch {
-      setInvitationError('Unable to revoke invitation.')
+      await deleteTeacher(schoolId, deleteTarget.id)
+      showToast({ type: 'success', title: 'Teacher removed' })
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Teacher not removed',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setDeleteTarget(null)
     }
   }
 
@@ -138,7 +215,7 @@ export default function AdminTeachers() {
     <div>
       <PageHeader
         title="Teachers"
-        description={`${teachers.length} teaching staff members`}
+        description="Teaching staff at your school."
         actions={
           <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
             Add Teacher
@@ -146,114 +223,83 @@ export default function AdminTeachers() {
         }
       />
 
-      <section className="card mb-6 p-6">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
-            <UserPlus className="h-5 w-5" />
-          </span>
-          <div>
-            <h2 className="font-semibold text-ink dark:text-white">Invite a member</h2>
-            <p className="mt-1 text-sm text-graphite">Creates a seven-day, single-use invitation. Email delivery is not configured yet.</p>
-          </div>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_12rem_auto] sm:items-end">
-          <Input
-            label="Email address"
-            type="email"
-            value={invitationForm.email}
-            onChange={(e) => setInvitationForm({ ...invitationForm, email: e.target.value })}
-            placeholder="person@school.example"
-          />
-          <Select
-            label="Role"
-            value={invitationForm.role}
-            onChange={(e) => setInvitationForm({ ...invitationForm, role: e.target.value as MembershipRole })}
-          >
-            <option value="teacher">Teacher</option>
-            <option value="parent">Parent</option>
-            <option value="admin">School admin</option>
-          </Select>
-          <Button onClick={handleCreateInvitation} loading={invitationLoading} icon={<UserPlus className="h-4 w-4" />}>
-            Create invite
-          </Button>
-        </div>
-        {invitationError && <p className="mt-3 text-sm font-medium text-red-500">{invitationError}</p>}
-        {invitations.length > 0 && (
-          <div className="mt-6 space-y-2 border-t border-ink/5 pt-5 dark:border-white/10">
-            <p className="text-xs font-semibold uppercase tracking-wide text-graphite">Live invitations</p>
-            {invitations.map((invitation) => (
-              <div key={invitation.id} className="flex items-center justify-between gap-3 rounded-xl bg-ink/5 px-4 py-3 dark:bg-white/5">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ink dark:text-white">{invitation.email}</p>
-                  <p className="text-xs text-graphite">
-                    {invitation.role} · expires {new Date(invitation.expires_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleRevokeInvitation(invitation)}
-                  className="flex-shrink-0 rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
-                  aria-label={`Revoke invitation for ${invitation.email}`}
-                >
-                  <X className="h-4 w-4" />
-                </button>
+      <ResourceGate
+        state={state}
+        empty={{ icon: GraduationCap, title: 'No teachers yet', description: 'Add your first member of teaching staff.' }}
+        deniedHint="Staff records are available to school management."
+      >
+        {() => (
+          <>
+            <div className="mb-5">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search by name, staff number or email…" className="sm:w-80" />
+            </div>
+
+            {filtered.length === 0 ? (
+              <EmptyState icon={GraduationCap} title="No teachers found" description="Try a different search." />
+            ) : (
+              <div className="card overflow-x-auto">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead>
+                    <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
+                      <th className="px-5 py-3.5 font-medium">Teacher</th>
+                      <th className="px-5 py-3.5 font-medium">Staff No.</th>
+                      <th className="px-5 py-3.5 font-medium">Primary Subject</th>
+                      <th className="px-5 py-3.5 font-medium">Homeroom Of</th>
+                      <th className="px-5 py-3.5 font-medium">Status</th>
+                      <th className="px-5 py-3.5 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((t) => (
+                      <tr key={t.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={t.full_name} size="sm" />
+                            <div>
+                              <p className="font-medium text-ink dark:text-white">{t.full_name}</p>
+                              <p className="text-xs text-graphite">{t.email ?? t.phone ?? '—'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-graphite">{t.staff_no ?? '—'}</td>
+                        <td className="px-5 py-3.5 text-graphite">
+                          {t.primary_subject_id ? (subjectNames.get(t.primary_subject_id) ?? '—') : '—'}
+                        </td>
+                        <td className="px-5 py-3.5 text-graphite">
+                          {(classesByTeacher.get(t.id) ?? []).join(', ') || '—'}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Badge tone={t.status === 'active' ? 'success' : 'neutral'}>{t.status}</Badge>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openEdit(t)}
+                              aria-label={`Edit ${t.full_name}`}
+                              className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(t)}
+                              aria-label={`Remove ${t.full_name}`}
+                              className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
-      </section>
-
-      <SearchInput value={search} onChange={setSearch} placeholder="Search by name or subject…" className="mb-6 sm:w-80" />
-
-      {filtered.length === 0 ? (
-        <EmptyState icon={GraduationCap} title="No teachers found" description="Try a different search, or add a new teacher." />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((t) => {
-            const teacherClasses = classes.filter((c) => t.classIds.includes(c.id))
-            return (
-              <div key={t.id} className="card p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar name={t.name} color={t.avatarColor} />
-                    <div>
-                      <p className="font-medium text-ink dark:text-white">{t.name}</p>
-                      <p className="text-xs text-graphite">{t.subject}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => openEdit(t)} className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => setDeleteTarget(t)} className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-1.5 text-xs text-graphite">
-                  <p className="flex items-center gap-2">
-                    <Mail className="h-3.5 w-3.5" /> {t.email}
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <Phone className="h-3.5 w-3.5" /> {t.phone}
-                  </p>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {teacherClasses.length === 0 ? (
-                    <Badge tone="neutral">No classes assigned</Badge>
-                  ) : (
-                    teacherClasses.map((c) => (
-                      <Badge key={c.id} tone="info">
-                        {c.name}
-                      </Badge>
-                    ))
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      </ResourceGate>
 
       <Modal
         open={modalOpen}
@@ -264,42 +310,49 @@ export default function AdminTeachers() {
             <Button variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>{editing ? 'Save Changes' : 'Add Teacher'}</Button>
+            <Button onClick={handleSubmit} disabled={isSaving}>
+              {isSaving ? 'Saving…' : editing ? 'Save Changes' : 'Add Teacher'}
+            </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Input label="Full name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} />
-          <Input
-            label="Email address"
-            type="email"
-            required
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            error={errors.email}
-          />
+          <Input label="Full name" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={errors.fullName} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <Input
-              label="Subject taught"
-              required
-              value={form.subject}
-              onChange={(e) => setForm({ ...form, subject: e.target.value })}
-              error={errors.subject}
-            />
+            <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </div>
-          {editing && (
-            <p className="rounded-xl bg-ink/5 px-4 py-3 text-xs text-graphite dark:bg-white/5">
-              Manage this teacher's class assignments from the Classes page.
-            </p>
-          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Staff number" value={form.staffNo} onChange={(e) => setForm({ ...form, staffNo: e.target.value })} />
+            <Select
+              label="Primary subject"
+              value={form.primarySubjectId}
+              onChange={(e) => setForm({ ...form, primarySubjectId: e.target.value })}
+            >
+              <option value="">None</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Select label="Status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </Select>
+          {editing && <p className="text-xs text-graphite">Joined {formatDate(editing.joined_date)}</p>}
+          <p className="text-xs text-graphite">
+            This records a member of staff. It does not create a login. Send them an invitation so they can sign in and
+            see their classes.
+          </p>
         </div>
       </Modal>
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title={`Remove ${deleteTarget?.name}?`}
-        description="Their assigned classes will become unassigned. This action cannot be undone."
+        title={`Remove ${deleteTarget?.full_name}?`}
+        description="A teacher still assigned to a class cannot be removed until they are unassigned."
         confirmLabel="Remove Teacher"
         danger
         onConfirm={confirmDelete}

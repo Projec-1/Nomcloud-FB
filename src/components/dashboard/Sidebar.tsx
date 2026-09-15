@@ -1,12 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { X, LogOut, RotateCcw } from 'lucide-react'
+import { X, LogOut } from 'lucide-react'
 import SchoolBrandLogo from '@/components/dashboard/SchoolBrandLogo'
 import { navByRole, roleLabelKey } from '@/components/dashboard/navConfig'
 import type { Role } from '@/types'
 import { cn } from '@/utils/cn'
 import { useAuth } from '@/context/AuthContext'
-import { useData } from '@/context/DataContext'
-import { useToast } from '@/context/ToastContext'
 import { useLanguage } from '@/context/LanguageContext'
 
 interface SidebarProps {
@@ -18,8 +16,6 @@ interface SidebarProps {
 export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
   const items = navByRole[role]
   const { logout } = useAuth()
-  const { resetDemoData } = useData()
-  const { showToast } = useToast()
   const { t } = useLanguage()
 
   const content = (
@@ -53,15 +49,12 @@ export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
         ))}
       </nav>
       <div className="space-y-1 border-t border-ink/5 px-3 py-4 dark:border-white/10">
-        <button
-          onClick={() => {
-            resetDemoData()
-            showToast({ type: 'info', title: 'Demo data reset', description: 'All records have been restored to their defaults.' })
-          }}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
-        >
-          <RotateCcw className="h-4 w-4" /> {t('dash.topbar.resetDemo')}
-        </button>
+        {/* Phase 8 batch 8. "Reset Demo Data" is removed. It restored the
+            client-side prototype store (removed in Phase 8 batch 8), which no longer
+            exists. It was never connected to the demo SCHOOL (schools.is_demo,
+            batch 0), which is real data in the real database and is untouched:
+            resetting that tenant would be a server-side operation, recorded as
+            open question H.11. */}
         <button
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-red-500/10"

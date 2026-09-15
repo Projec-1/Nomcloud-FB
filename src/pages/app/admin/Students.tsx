@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, Users } from 'lucide-react'
-import { useData } from '@/context/DataContext'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Users, Plus, Pencil, Trash2 } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
 import SearchInput from '@/components/ui/SearchInput'
@@ -9,45 +9,125 @@ import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Input from '@/components/ui/Input'
-import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
-import type { Student } from '@/types'
-import type { FieldErrors } from '@/utils/validators'
-import { minLength } from '@/utils/validators'
-import { formatDate } from '@/utils/format'
+import Avatar from '@/components/ui/Avatar'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { deriveResourceState } from '@/lib/resourceState'
+import { useRecordableClasses } from '@/hooks/useRecordableClasses'
+import { useAcademicStructure } from '@/hooks/useAcademicStructure'
+import {
+  createStudent,
+  deleteStudent,
+  endEnrolment,
+  enrolStudent,
+  fetchStudentDirectory,
+  updateStudent,
+  type DirectoryStudent,
+} from '@/services/studentService'
+import { createGuardian, fetchSchoolGuardians, linkGuardianToStudent, type GuardianRow } from '@/services/guardianService'
+import { minLength, type FieldErrors } from '@/utils/validators'
+import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 
-const MAX_CLASS_SIZE = 50
+// ---------------------------------------------------------------------------
+// Phase 8 batch 8. Real students, enrolments and guardian links.
+//
+// A STUDENT HAS NO CLASS COLUMN. The prototype stored `classId` on the student
+// and filtered on it. SCHEMA_DESIGN gives students no such column because
+// enrolment is a time-scoped relation: changing a student's class writes
+// class_enrollments, closing the open row with `left_on` and opening a new one.
+// That is what the form does, and it is why the class field needs an academic
+// year to write against.
+//
+// A STUDENT HAS MANY GUARDIANS. The prototype carried a single `parentId`.
+// student_guardians is many-to-many by design, so the table shows every linked
+// guardian and the form adds one rather than replacing the set.
+//
+// THE CLASS-SIZE CAP IS GONE. The prototype enforced a 50-student limit in the
+// browser. classes.capacity is a real nullable column and is shown, but nothing
+// in the database enforces it, so pretending otherwise in the client would be a
+// rule that only exists where it cannot be relied on.
+// ---------------------------------------------------------------------------
 
 const emptyForm = {
   name: '',
   admissionNo: '',
   classId: '',
-  gender: 'Male' as 'Male' | 'Female',
+  gender: 'Male',
   dateOfBirth: '',
-  parentId: '',
-  newParentName: '',
-  newParentEmail: '',
-  newParentPhone: '',
+  status: 'active',
+  guardianId: '',
+  newGuardianName: '',
+  newGuardianEmail: '',
+  newGuardianPhone: '',
 }
 
 export default function AdminStudents() {
-  const { students, classes, parents, addStudent, updateStudent, deleteStudent } = useData()
+  const { school } = useAuth()
   const { showToast } = useToast()
+  const { classes } = useRecordableClasses()
+  const { state: academicState } = useAcademicStructure()
+
+  const schoolId = school?.id ?? null
+  const timeZone = school?.timezone ?? DEFAULT_TIME_ZONE
+  const activeYearId = academicState.status === 'ready' ? (academicState.data.activeYear?.id ?? '') : ''
+
+  const [students, setStudents] = useState<DirectoryStudent[]>([])
+  const [guardians, setGuardians] = useState<GuardianRow[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+  const [nonce, setNonce] = useState(0)
 
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<Student | null>(null)
+  const [editing, setEditing] = useState<DirectoryStudent | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [parentMode, setParentMode] = useState<'existing' | 'new'>('existing')
-  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null)
+  const [guardianMode, setGuardianMode] = useState<'existing' | 'new' | 'none'>('none')
+  const [deleteTarget, setDeleteTarget] = useState<DirectoryStudent | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const reload = useCallback(() => setNonce((n) => n + 1), [])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!schoolId) {
+      setIsLoading(false)
+      return
+    }
+    setIsLoading(true)
+    setError(null)
+    Promise.all([fetchStudentDirectory(schoolId), fetchSchoolGuardians(schoolId)])
+      .then(([rows, gs]) => {
+        if (cancelled) return
+        setStudents(rows)
+        setGuardians(gs)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, nonce])
+
+  const state = deriveResourceState<DirectoryStudent[]>({
+    isLoading,
+    canAccess: schoolId !== null,
+    error,
+    data: students,
+    retry: reload,
+  })
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
     return students.filter((s) => {
       const matchesSearch =
-        s.name.toLowerCase().includes(search.toLowerCase()) || s.admissionNo.toLowerCase().includes(search.toLowerCase())
+        q === '' || s.name.toLowerCase().includes(q) || s.admissionNo.toLowerCase().includes(q)
       const matchesClass = classFilter === 'all' || s.classId === classFilter
       return matchesSearch && matchesClass
     })
@@ -56,90 +136,123 @@ export default function AdminStudents() {
   const openAdd = () => {
     setEditing(null)
     setForm({ ...emptyForm, classId: classes[0]?.id ?? '' })
-    setParentMode('existing')
+    setGuardianMode('none')
     setErrors({})
     setModalOpen(true)
   }
 
-  const openEdit = (student: Student) => {
+  const openEdit = (student: DirectoryStudent) => {
     setEditing(student)
     setForm({
       name: student.name,
       admissionNo: student.admissionNo,
-      classId: student.classId,
-      gender: student.gender,
-      dateOfBirth: student.dateOfBirth,
-      parentId: student.parentId,
-      newParentName: '',
-      newParentEmail: '',
-      newParentPhone: '',
+      classId: student.classId ?? '',
+      gender: student.gender ?? 'Male',
+      dateOfBirth: student.dateOfBirth ?? '',
+      status: student.status,
+      guardianId: '',
+      newGuardianName: '',
+      newGuardianEmail: '',
+      newGuardianPhone: '',
     })
-    setParentMode('existing')
+    setGuardianMode('none')
     setErrors({})
     setModalOpen(true)
   }
 
   const validate = () => {
     const next: FieldErrors = {}
-    if (!minLength(form.name, 2)) next.name = 'Enter the student\'s full name.'
+    if (!minLength(form.name, 2)) next.name = "Enter the student's full name."
     if (!minLength(form.admissionNo, 2)) next.admissionNo = 'Enter an admission number.'
-    if (!form.classId) next.classId = 'Select a class.'
-    else {
-      const targetClass = classes.find((c) => c.id === form.classId)
-      const movingIntoClass = !editing || editing.classId !== form.classId
-      if (targetClass && movingIntoClass && targetClass.studentIds.length >= MAX_CLASS_SIZE) {
-        next.classId = `${targetClass.name} is full — Nom Cloud limits classes to ${MAX_CLASS_SIZE} students.`
-      }
+    if (form.classId && !activeYearId) {
+      next.classId = 'Set an active academic year before enrolling a student in a class.'
     }
-    if (!form.dateOfBirth) next.dateOfBirth = 'Select a date of birth.'
-    if (parentMode === 'existing' && !form.parentId) next.parentId = 'Select a parent/guardian.'
-    if (parentMode === 'new' && !minLength(form.newParentName, 2)) next.newParentName = 'Enter the parent\'s name.'
+    if (guardianMode === 'existing' && !form.guardianId) next.guardianId = 'Select a guardian.'
+    if (guardianMode === 'new') {
+      if (!minLength(form.newGuardianName, 2)) next.newGuardianName = "Enter the guardian's name."
+      if (!minLength(form.newGuardianPhone, 6)) next.newGuardianPhone = 'Enter a phone number.'
+    }
     setErrors(next)
     return Object.keys(next).length === 0
   }
 
-  const handleSubmit = () => {
-    if (!validate()) return
-    if (editing) {
-      updateStudent(editing.id, {
-        name: form.name,
-        admissionNo: form.admissionNo,
-        classId: form.classId,
-        gender: form.gender,
-        dateOfBirth: form.dateOfBirth,
-        parentId: parentMode === 'existing' ? form.parentId : editing.parentId,
-      })
-      showToast({ type: 'success', title: 'Student updated', description: `${form.name}'s details were saved.` })
-    } else {
-      addStudent({
-        name: form.name,
-        admissionNo: form.admissionNo,
-        classId: form.classId,
-        gender: form.gender,
-        dateOfBirth: form.dateOfBirth,
-        parentId: parentMode === 'existing' ? form.parentId : '',
-        newParent:
-          parentMode === 'new'
-            ? { name: form.newParentName, email: form.newParentEmail, phone: form.newParentPhone }
-            : undefined,
-      })
-      showToast({ type: 'success', title: 'Student enrolled', description: `${form.name} was added to the school.` })
+  const handleSubmit = async () => {
+    if (!validate() || !schoolId) return
+    setIsSaving(true)
+
+    const input = {
+      fullName: form.name,
+      admissionNo: form.admissionNo,
+      gender: form.gender || null,
+      dateOfBirth: form.dateOfBirth || null,
+      status: form.status,
     }
-    setModalOpen(false)
+
+    try {
+      let studentId = editing?.id ?? ''
+      if (editing) {
+        await updateStudent(schoolId, editing.id, input)
+        // A class change is an enrolment change, not a column edit.
+        if (form.classId !== (editing.classId ?? '')) {
+          await endEnrolment(schoolId, editing.id, todayInTimeZone(timeZone))
+          if (form.classId && activeYearId) {
+            await enrolStudent(schoolId, editing.id, form.classId, activeYearId)
+          }
+        }
+      } else {
+        studentId = await createStudent(schoolId, input)
+        if (form.classId && activeYearId) {
+          await enrolStudent(schoolId, studentId, form.classId, activeYearId)
+        }
+      }
+
+      if (guardianMode === 'existing' && form.guardianId) {
+        await linkGuardianToStudent(schoolId, studentId, form.guardianId)
+      } else if (guardianMode === 'new') {
+        const guardianId = await createGuardian(schoolId, {
+          fullName: form.newGuardianName,
+          email: form.newGuardianEmail || null,
+          phone: form.newGuardianPhone,
+        })
+        await linkGuardianToStudent(schoolId, studentId, guardianId, true)
+      }
+
+      showToast({ type: 'success', title: editing ? 'Student updated' : 'Student added' })
+      setModalOpen(false)
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: editing ? 'Student not updated' : 'Student not added',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const confirmDelete = () => {
-    if (!deleteTarget) return
-    deleteStudent(deleteTarget.id)
-    showToast({ type: 'success', title: 'Student removed', description: `${deleteTarget.name} was removed from Nom Cloud.` })
-    setDeleteTarget(null)
+  const confirmDelete = async () => {
+    if (!deleteTarget || !schoolId) return
+    try {
+      await deleteStudent(schoolId, deleteTarget.id)
+      showToast({ type: 'success', title: 'Student removed' })
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: 'Student not removed',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setDeleteTarget(null)
+    }
   }
 
   return (
     <div>
       <PageHeader
         title="Students"
-        description={`${students.length} students enrolled across ${classes.length} classes`}
+        description="Every student enrolled at your school."
         actions={
           <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
             Add Student
@@ -147,94 +260,99 @@ export default function AdminStudents() {
         }
       />
 
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by name or admission no…" className="sm:w-80" />
-        <Select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} className="sm:w-56">
-          <option value="all">All Classes</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <ResourceGate
+        state={state}
+        empty={{ icon: Users, title: 'No students yet', description: 'Add your first student to get started.' }}
+        deniedHint="Student records are available to school staff."
+      >
+        {() => (
+          <>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search by name or admission number…" className="sm:w-80" />
+              <Select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} className="sm:w-52">
+                <option value="all">All Classes</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No students found"
-          description="Try adjusting your search or filters, or add a new student to get started."
-          action={
-            <Button onClick={openAdd} size="sm" icon={<Plus className="h-4 w-4" />}>
-              Add Student
-            </Button>
-          }
-        />
-      ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
-                <th className="px-5 py-3.5 font-medium">Student</th>
-                <th className="px-5 py-3.5 font-medium">Admission No.</th>
-                <th className="px-5 py-3.5 font-medium">Class</th>
-                <th className="px-5 py-3.5 font-medium">Guardian</th>
-                <th className="px-5 py-3.5 font-medium">Status</th>
-                <th className="px-5 py-3.5 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => {
-                const cls = classes.find((c) => c.id === s.classId)
-                const parent = parents.find((p) => p.id === s.parentId)
-                return (
-                  <tr key={s.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={s.name} color={s.avatarColor} size="sm" />
-                        <div>
-                          <p className="font-medium text-ink dark:text-white">{s.name}</p>
-                          <p className="text-xs text-graphite">
-                            {s.gender} · {formatDate(s.dateOfBirth)}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-graphite">{s.admissionNo}</td>
-                    <td className="px-5 py-3.5 text-graphite">{cls?.name ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-graphite">{parent?.name ?? '—'}</td>
-                    <td className="px-5 py-3.5">
-                      <Badge tone={s.status === 'active' ? 'success' : 'neutral'}>{s.status}</Badge>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button onClick={() => openEdit(s)} className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white">
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => setDeleteTarget(s)} className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+            {filtered.length === 0 ? (
+              <EmptyState icon={Users} title="No students found" description="Try adjusting your search or filters." />
+            ) : (
+              <div className="card overflow-x-auto">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead>
+                    <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
+                      <th className="px-5 py-3.5 font-medium">Student</th>
+                      <th className="px-5 py-3.5 font-medium">Admission No.</th>
+                      <th className="px-5 py-3.5 font-medium">Class</th>
+                      <th className="px-5 py-3.5 font-medium">Guardians</th>
+                      <th className="px-5 py-3.5 font-medium">Status</th>
+                      <th className="px-5 py-3.5 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((s) => (
+                      <tr key={s.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={s.name} color={s.avatarColor} size="sm" />
+                            <p className="font-medium text-ink dark:text-white">{s.name}</p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-graphite">{s.admissionNo}</td>
+                        <td className="px-5 py-3.5 text-graphite">{s.className ?? '—'}</td>
+                        <td className="px-5 py-3.5 text-graphite">
+                          {s.guardians.length === 0 ? '—' : s.guardians.map((g) => g.name).join(', ')}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Badge tone={s.status === 'active' ? 'success' : 'neutral'}>{s.status}</Badge>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openEdit(s)}
+                              aria-label={`Edit ${s.name}`}
+                              className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(s)}
+                              aria-label={`Remove ${s.name}`}
+                              className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </ResourceGate>
 
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editing ? 'Edit Student' : 'Add Student'}
-        description="Student records sync instantly across teacher and parent views."
         footer={
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>{editing ? 'Save Changes' : 'Add Student'}</Button>
+            <Button onClick={handleSubmit} disabled={isSaving}>
+              {isSaving ? 'Saving…' : editing ? 'Save Changes' : 'Add Student'}
+            </Button>
           </>
         }
       >
@@ -250,73 +368,91 @@ export default function AdminStudents() {
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Class" required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} error={errors.classId}>
+            <Select label="Class" value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} error={errors.classId}>
+              <option value="">Not enrolled</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
             </Select>
-            <Select label="Gender" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value as 'Male' | 'Female' })}>
-              <option>Male</option>
-              <option>Female</option>
+            <Select label="Status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="graduated">Graduated</option>
             </Select>
           </div>
-          <Input
-            label="Date of birth"
-            type="date"
-            required
-            value={form.dateOfBirth}
-            onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
-            error={errors.dateOfBirth}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="Gender" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </Select>
+            <Input
+              label="Date of birth"
+              type="date"
+              value={form.dateOfBirth}
+              onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+            />
+          </div>
 
           <div>
-            <p className="label mb-2">Parent / Guardian</p>
+            <p className="label mb-2">Link a guardian</p>
             <div className="mb-3 inline-flex rounded-full bg-ink/5 p-1 dark:bg-white/10">
-              <button
-                type="button"
-                onClick={() => setParentMode('existing')}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${parentMode === 'existing' ? 'bg-white shadow-soft dark:bg-white/10' : 'text-graphite'}`}
-              >
-                Existing Parent
-              </button>
-              <button
-                type="button"
-                onClick={() => setParentMode('new')}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${parentMode === 'new' ? 'bg-white shadow-soft dark:bg-white/10' : 'text-graphite'}`}
-              >
-                New Parent
-              </button>
+              {(['none', 'existing', 'new'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setGuardianMode(mode)}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium ${
+                    guardianMode === mode ? 'bg-white shadow-soft dark:bg-white/10' : 'text-graphite'
+                  }`}
+                >
+                  {mode === 'none' ? 'Skip' : mode === 'existing' ? 'Existing' : 'New'}
+                </button>
+              ))}
             </div>
-            {parentMode === 'existing' ? (
-              <Select value={form.parentId} onChange={(e) => setForm({ ...form, parentId: e.target.value })} error={errors.parentId}>
-                <option value="">Select a parent…</option>
-                {parents.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.email}
+            {guardianMode === 'existing' && (
+              <Select value={form.guardianId} onChange={(e) => setForm({ ...form, guardianId: e.target.value })} error={errors.guardianId}>
+                <option value="">Select a guardian…</option>
+                {guardians.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.full_name} · {g.phone}
                   </option>
                 ))}
               </Select>
-            ) : (
+            )}
+            {guardianMode === 'new' && (
               <div className="space-y-3">
                 <Input
-                  placeholder="Parent full name"
-                  value={form.newParentName}
-                  onChange={(e) => setForm({ ...form, newParentName: e.target.value })}
-                  error={errors.newParentName}
+                  placeholder="Guardian full name"
+                  value={form.newGuardianName}
+                  onChange={(e) => setForm({ ...form, newGuardianName: e.target.value })}
+                  error={errors.newGuardianName}
                 />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Input
-                    placeholder="Parent email"
+                    placeholder="Guardian email (optional)"
                     type="email"
-                    value={form.newParentEmail}
-                    onChange={(e) => setForm({ ...form, newParentEmail: e.target.value })}
+                    value={form.newGuardianEmail}
+                    onChange={(e) => setForm({ ...form, newGuardianEmail: e.target.value })}
                   />
-                  <Input placeholder="Parent phone" value={form.newParentPhone} onChange={(e) => setForm({ ...form, newParentPhone: e.target.value })} />
+                  <Input
+                    placeholder="Guardian phone"
+                    value={form.newGuardianPhone}
+                    onChange={(e) => setForm({ ...form, newGuardianPhone: e.target.value })}
+                    error={errors.newGuardianPhone}
+                  />
                 </div>
               </div>
             )}
+            {editing && editing.guardians.length > 0 && (
+              <p className="mt-2 text-xs text-graphite">
+                Already linked: {editing.guardians.map((g) => g.name).join(', ')}
+              </p>
+            )}
+            <p className="mt-2 text-xs text-graphite">
+              Creating a guardian does not give them an account. Invite them separately so they can sign in.
+            </p>
           </div>
         </div>
       </Modal>
@@ -324,7 +460,7 @@ export default function AdminStudents() {
       <ConfirmDialog
         open={!!deleteTarget}
         title={`Remove ${deleteTarget?.name}?`}
-        description="This will permanently remove the student's record, including attendance and grade history."
+        description="This permanently removes the student's record, including attendance, grades and fees."
         confirmLabel="Remove Student"
         danger
         onConfirm={confirmDelete}

@@ -34,6 +34,7 @@ import AdminHomework from '@/pages/app/admin/Homework'
 import AdminExams from '@/pages/app/admin/Exams'
 import AdminFees from '@/pages/app/admin/Fees'
 import AdminAnnouncements from '@/pages/app/admin/Announcements'
+import AdminMessages from '@/pages/app/admin/Messages'
 import AdminReports from '@/pages/app/admin/Reports'
 import AdminAcademicYears from '@/pages/app/admin/AcademicYears'
 import AdminTutorials from '@/pages/app/admin/Tutorials'
@@ -128,6 +129,7 @@ export default function App() {
           <Route path="exams" element={<AdminExams />} />
           <Route path="fees" element={<AdminFees />} />
           <Route path="announcements" element={<AdminAnnouncements />} />
+          <Route path="messages" element={<AdminMessages />} />
           <Route path="reports" element={<AdminReports />} />
           <Route path="academic-years" element={<AdminAcademicYears />} />
           <Route path="tutorials" element={<AdminTutorials />} />

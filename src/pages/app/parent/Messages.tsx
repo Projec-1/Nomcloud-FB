@@ -1,36 +1,42 @@
-import { useAuth } from '@/context/AuthContext'
-import { useData } from '@/context/DataContext'
-import { useSelectedChild } from '@/hooks/useSelectedChild'
+import { MessageSquare } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
+import ResourceGate from '@/components/ui/ResourceGate'
 import MessagesPanel from '@/components/dashboard/MessagesPanel'
+import { useMessageThreads } from '@/hooks/useCommunications'
+
+// Phase 8 batch 7. Real threads, for whoever is an actual participant.
+//
+// The prototype filtered mock threads by `participantIds.includes(parentId)`,
+// comparing a guardians.id against what are really USER ids, and offered a
+// compose control listing the teachers of the child's class. Neither works
+// against the real tables: participation is by auth.uid(), and a guardian holds
+// no INSERT policy on message_threads or message_thread_participants.
+//
+// So a guardian replies here and does not start. That is decision 7 applied
+// consistently, not a parent-specific restriction.
 
 export default function ParentMessages() {
-  const { profile, activeMembership } = useAuth()
-  const { classes, teachers, messageThreads } = useData()
-  const { children } = useSelectedChild()
-
-  const parentId = activeMembership?.guardian_id ?? ''
-  const myClassIds = new Set(children.map((c) => c.classId))
-  const myThreads = messageThreads.filter((t) => t.participantIds.includes(parentId))
-
-  const recipients = teachers
-    .filter((t) => t.classIds.some((cid) => myClassIds.has(cid)))
-    .map((t) => {
-      const cls = classes.find((c) => myClassIds.has(c.id) && t.classIds.includes(c.id))
-      const child = children.find((c) => c.classId === cls?.id)
-      return { id: t.id, name: t.name, subLabel: cls ? `${cls.name} · ${t.subject}` : t.subject, studentId: child?.id }
-    })
+  const { state, schoolId, userId, canStartThread, reload } = useMessageThreads()
 
   return (
     <div>
-      <PageHeader title="Messages" description="Message your children's teachers directly." />
-      <MessagesPanel
-        currentId={parentId}
-        currentName={profile?.full_name ?? ''}
-        threads={myThreads}
-        recipients={recipients}
-        recipientLabel="Teacher"
-      />
+      <PageHeader title="Messages" description="Conversations with your school." />
+      <ResourceGate
+        state={state}
+        empty={{ icon: MessageSquare, title: 'No conversations yet' }}
+        deniedHint="Messages are available to signed-in school members."
+      >
+        {(threads) => (
+          <MessagesPanel
+            threads={threads}
+            schoolId={schoolId as string}
+            currentUserId={userId as string}
+            canStartThread={canStartThread}
+            emptyDescription="When the school starts a conversation with you, it will appear here."
+            onChanged={reload}
+          />
+        )}
+      </ResourceGate>
     </div>
   )
 }

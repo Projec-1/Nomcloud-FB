@@ -15,7 +15,7 @@ const STORAGE_KEY = 'nomcloud_selected_child'
 //
 // BEFORE (broken since Phase 4):
 //
-//   const { parents, students } = useData()
+//   const { parents, students } = <prototype store>
 //   const parent = parents.find((p) => p.id === activeMembership?.guardian_id)
 //   const children = students.filter((s) => parent?.studentIds.includes(s.id))
 //

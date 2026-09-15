@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Avatar colour palette.
 //
-// Moved verbatim out of `src/data/mockData.ts`. This is presentation reference
+// Moved verbatim out of the prototype seed file, since removed. This is presentation reference
 // data belonging to the design system — not seed data — so it stays in code
 // rather than moving to the database later.
 // ---------------------------------------------------------------------------

@@ -127,17 +127,3 @@ export function lastSchoolDays(
   }
   return days
 }
-
-/**
- * DEPRECATED, retired by Phase 8 batch 5.
- *
- * A module-level constant cannot know the signed-in user's school, because it is
- * evaluated at import time and identity resolves later. It is kept only so the
- * prototype seed in src/data/mockData.ts and the eight screens that still read
- * it keep compiling while their data remains mock. It now at least uses the
- * correct Somali defaults rather than a Monday-to-Friday, UTC-based week.
- *
- * Do not use it in new code. Call lastSchoolDays with the school's real
- * weekend_days and timezone.
- */
-export const schoolDays = lastSchoolDays(12)
