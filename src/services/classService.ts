@@ -187,11 +187,23 @@ export async function updateClass(schoolId: string, id: string, input: ClassInpu
   }
 }
 
+/**
+ * Removes a class.
+ *
+ * Refused by the database (23503) while the class has attendance, grades,
+ * homework, exams or enrolments, current or past: migration
+ * 20260915000005_class_records_restrict made those foreign keys RESTRICT so
+ * academic history cannot disappear with its class (SYSTEM_ISSUES_LIST S1).
+ * Its timetable, subject assignments and class announcements are configuration
+ * and are still removed with it.
+ */
 export async function deleteClass(schoolId: string, id: string): Promise<void> {
   const { error } = await supabase.from('classes').delete().eq('school_id', schoolId).eq('id', id)
   if (error) {
     if (error.code === '23503') {
-      throw new Error('This class still has records attached to it and cannot be removed.')
+      throw new Error(
+        'This class has attendance, grades, homework, exams or enrolled students, so it cannot be removed. Those records are kept as academic history.',
+      )
     }
     throw error
   }

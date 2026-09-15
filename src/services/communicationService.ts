@@ -511,6 +511,17 @@ export async function fetchGuardianUserIds(schoolId: string): Promise<Map<string
  * adding themselves could not then post into it, and could not even read it
  * back.
  *
+ * NOTHING IS READ BACK UNTIL THE CREATOR IS A PARTICIPANT (SYSTEM_ISSUES_LIST
+ * B1). Step 1 used to be `.insert(...).select('id')`, which PostgREST sends as
+ * INSERT ... RETURNING. Returned rows must pass the SELECT policy, and
+ * message_threads is readable only through is_thread_participant, so at that
+ * moment the creator could not see the row they had just written and every
+ * new conversation failed with 42501. The id is now generated here and sent
+ * with the insert (authenticated holds the column grant on `id`), and the
+ * insert asks for no representation, so no read happens before step 2. The
+ * policies are untouched: creating a thread still confers no sight of it until
+ * the creator is a participant.
+ *
  * If step 2 or 3 fails the thread is removed again, so a half-built
  * conversation is not left behind. That cleanup is best effort: message_threads
  * has no DELETE policy for a school role, so it will only succeed for a platform
@@ -527,20 +538,18 @@ export async function createThread(
   const creator = await currentUserId()
   if (!creator) throw new Error('You must be signed in to start a conversation.')
 
-  const { data, error } = await supabase
-    .from('message_threads')
-    .insert({
-      school_id: schoolId,
-      subject,
-      student_id: studentId ?? null,
-      created_by: creator,
-      last_message_at: new Date().toISOString(),
-    })
-    .select('id')
-    .single()
+  const threadId = crypto.randomUUID()
+
+  const { error } = await supabase.from('message_threads').insert({
+    id: threadId,
+    school_id: schoolId,
+    subject,
+    student_id: studentId ?? null,
+    created_by: creator,
+    last_message_at: new Date().toISOString(),
+  })
 
   if (error) throw error
-  const threadId = (data as { id: string }).id
 
   // The creator is always a participant. See above.
   const userIds = Array.from(new Set([creator, ...participantUserIds]))

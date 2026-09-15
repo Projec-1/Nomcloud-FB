@@ -455,7 +455,7 @@ export default function AdminClasses() {
       <ConfirmDialog
         open={!!deleteTarget}
         title={`Remove ${deleteTarget?.name}?`}
-        description="A class with records attached to it cannot be removed."
+        description="Only a class with no attendance, grades, homework, exams or enrolled students (past or present) can be removed. Its timetable, subject assignments and class announcements are removed with it."
         confirmLabel="Remove Class"
         danger
         onConfirm={confirmDelete}
