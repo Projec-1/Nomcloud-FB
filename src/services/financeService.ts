@@ -358,6 +358,13 @@ export async function updateFeeRecord(schoolId: string, feeRecordId: string, inp
     if (error.code === '23505') {
       throw new Error('This student already has a fee of that category for that term.')
     }
+    // fee_records_prevent_paid_student_change (migration 20260915000006,
+    // SYSTEM_ISSUES_LIST S6): a fee with any payment against it cannot be moved
+    // to another student, so money recorded for one child never silently
+    // becomes another's.
+    if (error.code === 'PT409') {
+      throw new Error('This fee already has payments recorded against it, so it cannot be moved to a different student.')
+    }
     throw error
   }
 }

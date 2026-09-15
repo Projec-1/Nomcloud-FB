@@ -194,6 +194,10 @@ export default function AdminFees() {
   const validateFee = () => {
     const next: FieldErrors = {}
     if (!feeForm.studentId) next.studentId = 'Select a student.'
+    // Mirrors fee_records_prevent_paid_student_change, which is the guarantee.
+    if (editing && editing.amountPaid > 0 && feeForm.studentId !== editing.studentId) {
+      next.studentId = 'This fee already has payments, so its student cannot be changed.'
+    }
     if (!feeForm.termId) next.termId = 'Select a term.'
     if (!minLength(feeForm.category, 2)) next.category = 'Select a category.'
     const amount = Number(feeForm.amount)
@@ -545,19 +549,29 @@ export default function AdminFees() {
         }
       >
         <div className="space-y-4">
-          <Select
-            label="Student"
-            required
-            value={feeForm.studentId}
-            onChange={(e) => setFeeForm({ ...feeForm, studentId: e.target.value })}
-            error={feeErrors.studentId}
-          >
-            {students.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} · {s.admissionNo}
-              </option>
-            ))}
-          </Select>
+          <div>
+            <Select
+              label="Student"
+              required
+              value={feeForm.studentId}
+              onChange={(e) => setFeeForm({ ...feeForm, studentId: e.target.value })}
+              error={feeErrors.studentId}
+              // A fee with money against it belongs to its student permanently
+              // (SYSTEM_ISSUES_LIST S6); the database refuses the change too.
+              disabled={!!editing && editing.amountPaid > 0}
+            >
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} · {s.admissionNo}
+                </option>
+              ))}
+            </Select>
+            {editing && editing.amountPaid > 0 && (
+              <p className="mt-1.5 text-xs text-graphite">
+                Payments have been recorded against this fee, so it stays with this student.
+              </p>
+            )}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Select
               label="Term"

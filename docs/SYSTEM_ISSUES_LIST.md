@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1 and S1 resolved 2026-09-15 (marked in place below; original evidence kept).
+**Fixes since:** B1, S1 and S6 resolved; S5 partly resolved (the "moved" half) — all 2026-09-15, marked in place below; original evidence kept.
 This list is the input for small fix batches, worked top to bottom.
 
 ## How this was tested
@@ -60,10 +60,10 @@ From the academic-year investigation. Where this sweep touched them again it is 
 | Severity | Count | Resolved |
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
-| SERIOUS | 11 | 1 (S1) |
+| SERIOUS | 11 | 2 (S1, S6) + S5 partly |
 | MINOR | 16 | 0 |
 | COSMETIC | 2 | 0 |
-| **Total new** | **30** | **2** |
+| **Total new** | **30** | **3** (+ S5 partly) |
 
 ---
 
@@ -181,7 +181,25 @@ From the academic-year investigation. Where this sweep touched them again it is 
   - Only suspending the **membership** removes access; the teacher form's status does not.
 - **Reach:** UI (Admin → Teachers → Status).
 
-### S5 · Finance · Provider-confirmed (WaafiPay) payments can be edited or moved after the fact — NEW
+### S5 · Finance · Provider-confirmed (WaafiPay) payments can be edited or moved after the fact — NEW — ◐ PARTLY RESOLVED 2026-09-15
+
+> **"Moved" (F10) — resolved.** Migration `20260915000006_payment_reassignment_guards` revokes
+> table-level UPDATE on `fee_payments` from `anon` and `authenticated` and re-grants UPDATE on
+> seven columns only (`amount, currency, method, reference, paid_on, recorded_by, external_ref`).
+> `fee_record_id` (and `id`, `school_id`) can no longer be changed by any client. This is the same
+> column-grant instrument that guards `amount_paid`.
+>
+> **Verified:**
+> - Rolled back: the exact F10 update, the same move through an upsert, and a `school_id` change
+>   are each refused `42501`. The payment stays on Yusuf's fee (60 / 0 unchanged).
+> - Real HTTP: 403 `42501`, nothing changed. `anon` UPDATE refused.
+>
+> **"Edited" (F9 amount, F16 external_ref/reference) — STILL OPEN.** Those columns remain
+> updatable and were deliberately not touched in this task. Deciding whether a provider-confirmed
+> payment may be edited at all (and how corrections are voided) needs its own fix.
+
+**Original finding:**
+
 - **Table:** `fee_payments` rows referenced by `payment_events.fee_payment_id`
 - **Steps and actual results** (administrator; each undone):
   - **F9:** change a WaafiPay payment's amount 30 → 5. `OK rows=1`. The payment now reads
@@ -194,7 +212,36 @@ From the academic-year investigation. Where this sweep touched them again it is 
 - **Still protected:** deleting such a payment fails with `23503` (sweep F11).
 - **Reach:** API only (no payment-edit screen). Any administrator session can do it.
 
-### S6 · Finance · A fee with payments can be re-assigned to a different student — NEW
+### S6 · Finance · A fee with payments can be re-assigned to a different student — NEW — ✅ RESOLVED 2026-09-15
+
+> **Resolved.** The same migration adds `fee_records_prevent_paid_student_change`, a
+> `BEFORE UPDATE OF student_id` trigger (SECURITY DEFINER, empty `search_path`) that refuses a
+> real change of `student_id` whenever any `fee_payments` row exists for the fee. It raises
+> `PT409`, which PostgREST returns as HTTP 409.
+>
+> **Why a trigger here, not a grant:** the rule depends on another table. A grant cannot allow
+> the change on an unpaid fee while refusing it on a paid one.
+>
+> **UI.** The Edit Fee form disables Student once `amountPaid > 0`, with a note, and validates the
+> same rule. `updateFeeRecord` maps `PT409` to a clear message.
+>
+> **Verified:**
+> - Rolled back: the exact updateFeeRecord payload with a new student is refused `PT409` and the
+>   student is unchanged. It is also refused for the table owner (`postgres`).
+> - Real HTTP: 409 `PT409`, nothing changed.
+> - Still allowed: amount, due date and category edits on unpaid and paid fees (student re-sent
+>   unchanged); a student change on a fee with **zero** payments; a student change again after
+>   its last manual payment is deleted.
+> - `amount_paid` trigger unaffected: payment 25 → 25.00, edit to 40 → 40.00, delete → 0.00.
+>   Overpayment still `23514`, direct forgery still `42501`, amount below paid still `23514`, and
+>   a fee with payments still cannot be deleted (`23503`). The guardian read is unchanged.
+>
+> **Workflow gap, not built:** a fee raised against the wrong pupil *after* money was taken has no
+> correction path in the app. Manual payments can be deleted first; WaafiPay-applied ones cannot
+> (`payment_events` RESTRICT). A void or re-issue workflow is needed.
+
+**Original finding:**
+
 - **Table:** `fee_records.student_id`
 - **Steps:** Admin → Fees → Edit Yusuf's fee (60 already paid) → change **Student** to Hodan → save.
   `updateFeeRecord` sends `student_id`.
@@ -468,7 +515,7 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 
 1. ~~**B1**~~ (messaging unusable). **Resolved.**
 2. ~~**S1**~~ (resolved), **S2, S3** (silent data loss and silent failure through the UI).
-3. **S5, S6, S7** (money integrity).
+3. ~~**S6**~~ (resolved), **S5** (moved: resolved; edited: open), **S7** (money integrity).
 4. **S8, S9** (role and privacy decisions first, then policies).
 5. **S4, S10, S11**, with K3 (one enrolment and attendance authority batch).
 6. The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.
