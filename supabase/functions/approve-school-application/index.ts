@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient, type User } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +20,57 @@ const temporaryPassword = () => {
   const bytes = new Uint8Array(18)
   crypto.getRandomValues(bytes)
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+// ---------------------------------------------------------------------------
+// Existing-account handling.
+//
+// WHY THIS EXISTS. Approval always created a brand-new auth user. If an account
+// with the applicant's email already existed, Auth refused with a duplicate-email
+// error and the whole approval failed with an unexplained 502. That happened on
+// 2026-09-15 with an account left over from the removed public sign-up page.
+//
+// WHAT COUNTS AS GENUINELY ORPHANED, AND IS THEREFORE SAFE TO REUSE. An auth
+// user with the application's email that has:
+//   - no profiles row,
+//   - no memberships,
+//   - no platform_admins row.
+// Such an account belongs to no school and grants nothing, so giving it to the
+// applicant whose email it is takes nothing from anyone. Anything else — an
+// account already attached to a school or to the platform — is refused with 409,
+// never reused, because reusing it would move a real person into a new school.
+//
+// The reused account gets a fresh temporary password, a confirmed email and
+// must_change_password, exactly like a newly created one, so the applicant's
+// first sign-in is identical either way.
+// ---------------------------------------------------------------------------
+
+/** Finds an auth user by email through the Admin API. Pages through the list. */
+async function findAuthUserByEmail(adminClient: SupabaseClient, email: string): Promise<User | null> {
+  const target = email.trim().toLowerCase()
+  const perPage = 1000
+  // A hard cap keeps a pathological user count from looping forever.
+  for (let page = 1; page <= 50; page += 1) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+    const match = data.users.find((user) => user.email?.toLowerCase() === target)
+    if (match) return match
+    if (data.users.length < perPage) return null
+  }
+  return null
+}
+
+/** True when the account is attached to nothing: no profile, membership or platform-admin row. */
+async function isOrphanedAccount(adminClient: SupabaseClient, userId: string): Promise<boolean> {
+  const [profile, membership, platformAdmin] = await Promise.all([
+    adminClient.from('profiles').select('id', { count: 'exact', head: true }).eq('id', userId),
+    adminClient.from('memberships').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    adminClient.from('platform_admins').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+  ])
+  for (const result of [profile, membership, platformAdmin]) {
+    if (result.error) throw result.error
+  }
+  return (profile.count ?? 0) === 0 && (membership.count ?? 0) === 0 && (platformAdmin.count ?? 0) === 0
 }
 
 Deno.serve(async (request) => {
@@ -85,6 +136,9 @@ Deno.serve(async (request) => {
   if (application.status !== 'pending') return json({ error: 'Application is no longer pending' }, 409)
 
   const password = temporaryPassword()
+  let authUserId: string
+  let reusedExistingAccount = false
+
   const { data: createdUser, error: createUserError } = await adminClient.auth.admin.createUser({
     email: application.email,
     password,
@@ -92,26 +146,80 @@ Deno.serve(async (request) => {
     user_metadata: { must_change_password: true },
   })
 
-  if (createUserError || !createdUser.user) {
-    return json({ error: createUserError?.message ?? 'Auth user creation failed' }, 502)
+  if (!createUserError && createdUser.user) {
+    authUserId = createdUser.user.id
+  } else {
+    // Creation failed. The common cause is an account that already has this
+    // email; decide whether it is safe to reuse before reporting anything.
+    let existing: User | null
+    try {
+      existing = await findAuthUserByEmail(adminClient, application.email)
+    } catch (lookupError) {
+      const message = lookupError instanceof Error ? lookupError.message : String(lookupError)
+      return json({ error: `Auth user creation failed (${createUserError?.message ?? 'unknown'}); lookup of an existing account also failed: ${message}` }, 502)
+    }
+
+    if (!existing) {
+      const duplicate = /duplicate|already|exists|users_email/i.test(createUserError?.message ?? '')
+      if (duplicate) {
+        // Auth reports the email as taken but cannot return the account. That
+        // happens only for a row written directly into auth.users outside the
+        // Auth service, which the Admin API cannot see or repair.
+        return json({
+          error: `An account with ${application.email} already exists but the Auth service cannot load it, so it cannot be reused. It was created outside Supabase Auth and must be removed by an operator before this application can be approved.`,
+        }, 409)
+      }
+      return json({ error: createUserError?.message ?? 'Auth user creation failed' }, 502)
+    }
+
+    let orphaned: boolean
+    try {
+      orphaned = await isOrphanedAccount(adminClient, existing.id)
+    } catch (checkError) {
+      return json({ error: checkError instanceof Error ? checkError.message : String(checkError) }, 500)
+    }
+
+    if (!orphaned) {
+      return json({
+        error: `An account with ${application.email} already exists and is linked to a school or to the platform. It cannot be reused for a new school; use a different email for this application.`,
+      }, 409)
+    }
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(existing.id, {
+      password,
+      email_confirm: true,
+      user_metadata: { ...(existing.user_metadata ?? {}), must_change_password: true },
+    })
+    if (updateError) {
+      return json({ error: `Existing account ${application.email} could not be prepared for reuse: ${updateError.message}` }, 502)
+    }
+
+    authUserId = existing.id
+    reusedExistingAccount = true
   }
 
   const { data: approval, error: approvalError } = await callerClient.rpc('approve_school_application', {
     p_application_id: input.application_id,
-    p_auth_user_id: createdUser.user.id,
+    p_auth_user_id: authUserId,
     p_shortcode: input.shortcode,
   })
 
   if (approvalError) {
-    const { error: cleanupError } = await adminClient.auth.admin.deleteUser(createdUser.user.id)
-    if (cleanupError) {
-      return json({ error: approvalError.message, cleanup_error: cleanupError.message }, 500)
+    // Only an account this request created is removed. A reused account existed
+    // before this request and is left in place, still orphaned, so a corrected
+    // retry can reuse it again.
+    if (!reusedExistingAccount) {
+      const { error: cleanupError } = await adminClient.auth.admin.deleteUser(authUserId)
+      if (cleanupError) {
+        return json({ error: approvalError.message, cleanup_error: cleanupError.message }, 500)
+      }
     }
     return json({ error: approvalError.message }, 400)
   }
 
   return json({
     ...approval,
+    reused_existing_account: reusedExistingAccount,
     temporary_password: password,
   })
 })

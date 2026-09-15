@@ -9,6 +9,38 @@ interface PendingApplication {
   school_name: string
 }
 
+/**
+ * The real reason an Edge Function call failed.
+ *
+ * supabase.functions.invoke wraps every non-2xx response in a FunctionsHttpError
+ * whose message is always "Edge Function returned a non-2xx status code". The
+ * function's own explanation is in the response body, which the error carries as
+ * `context`. Reading that body is what turns a generic wrapper into, for example,
+ * "An account with this email already exists and is linked to a school".
+ */
+async function functionErrorMessage(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown } | null)?.context
+  if (context instanceof Response) {
+    const status = `HTTP ${context.status}`
+    try {
+      const body = (await context.clone().json()) as { error?: unknown; cleanup_error?: unknown }
+      if (typeof body.error === 'string' && body.error) {
+        const cleanup = typeof body.cleanup_error === 'string' ? ` Cleanup also failed: ${body.cleanup_error}` : ''
+        return `${body.error} (${status})${cleanup}`
+      }
+    } catch {
+      try {
+        const text = await context.clone().text()
+        if (text) return `${text} (${status})`
+      } catch {
+        // Fall through to the error's own message.
+      }
+    }
+    return `The approval service returned ${status}.`
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
 export default function ApprovalPanel() {
   const { authUser, logout } = useAuth()
   const [isPlatformAdmin, setIsPlatformAdmin] = useState<boolean | null>(null)
@@ -81,7 +113,7 @@ export default function ApprovalPanel() {
     })
 
     if (approvalError) {
-      setError(JSON.stringify(approvalError, null, 2))
+      setError(await functionErrorMessage(approvalError))
     } else {
       setResult(data)
       await loadApplications()
