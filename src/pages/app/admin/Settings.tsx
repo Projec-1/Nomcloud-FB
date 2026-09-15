@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Save, School, Palette, Bell, ShieldCheck } from 'lucide-react'
+import { useRef, useState, type ChangeEvent } from 'react'
+import { Save, School, Palette, Bell, ShieldCheck, Upload, Trash2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -10,18 +10,19 @@ import Switch from '@/components/ui/Switch'
 import ResourceGate from '@/components/ui/ResourceGate'
 import { deriveResourceState } from '@/lib/resourceState'
 import { schoolInitial, updateSchool, type SchoolSettingsUpdate } from '@/services/schoolService'
+import { prepareImage, IMAGE_ACCEPT } from '@/lib/imageUpload'
+import { removeSchoolLogo, replaceSchoolLogo, schoolLogoUrl } from '@/services/storageService'
 import type { SchoolRow } from '@/types/auth'
 
 // Phase 8 batch 1. Reads and writes the real public.schools row for the
 // signed-in user's own school, replacing the mock settings object.
 //
-// The logo upload that used to live here has been removed rather than left
-// pointing at nothing. It produced a base64 data URL, which SCHEMA_DESIGN
-// section F forbids persisting ("bloats every row ... uncacheable by CDN"), and
-// the real column is logo_path, a Storage object path. No Storage bucket exists
-// in any phase so far (plan section H.6, open decision 10). Keeping an upload
-// control that silently discarded its file on reload would be worse than not
-// offering one, so the badge now always renders the derived initial.
+// LOGO. File storage build. The upload writes an object to the public
+// school-branding bucket and stores its path in schools.logo_path — never the
+// base64 data URL the prototype used, which SCHEMA_DESIGN section F forbids.
+// It is saved immediately rather than with the form, because the file is
+// already on the server once uploaded; waiting for "Save Changes" would leave
+// an object nobody references if the user navigated away.
 
 function toFormState(school: SchoolRow): SchoolSettingsUpdate {
   return {
@@ -75,6 +76,37 @@ function SettingsForm({
 }) {
   const [form, setForm] = useState<SchoolSettingsUpdate>(() => toFormState(school))
   const [saving, setSaving] = useState(false)
+  const [logoBusy, setLogoBusy] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const logoUrl = schoolLogoUrl(school.logo_path)
+
+  const handleLogoChosen = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setLogoBusy(true)
+    try {
+      const image = await prepareImage(file, 'logo')
+      onSaved(await replaceSchoolLogo(school, image))
+      showToast({ type: 'success', title: 'Logo updated', description: 'Your school logo is now shown across the app and on your login page.' })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Logo not uploaded', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
+  const handleLogoRemoved = async () => {
+    setLogoBusy(true)
+    try {
+      onSaved(await removeSchoolLogo(school))
+      showToast({ type: 'success', title: 'Logo removed', description: 'The initial badge is shown instead.' })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Logo not removed', description: err instanceof Error ? err.message : 'Please try again.' })
+    } finally {
+      setLogoBusy(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -129,14 +161,42 @@ function SettingsForm({
               <p className="label mb-2">School badge</p>
               <p className="mb-3 text-xs text-graphite">
                 Shown throughout your dashboard — in the sidebar and top bar — instead of the Nom Cloud logo, so this
-                feels like your school's own system. Logo image upload arrives with file storage.
+                feels like your school's own system. Also shown on your login page. PNG, JPEG or WebP, up to 1 MB.
               </p>
-              <span
-                className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl text-lg font-bold text-white"
-                style={{ backgroundColor: form.primary_color }}
-              >
-                {schoolInitial(form.name)}
-              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={`${school.name} logo`} className="h-14 w-14 flex-shrink-0 rounded-2xl object-contain" />
+                ) : (
+                  <span
+                    className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl text-lg font-bold text-white"
+                    style={{ backgroundColor: form.primary_color }}
+                  >
+                    {schoolInitial(form.name)}
+                  </span>
+                )}
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept={IMAGE_ACCEPT}
+                  className="hidden"
+                  aria-label="Choose school logo"
+                  onChange={handleLogoChosen}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={logoBusy}
+                  onClick={() => fileInput.current?.click()}
+                  icon={<Upload className="h-4 w-4" />}
+                >
+                  {logoBusy ? 'Working…' : logoUrl ? 'Replace logo' : 'Upload logo'}
+                </Button>
+                {logoUrl && (
+                  <Button variant="ghost" size="sm" disabled={logoBusy} onClick={handleLogoRemoved} icon={<Trash2 className="h-4 w-4" />}>
+                    Remove
+                  </Button>
+                )}
+              </div>
             </div>
             <Input
               label="School address on the web"

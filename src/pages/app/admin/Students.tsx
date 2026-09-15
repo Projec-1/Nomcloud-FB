@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Users, Plus, Pencil, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { Users, Plus, Pencil, Trash2, Upload } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -28,6 +28,8 @@ import {
 import { createGuardian, fetchSchoolGuardians, linkGuardianToStudent, type GuardianRow } from '@/services/guardianService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
+import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
+import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Real students, enrolments and guardian links.
@@ -47,6 +49,13 @@ import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 // browser. classes.capacity is a real nullable column and is shown, but nothing
 // in the database enforces it, so pretending otherwise in the client would be a
 // rule that only exists where it cannot be relied on.
+//
+// PHOTOS. File storage build. students.photo_path names an object in the private
+// student-photos bucket; the list shows it through signed URLs fetched in one
+// request per load. Upload is offered only when editing an existing student,
+// because the object path contains the student's id, and it is saved at once
+// rather than with the form: once the file is in Storage, leaving the form
+// unsaved would orphan it.
 // ---------------------------------------------------------------------------
 
 const emptyForm = {
@@ -87,6 +96,9 @@ export default function AdminStudents() {
   const [guardianMode, setGuardianMode] = useState<'existing' | 'new' | 'none'>('none')
   const [deleteTarget, setDeleteTarget] = useState<DirectoryStudent | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map())
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const photoInput = useRef<HTMLInputElement>(null)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -114,6 +126,53 @@ export default function AdminStudents() {
       cancelled = true
     }
   }, [schoolId, nonce])
+
+  useEffect(() => {
+    let cancelled = false
+    const paths = students.map((s) => s.photoPath).filter((p): p is string => p !== null)
+    createSignedImageUrls(BUCKETS.studentPhotos, paths).then((urls) => {
+      if (!cancelled) setPhotoUrls(urls)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [students])
+
+  const applyPhotoPath = (studentId: string, photoPath: string | null) => {
+    setStudents((rows) => rows.map((r) => (r.id === studentId ? { ...r, photoPath } : r)))
+    setEditing((current) => (current && current.id === studentId ? { ...current, photoPath } : current))
+  }
+
+  const handlePhotoChosen = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !editing || !schoolId) return
+    setPhotoBusy(true)
+    try {
+      const image = await prepareImage(file, 'studentPhoto')
+      const path = await replaceStudentPhoto(schoolId, editing.id, editing.photoPath, image)
+      applyPhotoPath(editing.id, path)
+      showToast({ type: 'success', title: 'Photo updated' })
+    } catch (err: unknown) {
+      showToast({ type: 'error', title: 'Photo not uploaded', description: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const handlePhotoRemoved = async () => {
+    if (!editing || !schoolId) return
+    setPhotoBusy(true)
+    try {
+      await removeStudentPhoto(schoolId, editing.id, editing.photoPath)
+      applyPhotoPath(editing.id, null)
+      showToast({ type: 'success', title: 'Photo removed' })
+    } catch (err: unknown) {
+      showToast({ type: 'error', title: 'Photo not removed', description: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
 
   const state = deriveResourceState<DirectoryStudent[]>({
     isLoading,
@@ -299,7 +358,12 @@ export default function AdminStudents() {
                       <tr key={s.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            <Avatar name={s.name} color={s.avatarColor} size="sm" />
+                            <Avatar
+                              name={s.name}
+                              color={s.avatarColor}
+                              size="sm"
+                              src={s.photoPath ? photoUrls.get(s.photoPath) : null}
+                            />
                             <p className="font-medium text-ink dark:text-white">{s.name}</p>
                           </div>
                         </td>
@@ -357,6 +421,39 @@ export default function AdminStudents() {
         }
       >
         <div className="space-y-4">
+          {editing && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Avatar
+                name={editing.name}
+                color={editing.avatarColor}
+                size="lg"
+                src={editing.photoPath ? photoUrls.get(editing.photoPath) : null}
+              />
+              <input
+                ref={photoInput}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                className="hidden"
+                aria-label="Choose student photo"
+                onChange={handlePhotoChosen}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={photoBusy}
+                onClick={() => photoInput.current?.click()}
+                icon={<Upload className="h-4 w-4" />}
+              >
+                {photoBusy ? 'Working…' : editing.photoPath ? 'Replace photo' : 'Upload photo'}
+              </Button>
+              {editing.photoPath && (
+                <Button variant="ghost" size="sm" disabled={photoBusy} onClick={handlePhotoRemoved}>
+                  Remove photo
+                </Button>
+              )}
+              <p className="w-full text-xs text-graphite">PNG, JPEG or WebP, up to 2 MB. Saved immediately.</p>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Full name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} />
             <Input

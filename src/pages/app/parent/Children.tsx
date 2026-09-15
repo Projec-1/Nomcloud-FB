@@ -11,6 +11,9 @@ import { formatDate, percentage } from '@/utils/format'
 import { DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { fetchChildAttendance, fetchChildGrades } from '@/services/teachingRecordsService'
 import { fetchChildFeeRecords } from '@/services/financeService'
+import { useSignedImageUrl } from '@/hooks/useSignedImageUrl'
+import { BUCKETS } from '@/services/storageService'
+import type { ChildSummary } from '@/services/guardianService'
 
 // Phase 8 batch 8. The last mock reader on the parent side.
 //
@@ -22,6 +25,14 @@ import { fetchChildFeeRecords } from '@/services/financeService'
 //
 // The prototype counted attendance against a hardcoded `schoolDays` week. Real
 // records are counted as they exist.
+
+// A child's photo comes from the private student-photos bucket through a
+// signed URL. Storage allows it because is_guardian_of_student holds for this
+// guardian and this child, the same check that shows the child's row.
+function ChildAvatar({ child }: { child: ChildSummary }) {
+  const url = useSignedImageUrl(BUCKETS.studentPhotos, child.photoPath)
+  return <Avatar name={child.name} color={child.avatarColor} src={url} />
+}
 
 interface ChildSummaryStats {
   attendanceRate: number | null
@@ -107,7 +118,7 @@ export default function ParentChildren() {
             <div key={child.id} className="card p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Avatar name={child.name} color={child.avatarColor} />
+                  <ChildAvatar child={child} />
                   <div>
                     <p className="font-medium text-ink dark:text-white">{child.name}</p>
                     <p className="text-xs text-graphite">

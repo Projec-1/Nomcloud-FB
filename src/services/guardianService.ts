@@ -92,6 +92,8 @@ export interface ChildSummary {
   status: string
   enrolledDate: string
   avatarColor: string
+  /** Object path in the private student-photos bucket, or null. */
+  photoPath: string | null
   classId: string | null
   className: string | null
 }
@@ -107,6 +109,7 @@ export function toChildSummary(
     status: student.status,
     enrolledDate: student.enrolled_date,
     avatarColor: avatarColorForId(student.id),
+    photoPath: student.photo_path,
     classId: enrolledClass?.id ?? null,
     className: enrolledClass?.name ?? null,
   }

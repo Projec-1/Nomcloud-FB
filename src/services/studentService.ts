@@ -20,6 +20,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { AVATAR_COLORS } from '@/constants/avatarColors'
+import { removeOrphanedStudentPhoto } from '@/services/storageService'
 
 /**
  * Deterministic per-student colour, so a child looks the same on every screen.
@@ -165,8 +166,18 @@ export async function updateStudent(schoolId: string, id: string, input: Student
  * status is an editable field on the form.
  */
 export async function deleteStudent(schoolId: string, id: string): Promise<void> {
-  const { error } = await supabase.from('students').delete().eq('school_id', schoolId).eq('id', id)
+  const { data, error } = await supabase
+    .from('students')
+    .delete()
+    .eq('school_id', schoolId)
+    .eq('id', id)
+    .select('photo_path')
   if (error) throw error
+  // A Storage object has no foreign key to its row, so the photo is removed
+  // here or it would outlive the student (FILE_STORAGE_PLAN section 3, rule 4).
+  for (const row of (data ?? []) as { photo_path: string | null }[]) {
+    await removeOrphanedStudentPhoto(row.photo_path)
+  }
 }
 
 /** Enrols a student in a class for an academic year. */
@@ -214,6 +225,8 @@ export interface DirectoryStudent {
   status: string
   enrolledDate: string
   avatarColor: string
+  /** Object path in the private student-photos bucket, or null. */
+  photoPath: string | null
   /** Resolved through class_enrollments, not a column. Null when unenrolled. */
   classId: string | null
   className: string | null
@@ -232,7 +245,7 @@ export interface DirectoryStudent {
 export async function fetchStudentDirectory(schoolId: string): Promise<DirectoryStudent[]> {
   const { data, error } = await supabase
     .from('students')
-    .select('id, full_name, admission_no, gender, date_of_birth, status, enrolled_date')
+    .select('id, full_name, admission_no, gender, date_of_birth, status, enrolled_date, photo_path')
     .eq('school_id', schoolId)
     .order('full_name', { ascending: true })
 
@@ -246,6 +259,7 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
     date_of_birth: string | null
     status: string
     enrolled_date: string
+    photo_path: string | null
   }[]
   if (rows.length === 0) return []
 
@@ -317,6 +331,7 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
       status: r.status,
       enrolledDate: r.enrolled_date,
       avatarColor: avatarColorForId(r.id),
+      photoPath: r.photo_path,
       classId,
       className: classId ? (classNames.get(classId) ?? null) : null,
       guardians: guardiansByStudent.get(r.id) ?? [],

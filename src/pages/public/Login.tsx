@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { ArrowRight, Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import AuthLayout from '@/components/layout/AuthLayout'
@@ -11,13 +11,16 @@ import { useLanguage } from '@/context/LanguageContext'
 import { supabase } from '@/lib/supabase'
 import { fetchActiveMemberships, fetchPlatformAdminStatus } from '@/services/identityService'
 import { workspacesForMembershipRoles } from '@/lib/roles'
+import { resolveSchoolShortcode } from '@/lib/schoolShortcode'
+import { fetchLoginBranding, type LoginBranding } from '@/services/storageService'
+import { schoolInitial } from '@/services/schoolService'
 import type { Role } from '@/types'
 
 export default function Login() {
   const { t } = useLanguage()
   const { showToast } = useToast()
   const navigate = useNavigate()
-  const location = useLocation() as { state?: { from?: string } }
+  const location = useLocation() as { search: string; state?: { from?: string } }
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -26,6 +29,31 @@ export default function Login() {
   const [confirmationRequired, setConfirmationRequired] = useState(false)
   const [resendingConfirmation, setResendingConfirmation] = useState(false)
   const [confirmationSent, setConfirmationSent] = useState(false)
+  const [branding, setBranding] = useState<LoginBranding | null>(null)
+  const [logoFailed, setLogoFailed] = useState(false)
+
+  // A school's own login page, before sign-in. The shortcode comes from the
+  // school's subdomain or ?school=, and school_login_branding returns the name,
+  // colour and logo path of that one active school only. The logo itself is
+  // served from the public school-branding bucket by exact path; no session is
+  // needed and nothing lets this page list or read any other file.
+  useEffect(() => {
+    const shortcode = resolveSchoolShortcode(window.location.hostname, location.search)
+    setBranding(null)
+    setLogoFailed(false)
+    if (!shortcode) return
+    let cancelled = false
+    fetchLoginBranding(shortcode)
+      .then((result) => {
+        if (!cancelled) setBranding(result)
+      })
+      .catch(() => {
+        // Branding is decoration: on failure the default login page is shown.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [location.search])
 
   const destinationForRoles = (roles: Role[]) => {
     const role = (['admin', 'teacher', 'parent'] as Role[]).find((candidate) => roles.includes(candidate))
@@ -111,6 +139,26 @@ export default function Login() {
 
   return (
     <AuthLayout title={t('auth.login.title')} subtitle={t('auth.login.subtitle')}>
+      {branding && (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-ink/5 p-3 dark:border-white/10" data-testid="school-login-branding">
+          {branding.logoUrl && !logoFailed ? (
+            <img
+              src={branding.logoUrl}
+              alt={`${branding.name} logo`}
+              onError={() => setLogoFailed(true)}
+              className="h-12 w-12 flex-shrink-0 rounded-xl object-contain"
+            />
+          ) : (
+            <span
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white"
+              style={{ backgroundColor: branding.primaryColor }}
+            >
+              {schoolInitial(branding.name)}
+            </span>
+          )}
+          <p className="min-w-0 truncate font-semibold text-ink dark:text-white">{branding.name}</p>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         <Input
           label={t('auth.login.email')}

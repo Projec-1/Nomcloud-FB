@@ -24,6 +24,8 @@ interface AuthContextValue {
   school: SchoolRow | null
   /** Replace the cached school row after an in-app edit (Phase 8 batch 1). */
   refreshSchool: (next: SchoolRow) => void
+  /** Replace the cached profile row after an in-app edit (file storage: avatar). */
+  refreshProfile: (next: ProfileRow) => void
   displayName: string
   authState: AuthState
   activeRole: Role | null
@@ -187,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           null,
         school,
         refreshSchool: setSchool,
+        refreshProfile: setProfile,
         displayName: profile?.full_name ?? '',
         authState,
         activeRole,
