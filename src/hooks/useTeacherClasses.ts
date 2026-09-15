@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { deriveResourceState, type ResourceState } from '@/lib/resourceState'
 import { fetchTeacherWorkspace, type TeacherWorkspace } from '@/services/teacherService'
+import { toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 4. The teacher-side counterpart of useSelectedChild.
@@ -57,7 +58,7 @@ export function useTeacherClasses(): UseTeacherClassesResult {
         if (!cancelled) setData(workspace)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

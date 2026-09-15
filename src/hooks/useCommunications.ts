@@ -9,6 +9,7 @@ import {
   type NotificationView,
   type ThreadView,
 } from '@/services/communicationService'
+import { toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Communications reads through the four-state contract. Phase 8 batch 7.
@@ -70,7 +71,7 @@ export function useAnnouncements(): UseAnnouncementsResult {
         if (!cancelled) setAnnouncements(rows)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -133,7 +134,7 @@ export function useMessageThreads(): UseThreadsResult {
         if (!cancelled) setThreads(rows)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -193,7 +194,7 @@ export function useNotifications(): UseNotificationsResult {
         if (!cancelled) setNotifications(rows)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

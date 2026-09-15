@@ -10,6 +10,7 @@ import {
 } from '@/services/academicService'
 import { deriveResourceState, type ResourceState } from '@/lib/resourceState'
 import { DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
+import { toError } from '@/utils/errorMessage'
 
 export interface AcademicStructure {
   years: AcademicYearRow[]
@@ -73,7 +74,7 @@ export function useAcademicStructure(): {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err : new Error(String(err)))
+        setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

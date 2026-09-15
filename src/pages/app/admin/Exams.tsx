@@ -24,6 +24,7 @@ import {
   updateExam,
   type ExamView,
 } from '@/services/teachingRecordsService'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 5. Reads and writes real exams.
@@ -106,7 +107,7 @@ export default function AdminExams() {
         showToast({
           type: 'error',
           title: 'Could not load exams',
-          description: err instanceof Error ? err.message : String(err),
+          description: errorMessage(err),
         })
       })
       .finally(() => {
@@ -203,7 +204,7 @@ export default function AdminExams() {
       showToast({
         type: 'error',
         title: editing ? 'Exam not updated' : 'Exam not scheduled',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)
@@ -220,7 +221,7 @@ export default function AdminExams() {
       showToast({
         type: 'error',
         title: 'Exam not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setDeleteTarget(null)

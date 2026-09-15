@@ -39,6 +39,7 @@ import type { FieldErrors } from '@/utils/validators'
 import { minLength } from '@/utils/validators'
 import { formatDate, formatMoney } from '@/utils/format'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 6. Real fee_records and fee_payments.
@@ -232,7 +233,7 @@ export default function AdminFees() {
       showToast({
         type: 'error',
         title: editing ? 'Fee not updated' : 'Fee not created',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)
@@ -287,9 +288,9 @@ export default function AdminFees() {
       showToast({
         type: 'error',
         title: 'Payment not recorded',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
-      setPayErrors({ reference: err instanceof Error ? err.message : String(err) })
+      setPayErrors({ reference: errorMessage(err) })
     } finally {
       setIsSaving(false)
     }
@@ -305,7 +306,7 @@ export default function AdminFees() {
       showToast({
         type: 'error',
         title: 'Fee not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setDeleteFeeTarget(null)
@@ -323,7 +324,7 @@ export default function AdminFees() {
       showToast({
         type: 'error',
         title: 'Payment not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     }
   }
@@ -351,7 +352,7 @@ export default function AdminFees() {
       showToast({
         type: 'error',
         title: 'Could not work out who to remind',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
       setReminderOpen(false)
     } finally {
@@ -383,7 +384,7 @@ export default function AdminFees() {
       showToast({
         type: 'error',
         title: 'Reminders not sent',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)

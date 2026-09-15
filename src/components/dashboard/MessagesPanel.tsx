@@ -21,6 +21,7 @@ import {
   type MessageableUser,
   type ThreadView,
 } from '@/services/communicationService'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 7. Real message_threads, message_thread_participants, messages.
@@ -116,7 +117,7 @@ export default function MessagesPanel({
         showToast({
           type: 'error',
           title: 'Could not open the conversation',
-          description: err instanceof Error ? err.message : String(err),
+          description: errorMessage(err),
         })
       })
       .finally(() => {
@@ -144,7 +145,7 @@ export default function MessagesPanel({
       showToast({
         type: 'error',
         title: 'Could not load recipients',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     }
   }, [schoolId, currentUserId, showToast])
@@ -163,7 +164,7 @@ export default function MessagesPanel({
       showToast({
         type: 'error',
         title: 'Message not sent',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setSending(false)
@@ -192,7 +193,7 @@ export default function MessagesPanel({
       showToast({
         type: 'error',
         title: 'Conversation not started',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setCreating(false)

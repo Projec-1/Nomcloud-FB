@@ -7,6 +7,7 @@ import {
   toChildSummary,
   type ChildSummary,
 } from '@/services/guardianService'
+import { toError } from '@/utils/errorMessage'
 
 const STORAGE_KEY = 'nomcloud_selected_child'
 
@@ -91,7 +92,7 @@ export function useSelectedChild(): UseSelectedChildResult {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err : new Error(String(err)))
+        setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

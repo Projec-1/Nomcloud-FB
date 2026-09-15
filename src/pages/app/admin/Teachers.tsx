@@ -25,6 +25,7 @@ import {
 import { fetchSubjects, type SubjectRow } from '@/services/academicService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { formatDate } from '@/utils/format'
+import { errorMessage, toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Real teachers.
@@ -88,7 +89,7 @@ export default function AdminTeachers() {
         setSubjects(subs)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -187,7 +188,7 @@ export default function AdminTeachers() {
       showToast({
         type: 'error',
         title: editing ? 'Teacher not updated' : 'Teacher not added',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)
@@ -204,7 +205,7 @@ export default function AdminTeachers() {
       showToast({
         type: 'error',
         title: 'Teacher not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setDeleteTarget(null)

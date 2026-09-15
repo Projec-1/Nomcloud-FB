@@ -25,6 +25,7 @@ import {
   type SubmissionStatus,
 } from '@/services/teachingRecordsService'
 import { todayInTimeZone } from '@/utils/schoolCalendar'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 5. Reads and writes real homework and homework_submissions.
@@ -122,7 +123,7 @@ export default function HomeworkBoard({ classes, schoolId, timeZone }: HomeworkB
         showToast({
           type: 'error',
           title: 'Could not load homework',
-          description: err instanceof Error ? err.message : String(err),
+          description: errorMessage(err),
         })
       })
       .finally(() => {
@@ -189,7 +190,7 @@ export default function HomeworkBoard({ classes, schoolId, timeZone }: HomeworkB
       showToast({
         type: 'error',
         title: 'Homework not assigned',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)
@@ -206,7 +207,7 @@ export default function HomeworkBoard({ classes, schoolId, timeZone }: HomeworkB
       showToast({
         type: 'error',
         title: 'Homework not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setDeleteTarget(null)
@@ -235,7 +236,7 @@ export default function HomeworkBoard({ classes, schoolId, timeZone }: HomeworkB
       showToast({
         type: 'error',
         title: 'Status not updated',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
       reload()
     }

@@ -9,6 +9,7 @@ import {
   type ChildGradeRecord,
   type ChildHomeworkItem,
 } from '@/services/teachingRecordsService'
+import { toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // A guardian's view of one child's teaching records. Phase 8 batch 5.
@@ -68,7 +69,7 @@ function useChildResource<T>(
         if (!cancelled) setData(result)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

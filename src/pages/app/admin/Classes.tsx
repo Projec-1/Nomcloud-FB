@@ -25,6 +25,7 @@ import { fetchSubjects, type SubjectRow } from '@/services/academicService'
 import { supabase } from '@/lib/supabase'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import type { IsoWeekday } from '@/types'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Real classes and real timetable slots.
@@ -198,7 +199,7 @@ export default function AdminClasses() {
       showToast({
         type: 'error',
         title: editing ? 'Class not updated' : 'Class not created',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)
@@ -215,7 +216,7 @@ export default function AdminClasses() {
       showToast({
         type: 'error',
         title: 'Class not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setDeleteTarget(null)
@@ -251,7 +252,7 @@ export default function AdminClasses() {
       showToast({
         type: 'error',
         title: 'Slot not added',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     }
   }
@@ -265,7 +266,7 @@ export default function AdminClasses() {
       showToast({
         type: 'error',
         title: 'Slot not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     }
   }

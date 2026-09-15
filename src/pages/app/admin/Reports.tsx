@@ -20,6 +20,7 @@ import {
   type AttendanceFact,
   type GradeFact,
 } from '@/services/reportsService'
+import { toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Reports on real data.
@@ -97,7 +98,7 @@ export default function AdminReports() {
         setSubjects(subs)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setLoadError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -149,8 +150,9 @@ export default function AdminReports() {
         return {
           name: c.name,
           total: roster.length,
-          male: roster.filter((s) => s.gender === 'Male').length,
-          female: roster.filter((s) => s.gender === 'Female').length,
+          // Database values are lower-case (students_gender_check).
+          male: roster.filter((s) => s.gender === 'male').length,
+          female: roster.filter((s) => s.gender === 'female').length,
         }
       }),
     [classes, students],

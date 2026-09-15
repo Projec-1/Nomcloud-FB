@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import { errorMessage } from '@/utils/errorMessage'
 
 interface PendingApplication {
   id: string
@@ -38,7 +39,7 @@ async function functionErrorMessage(error: unknown): Promise<string> {
     }
     return `The approval service returned ${status}.`
   }
-  return error instanceof Error ? error.message : String(error)
+  return errorMessage(error)
 }
 
 export default function ApprovalPanel() {

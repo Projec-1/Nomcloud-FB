@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import { deriveResourceState, type ResourceState } from '@/lib/resourceState'
 import { fetchChildFeeRecords, fetchFeeRecords, type FeeRecordView } from '@/services/financeService'
 import { DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
+import { toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Finance reads through the four-state contract. Phase 8 batch 6.
@@ -75,7 +76,7 @@ export function useFinance(): UseFinanceResult {
         if (!cancelled) setRecords(rows)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -139,7 +140,7 @@ export function useChildFees(studentId: string | null): UseChildFeesResult {
         if (!cancelled) setRecords(rows)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)

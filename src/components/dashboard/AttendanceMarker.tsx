@@ -13,6 +13,7 @@ import { fetchRosterStudents, type RosterStudent } from '@/services/studentServi
 import { fetchAttendance, saveAttendance, type AttendanceEntry } from '@/services/teachingRecordsService'
 import { todayInTimeZone } from '@/utils/schoolCalendar'
 import { cn } from '@/utils/cn'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 5. Reads and writes real attendance_records.
@@ -98,7 +99,7 @@ export default function AttendanceMarker({ classes, schoolId, timeZone }: Attend
         showToast({
           type: 'error',
           title: 'Could not load attendance',
-          description: err instanceof Error ? err.message : String(err),
+          description: errorMessage(err),
         })
       })
       .finally(() => {
@@ -146,7 +147,7 @@ export default function AttendanceMarker({ classes, schoolId, timeZone }: Attend
       showToast({
         type: 'error',
         title: 'Attendance not saved',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)

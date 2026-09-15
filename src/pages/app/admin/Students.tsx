@@ -24,12 +24,14 @@ import {
   fetchStudentDirectory,
   updateStudent,
   type DirectoryStudent,
+  type StudentGender,
 } from '@/services/studentService'
 import { createGuardian, fetchSchoolGuardians, linkGuardianToStudent, type GuardianRow } from '@/services/guardianService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
 import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
+import { errorMessage, toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Real students, enrolments and guardian links.
@@ -62,7 +64,10 @@ const emptyForm = {
   name: '',
   admissionNo: '',
   classId: '',
-  gender: 'Male',
+  // Database values, lower-case: students_gender_check allows exactly
+  // 'male', 'female' and 'other'. The prototype's 'Male'/'Female' were
+  // rejected by that constraint, which is what "Student not added" hid.
+  gender: 'male',
   dateOfBirth: '',
   status: 'active',
   guardianId: '',
@@ -117,7 +122,7 @@ export default function AdminStudents() {
         setGuardians(gs)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -154,7 +159,7 @@ export default function AdminStudents() {
       applyPhotoPath(editing.id, path)
       showToast({ type: 'success', title: 'Photo updated' })
     } catch (err: unknown) {
-      showToast({ type: 'error', title: 'Photo not uploaded', description: err instanceof Error ? err.message : String(err) })
+      showToast({ type: 'error', title: 'Photo not uploaded', description: errorMessage(err) })
     } finally {
       setPhotoBusy(false)
     }
@@ -168,7 +173,7 @@ export default function AdminStudents() {
       applyPhotoPath(editing.id, null)
       showToast({ type: 'success', title: 'Photo removed' })
     } catch (err: unknown) {
-      showToast({ type: 'error', title: 'Photo not removed', description: err instanceof Error ? err.message : String(err) })
+      showToast({ type: 'error', title: 'Photo not removed', description: errorMessage(err) })
     } finally {
       setPhotoBusy(false)
     }
@@ -206,7 +211,7 @@ export default function AdminStudents() {
       name: student.name,
       admissionNo: student.admissionNo,
       classId: student.classId ?? '',
-      gender: student.gender ?? 'Male',
+      gender: student.gender ?? 'male',
       dateOfBirth: student.dateOfBirth ?? '',
       status: student.status,
       guardianId: '',
@@ -223,6 +228,11 @@ export default function AdminStudents() {
     const next: FieldErrors = {}
     if (!minLength(form.name, 2)) next.name = "Enter the student's full name."
     if (!minLength(form.admissionNo, 2)) next.admissionNo = 'Enter an admission number.'
+    // students_date_of_birth_check requires a date before today. ISO dates
+    // compare correctly as strings.
+    if (form.dateOfBirth && form.dateOfBirth >= todayInTimeZone(timeZone)) {
+      next.dateOfBirth = 'Date of birth must be before today.'
+    }
     if (form.classId && !activeYearId) {
       next.classId = 'Set an active academic year before enrolling a student in a class.'
     }
@@ -242,7 +252,7 @@ export default function AdminStudents() {
     const input = {
       fullName: form.name,
       admissionNo: form.admissionNo,
-      gender: form.gender || null,
+      gender: (form.gender || null) as StudentGender | null,
       dateOfBirth: form.dateOfBirth || null,
       status: form.status,
     }
@@ -283,7 +293,7 @@ export default function AdminStudents() {
       showToast({
         type: 'error',
         title: editing ? 'Student not updated' : 'Student not added',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)
@@ -300,7 +310,7 @@ export default function AdminStudents() {
       showToast({
         type: 'error',
         title: 'Student not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setDeleteTarget(null)
@@ -481,14 +491,16 @@ export default function AdminStudents() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Select label="Gender" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
             </Select>
             <Input
               label="Date of birth"
               type="date"
               value={form.dateOfBirth}
               onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })}
+              error={errors.dateOfBirth}
             />
           </div>
 

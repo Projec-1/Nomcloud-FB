@@ -11,6 +11,7 @@ import type { ClassSummary } from '@/services/teacherService'
 import { fetchRosterStudents, type RosterStudent } from '@/services/studentService'
 import { fetchGrades, saveGrades, type GradeEntry } from '@/services/teachingRecordsService'
 import { cn } from '@/utils/cn'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 5. Reads and writes real grade_records.
@@ -149,7 +150,7 @@ export default function GradeBook({ classes, schoolId }: GradeBookProps) {
         showToast({
           type: 'error',
           title: 'Could not load grades',
-          description: err instanceof Error ? err.message : String(err),
+          description: errorMessage(err),
         })
       })
       .finally(() => {
@@ -198,7 +199,7 @@ export default function GradeBook({ classes, schoolId }: GradeBookProps) {
       showToast({
         type: 'error',
         title: 'Grades not saved',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)

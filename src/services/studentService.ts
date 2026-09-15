@@ -109,10 +109,13 @@ export async function fetchSchoolStudents(schoolId: string): Promise<RosterStude
 // path: RLS batch 2 made student_guardians management-only precisely so a
 // guardian cannot attach themselves to another family's child.
 
+/** Exactly the values students_gender_check accepts. */
+export type StudentGender = 'male' | 'female' | 'other'
+
 export interface StudentInput {
   fullName: string
   admissionNo: string
-  gender: string | null
+  gender: StudentGender | null
   dateOfBirth: string | null
   status: string
 }

@@ -20,6 +20,7 @@ import {
   type AnnouncementPriority,
   type AnnouncementView,
 } from '@/services/communicationService'
+import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 7. Real announcements.
@@ -137,7 +138,7 @@ export default function AnnouncementBoard({
       showToast({
         type: 'error',
         title: 'Announcement not published',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setIsSaving(false)
@@ -152,7 +153,7 @@ export default function AnnouncementBoard({
       showToast({
         type: 'error',
         title: 'Could not change the pin',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     }
   }
@@ -167,7 +168,7 @@ export default function AnnouncementBoard({
       showToast({
         type: 'error',
         title: 'Announcement not removed',
-        description: err instanceof Error ? err.message : String(err),
+        description: errorMessage(err),
       })
     } finally {
       setDeleteTarget(null)

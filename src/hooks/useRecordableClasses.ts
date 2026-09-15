@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import { deriveResourceState, type ResourceState } from '@/lib/resourceState'
 import { fetchManagedClasses } from '@/services/classService'
 import { fetchTeacherWorkspace, type ClassSummary } from '@/services/teacherService'
+import { toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
 // "Which classes may I record against, and what may I write in them?"
@@ -72,7 +73,7 @@ export function useRecordableClasses(): UseRecordableClassesResult {
         if (!cancelled) setClasses(result)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)))
+        if (!cancelled) setError(toError(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
