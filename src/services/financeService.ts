@@ -358,12 +358,14 @@ export async function updateFeeRecord(schoolId: string, feeRecordId: string, inp
     if (error.code === '23505') {
       throw new Error('This student already has a fee of that category for that term.')
     }
-    // fee_records_prevent_paid_student_change (migration 20260915000006,
-    // SYSTEM_ISSUES_LIST S6): a fee with any payment against it cannot be moved
-    // to another student, so money recorded for one child never silently
-    // becomes another's.
+    // Two guards raise PT409 on this table, both meaning "money is already
+    // recorded against this fee": the student cannot change (migration
+    // 20260915000006, S6) and the currency cannot change (migration
+    // 20260916000002, S7).
     if (error.code === 'PT409') {
-      throw new Error('This fee already has payments recorded against it, so it cannot be moved to a different student.')
+      throw new Error(
+        'This fee already has payments recorded against it, so it cannot be moved to a different student or changed to another currency.',
+      )
     }
     throw error
   }
@@ -425,6 +427,9 @@ export async function recordPayment(schoolId: string, input: PaymentInput): Prom
     if (error.code === '23514') {
       throw new Error('That payment would take the total above the fee amount. Check the balance and try again.')
     }
+    // fee_payments_currency_matches_fee (migration 20260916000002, S7): a
+    // payment is recorded in the fee's own currency or not at all.
+    if (error.code === 'PT409') throw new Error(error.message)
     throw error
   }
 }

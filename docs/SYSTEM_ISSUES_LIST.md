@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15) and S2, S3, S4 (2026-09-16) resolved; S5 partly resolved (the "moved" half). Marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15) and S2, S3, S4, S5 (in full), S7, S10, S11, K3 (2026-09-16) resolved. Marked in place below; original evidence kept.
 **New capability:** *Revoke access* / *Restore access* for a teacher or guardian — suspends the login only, keeping the employment or family record (see S4).
 This list is the input for small fix batches, worked top to bottom.
 
@@ -49,7 +49,7 @@ From the academic-year investigation. Where this sweep touched them again it is 
 |---|---|
 | **K1** | No way to create an academic year from the app (the API accepts it — sweep A9 — but no screen offers it) |
 | **K2** | Switching the active year is two unsafe steps with a window of zero active years |
-| **K3** | A teacher can mark attendance for a student not enrolled in their class (also after the student has **left** the class — sweep L4) |
+| ~~**K3**~~ | ~~A teacher can mark attendance for a student not enrolled in their class~~ — **✅ RESOLVED 2026-09-16** with S10/S11 (enrolment check on all three teaching tables) |
 | **K4** | Attendance can be dated outside any valid academic year |
 | **K5** | A student can end up with two open enrolments |
 | **K6** | Screens mix every year's classes together |
@@ -61,10 +61,10 @@ From the academic-year investigation. Where this sweep touched them again it is 
 | Severity | Count | Resolved |
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
-| SERIOUS | 11 | 7 (S1, S2, S3, S4, S6, S8, S9) + S5 partly |
+| SERIOUS | 11 | **11 — all resolved** |
 | MINOR | 16 | 0 |
 | COSMETIC | 2 | 0 |
-| **Total new** | **30** | **8** (+ S5 partly) |
+| **Total new** | **30** | **12** |
 
 ---
 
@@ -287,7 +287,7 @@ From the academic-year investigation. Where this sweep touched them again it is 
   - Only suspending the **membership** removes access; the teacher form's status does not.
 - **Reach:** UI (Admin → Teachers → Status).
 
-### S5 · Finance · Provider-confirmed (WaafiPay) payments can be edited or moved after the fact — NEW — ◐ PARTLY RESOLVED 2026-09-15
+### S5 · Finance · Provider-confirmed (WaafiPay) payments can be edited or moved after the fact — NEW — ✅ RESOLVED (moved 2026-09-15, edited 2026-09-16)
 
 > **"Moved" (F10) — resolved.** Migration `20260915000006_payment_reassignment_guards` revokes
 > table-level UPDATE on `fee_payments` from `anon` and `authenticated` and re-grants UPDATE on
@@ -300,9 +300,21 @@ From the academic-year investigation. Where this sweep touched them again it is 
 >   are each refused `42501`. The payment stays on Yusuf's fee (60 / 0 unchanged).
 > - Real HTTP: 403 `42501`, nothing changed. `anon` UPDATE refused.
 >
-> **"Edited" (F9 amount, F16 external_ref/reference) — STILL OPEN.** Those columns remain
-> updatable and were deliberately not touched in this task. Deciding whether a provider-confirmed
-> payment may be edited at all (and how corrections are voided) needs its own fix.
+> **"Edited" (F9 amount, F16 external_ref/reference) — resolved 2026-09-16.** Migration
+> `20260916000002_teaching_and_finance_guards` adds `fee_payments_prevent_confirmed_edit`, a
+> `BEFORE UPDATE OF amount, currency, external_ref, reference` trigger that refuses (PT409) when a
+> `payment_events` row points at the payment. "Provider-confirmed" is not a new flag: it is exactly
+> that link, which is unique per payment.
+>
+> **The manual-correction path is preserved by construction.** A cash, bank or card payment
+> recorded in the office has no `payment_events` row, so the trigger never fires for it.
+>
+> **Verified (rolled back, before / dry run / after apply):** editing a confirmed payment's amount
+> (F9) and its external_ref + reference (F16) are both refused PT409, and its currency too; the
+> payment still reads 30.00 USD with its original `waafipay-MOCK-APPROVE-…` reference and the fee
+> still shows 60.00 paid. A non-money field (method) is still editable. A **manual** payment can
+> still have its amount corrected (30 → 40, `amount_paid` followed to 40.00), its reference and
+> date corrected, and be deleted (`amount_paid` back to 0.00).
 
 **Original finding:**
 
@@ -354,7 +366,27 @@ From the academic-year investigation. Where this sweep touched them again it is 
 - **Actual result:** `OK rows=1`. The fee, and its 60 paid, now belong to Hodan (sweep F12).
 - **Reach:** UI (the Student field is editable on an existing fee).
 
-### S7 · Finance · Currency is not enforced between a fee and its payments — NEW
+### S7 · Finance · Currency is not enforced between a fee and its payments — NEW — ✅ RESOLVED 2026-09-16
+
+> **Resolved from both ends** by `20260916000002_teaching_and_finance_guards`:
+> - `fee_payments_currency_matches_fee` — a `BEFORE INSERT OR UPDATE` trigger comparing the
+>   payment's currency with its fee's. A CHECK cannot read another table, so this is the same
+>   instrument and shape as `sync_fee_record_amount_paid`.
+> - `fee_records_prevent_paid_currency_change` — the S6 pattern applied to `currency`: once any
+>   payment exists, the fee's currency is frozen. A **separate** trigger from S6's student guard so
+>   each rule reads and can be dropped on its own.
+>
+> **Verified:** a 25 EUR payment against a USD fee is refused PT409 and `amount_paid` stays 0.00
+> (F14); changing a paid fee USD → SOS is refused PT409 and it stays USD (F13). Still allowed:
+> changing the currency of a fee with **no** payments, then recording a matching-currency payment
+> (SOS 30 → `amount_paid` 30.00). Editing a manual payment's currency to a mismatching one is also
+> refused.
+>
+> **UI:** `recordPayment` surfaces the trigger's message; `updateFeeRecord`'s PT409 message now
+> covers both the student and the currency guard.
+
+**Original finding:**
+
 - **Table:** `fee_payments.currency`, `fee_records.currency`
 - **Steps and actual results:**
   - **F14:** record a **25 EUR** payment against Layla's **USD** fee. `OK rows=1`. Her
@@ -457,7 +489,30 @@ From the academic-year investigation. Where this sweep touched them again it is 
 - **Reach:** API only. It undoes the participant-only model for administrators.
 - **Needs a decision:** is administrator oversight of conversations intended?
 
-### S10 · Grades & homework · Same "no enrolment check" gap as attendance — NEW (same class as K3)
+### S10 · Grades & homework · Same "no enrolment check" gap as attendance — NEW (same class as K3) — ✅ RESOLVED 2026-09-16
+
+> **Resolved together with S11 and K3.** `20260916000002_teaching_and_finance_guards` adds the
+> enrolment half of `teaches_class`:
+> - `student_enrolled_in_class(school, class, student)` — an OPEN enrolment (`left_on IS NULL`),
+>   the same signal `teaches_student` and every roster read already use.
+> - `homework_class_has_student(school, homework, student)` — resolves the homework's class and
+>   delegates, because `homework_submissions` carries `homework_id`, not `class_id`.
+>
+> Both are SECURITY DEFINER with an empty `search_path`, like `teaches_class`, so the check is not
+> narrowed by the caller's own RLS. The teacher INSERT and UPDATE policies on `grade_records` and
+> `homework_submissions` now require it in addition to the existing subject-exact check.
+>
+> **Verified:** Sahra recording a 5A Maths grade (G1) or a 5A homework submission (H2) for Layla,
+> who is enrolled in 6B, are both refused 42501. Recording both for Yusuf, who *is* in 5A, still
+> works, as does editing that submission to graded.
+>
+> **Deliberately unchanged:** the management policies (`can_manage_class`, `can_manage_homework`).
+> Owner, director, administrator and principal keep school-wide authority here. Whether management
+> should also be held to the enrolment check is a real question — **open, needs a decision**
+> (measured: an administrator can still mark attendance for a pupil of another class).
+
+**Original finding:**
+
 - **Tables:** `grade_records`, `homework_submissions`
 - **Steps and actual results:**
   - **G1:** Sahra (5A Mathematics) records a grade for **Layla**, who is enrolled in 6B, under
@@ -466,7 +521,42 @@ From the academic-year investigation. Where this sweep touched them again it is 
 - **Still refused:** a teacher of another class (`42501`, sweep G5 and H3).
 - **Reach:** API (the screens list only enrolled students).
 
-### S11 · Attendance · A teacher can rewrite another teacher's record, erase who marked it, and move it to a different student — NEW (extends K3)
+### S11 · Attendance · A teacher can rewrite another teacher's record, erase who marked it, and move it to a different student — NEW (extends K3) — ✅ RESOLVED 2026-09-16
+
+> **Three separate holes, three fixes**, all in `20260916000002_teaching_and_finance_guards`:
+>
+> 1. **Enrolment (K3).** The teacher INSERT/UPDATE policies on `attendance_records` now require
+>    `student_enrolled_in_class`. Measured: marking a 6B pupil in 5A is refused 42501, and so is
+>    marking a pupil **after** they left the class (the L4 case).
+> 2. **Attribution can no longer be erased.** The policy check was
+>    `(marked_by IS NULL OR marked_by = auth.uid())`; it is now `marked_by = auth.uid()`, so an
+>    edit re-attributes to the editor instead of blanking. **NOT NULL on the column was considered
+>    and rejected:** `marked_by` is `ON DELETE SET NULL` to profiles so that "who marked it must
+>    survive staff turnover" (SCHEMA_DESIGN table 19), so it must stay nullable; the policy is what
+>    stops a live client writing NULL. Measured: AT1 refused 42501, and attributing an edit to a
+>    *colleague* is refused too.
+> 3. **The record cannot move to another pupil.** `attendance_records_prevent_student_change`, a
+>    `BEFORE UPDATE OF student_id` trigger, refuses PT409. **A trigger, not a column grant**, and
+>    the difference is load-bearing: `saveAttendance` upserts, and PostgREST puts every payload
+>    column in `ON CONFLICT DO UPDATE SET`, `student_id` included, so a grant would refuse every
+>    legitimate re-mark of a register. Measured: AT2 refused, including to a classmate of the same
+>    class, while the ordinary re-mark still works.
+>
+> **Co-teaching — decision, with reasoning.** Kept: **any teacher who currently teaches the class
+> may edit the record.** RLS batch 4 decision 1 made attendance deliberately class-level ("one row
+> per pupil per day, so any teacher of the class may mark it") so a homeroom teacher who teaches no
+> subject can still mark the register; creator-only would break co-taught classes and leave a wrong
+> mark uncorrectable while the marker is away. What changed is that the edit is now **attributed**:
+> the register always names who last set it. Measured: Sahra (co-teaches 5A) may correct the status
+> as herself; Guled (6B only) still cannot touch it. Tightening this to creator-only is a one-line
+> change to the USING clause and remains **a product decision, open** if the school wants it.
+>
+> **Verified end state:** after the refused AT1–AT2 attempts the row still reads
+> `Hodan Warsame / late / marked_by = Faysal`. (Read as postgres — a teacher cannot read a
+> colleague's `profiles` row, so an RLS-filtered join prints NULL for the name either way.)
+
+**Original finding:**
+
 - **Table:** `attendance_records` (`attendance_records_teacher_update`: USING `teaches_class`;
   CHECK allows `marked_by IS NULL`)
 - **Steps and actual results** (Faysal marked Hodan present on 2026-09-15; Sahra teaches the same
@@ -688,8 +778,8 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 
 1. ~~**B1**~~ (messaging unusable). **Resolved.**
 2. ~~**S1, S2, S3**~~ (all resolved).
-3. ~~**S6**~~ (resolved), **S5** (moved: resolved; edited: open), **S7** (money integrity).
+3. ~~**S5, S6, S7**~~ (all resolved — money integrity).
 4. ~~**S8, S9**~~ (resolved).
-5. ~~**S4**~~ (resolved), **S10, S11**, with K3 (one enrolment and attendance authority batch).
+5. ~~**S4, S10, S11, K3**~~ (all resolved).
 6. The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.
 7. Remaining MINOR and COSMETIC items.

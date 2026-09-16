@@ -151,6 +151,10 @@ export async function saveAttendance(
 
   const markedBy = await currentUserId()
 
+  // GROUP A (SYSTEM_ISSUES_LIST K3, S11). The teacher policies now also require
+  // the pupil to have an OPEN enrolment in this class, and marked_by to be the
+  // caller, so a refusal here is a real condition worth naming rather than a
+  // generic permission error.
   const { error } = await supabase.from('attendance_records').upsert(
     entries.map((e) => ({
       school_id: schoolId,
@@ -166,6 +170,16 @@ export async function saveAttendance(
     })),
     { onConflict: 'school_id,student_id,date' },
   )
+
+  if (error) {
+    if (error.code === '42501') {
+      throw new Error(
+        'Attendance can only be marked for pupils currently enrolled in this class, and only by a teacher of it.',
+      )
+    }
+    if (error.code === 'PT409') throw new Error(error.message)
+    throw error
+  }
 
   if (error) throw error
 }
@@ -243,6 +257,8 @@ export async function saveGrades(
 
   const recordedBy = await currentUserId()
 
+  // GROUP A (SYSTEM_ISSUES_LIST S10): subject-exact teaching AND an open
+  // enrolment in the class.
   const { error } = await supabase.from('grade_records').upsert(
     entries.map((e) => ({
       school_id: schoolId,
@@ -257,6 +273,15 @@ export async function saveGrades(
     })),
     { onConflict: 'school_id,student_id,subject_id,term_id,assessment' },
   )
+
+  if (error) {
+    if (error.code === '42501') {
+      throw new Error(
+        'Marks can only be recorded for pupils currently enrolled in this class, in a subject you teach.',
+      )
+    }
+    throw error
+  }
 
   if (error) throw error
 }
@@ -417,6 +442,8 @@ export async function setSubmissionStatus(
   studentId: string,
   status: SubmissionStatus,
 ): Promise<void> {
+  // GROUP A (SYSTEM_ISSUES_LIST S10): the pupil must be enrolled in the class
+  // the homework was set for.
   const { error } = await supabase.from('homework_submissions').upsert(
     {
       school_id: schoolId,
@@ -427,6 +454,13 @@ export async function setSubmissionStatus(
     },
     { onConflict: 'school_id,homework_id,student_id' },
   )
+
+  if (error) {
+    if (error.code === '42501') {
+      throw new Error('A submission can only be recorded for a pupil enrolled in this homework\'s class.')
+    }
+    throw error
+  }
 
   if (error) throw error
 }
