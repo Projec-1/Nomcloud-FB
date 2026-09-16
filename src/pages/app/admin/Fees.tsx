@@ -207,6 +207,11 @@ export default function AdminFees() {
       next.amount = `Already paid ${formatMoney(editing.amountPaid, editing.currency, true)}. The amount cannot be lower.`
     }
     if (!feeForm.dueDate) next.dueDate = 'Select a due date.'
+    // fee_records_assert_not_created_overdue: a NEW fee cannot be due before
+    // today. Editing an existing fee's due date stays allowed (correction path).
+    else if (!editing && feeForm.dueDate < todayInTimeZone(timeZone)) {
+      next.dueDate = 'A new fee cannot be due before today.'
+    }
     setFeeErrors(next)
     return Object.keys(next).length === 0
   }
@@ -263,6 +268,8 @@ export default function AdminFees() {
     // Required, not generated. A reference is a real receipt number.
     if (!minLength(payReference.trim(), 2)) next.reference = 'Enter the receipt or transaction reference.'
     if (!payDate) next.paidOn = 'Select the payment date.'
+    // fee_payments_assert_not_future_dated (SYSTEM_ISSUES_LIST M9).
+    else if (payDate > todayInTimeZone(timeZone)) next.paidOn = 'A payment cannot be dated in the future.'
     setPayErrors(next)
     return Object.keys(next).length === 0
   }
@@ -615,6 +622,7 @@ export default function AdminFees() {
               label="Due date"
               type="date"
               required
+              min={editing ? undefined : todayInTimeZone(timeZone)}
               value={feeForm.dueDate}
               onChange={(e) => setFeeForm({ ...feeForm, dueDate: e.target.value })}
               error={feeErrors.dueDate}
@@ -683,6 +691,7 @@ export default function AdminFees() {
             label="Payment date"
             type="date"
             required
+            max={todayInTimeZone(timeZone)}
             value={payDate}
             onChange={(e) => setPayDate(e.target.value)}
             error={payErrors.paidOn}

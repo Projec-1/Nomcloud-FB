@@ -59,12 +59,16 @@
 // ---------------------------------------------------------------------------
 // ANNOUNCEMENT VISIBILITY IS FILTERED BY AUDIENCE, IN THE DATABASE
 // ---------------------------------------------------------------------------
-// announcements.audience is CHECKed to 'all', 'teachers', 'parents', 'students'
-// or 'class', and migration 14 wrote one SELECT policy per readership rather
-// than inventing a rule. A guardian sees 'all', 'parents', and class notices for
-// their own child's class. A teacher sees 'all', 'teachers', and class notices
-// for classes they teach. 'students' is visible to management only, because V1
-// issues students no logins.
+// announcements.audience is CHECKed to 'all', 'teachers', 'parents' or 'class',
+// and migration 14 wrote one SELECT policy per readership rather than inventing
+// a rule. A guardian sees 'all', 'parents', and class notices for their own
+// child's class. A teacher sees 'all', 'teachers', and class notices for classes
+// they teach. There is no 'students' audience any more (SYSTEM_ISSUES_LIST M11,
+// migration 20260916000007): V1 issues students no logins, so "All Students"
+// reached nobody while reporting success.
+//
+// A class notice is refused (PT422) when the class has no enrolled students,
+// because it would reach no family; the server's sentence is shown as is.
 //
 // This module therefore does NOT filter by audience. It asks for the caller's
 // own school and lets the policies decide readership, which is the one case in
@@ -81,7 +85,7 @@
 import { supabase } from '@/lib/supabase'
 
 /** The audiences `announcements_audience_check` allows. */
-export type AnnouncementAudience = 'all' | 'teachers' | 'parents' | 'students' | 'class'
+export type AnnouncementAudience = 'all' | 'teachers' | 'parents' | 'class'
 
 /** The priorities `announcements_priority_check` allows. */
 export type AnnouncementPriority = 'normal' | 'important' | 'urgent'
@@ -112,8 +116,10 @@ export interface AnnouncementInput {
  * The signed-in auth user id, which is what auth.uid() returns inside a policy.
  *
  * announcements.created_by, message_threads.created_by and messages.sender_id
- * are all attribution columns referencing profiles(id), and the matching
- * policies accept only NULL or auth.uid(). Batch 5 found the prototype passing
+ * are all attribution columns referencing profiles(id), and the matching INSERT
+ * policies accept only auth.uid() — never NULL, never someone else
+ * (SYSTEM_ISSUES_LIST M10, migration 20260916000007). messages.sent_at is not
+ * insertable at all; the database stamps it. Batch 5 found the prototype passing
  * a teachers.id and a person's name into columns of exactly this kind, so this
  * is resolved from the session and never accepted from a caller.
  */
@@ -450,8 +456,16 @@ export async function markThreadRead(schoolId: string, threadId: string, userId:
 export interface MessageableUser {
   userId: string
   name: string
+  /** Every active role the person holds at this school, highest first. */
+  roles: string[]
+  /** Those roles for display, e.g. "Owner / Administrator". */
   role: string
 }
+
+/** Display order for a person's roles: the most senior first. */
+const ROLE_ORDER = ['owner', 'director', 'administrator', 'principal', 'teacher', 'guardian']
+
+const roleLabel = (role: string) => role.charAt(0).toUpperCase() + role.slice(1)
 
 /**
  * People an administrator can open a conversation with.
@@ -461,6 +475,11 @@ export interface MessageableUser {
  * guardians row but has never signed in has no user id and cannot be messaged;
  * that is a real limit of the model, not an omission here, and the reminder
  * feature below reports it rather than silently skipping.
+ *
+ * ONE ENTRY PER PERSON, NOT PER MEMBERSHIP. A person may hold several roles at
+ * one school (UNIQUE (user_id, role)); every school approved since
+ * 20260916000006 has an owner who is also its administrator. Memberships are
+ * therefore grouped by user, and the roles are combined for display.
  */
 export async function fetchMessageableUsers(schoolId: string, excludeUserId: string): Promise<MessageableUser[]> {
   const { data, error } = await supabase
@@ -472,12 +491,24 @@ export async function fetchMessageableUsers(schoolId: string, excludeUserId: str
   if (error) throw error
 
   const rows = (data ?? []) as { user_id: string; role: string }[]
-  const names = await profileNames(schoolId, rows.map((r) => r.user_id))
 
-  return rows
-    .filter((r) => r.user_id !== excludeUserId)
-    .map((r) => ({ userId: r.user_id, name: names.get(r.user_id) ?? 'School member', role: r.role }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const rolesByUser = new Map<string, Set<string>>()
+  for (const r of rows) {
+    if (r.user_id === excludeUserId) continue
+    rolesByUser.set(r.user_id, (rolesByUser.get(r.user_id) ?? new Set<string>()).add(r.role))
+  }
+
+  const names = await profileNames(schoolId, Array.from(rolesByUser.keys()))
+
+  return Array.from(rolesByUser, ([userId, roleSet]) => {
+    const roles = Array.from(roleSet).sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b))
+    return {
+      userId,
+      name: names.get(userId) ?? 'School member',
+      roles,
+      role: roles.map(roleLabel).join(' / '),
+    }
+  }).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /** The guardian membership user id for each guardian, where one exists. */

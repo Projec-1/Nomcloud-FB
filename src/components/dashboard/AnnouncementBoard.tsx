@@ -44,10 +44,9 @@ import { errorMessage } from '@/utils/errorMessage'
 // what by audience, and the service deliberately does not restate that matrix
 // client-side. A guardian receives 'all' and 'parents' plus their own child's
 // class notices; a teacher receives 'all' and 'teachers' plus classes they
-// teach. Note in particular that the prototype showed guardians the 'students'
-// audience, which migration 14 is explicit is management-only — treating it as a
-// parent audience silently redirects a message meant for children. That
-// misreading is gone simply by not filtering here.
+// teach. The prototype showed guardians a 'students' audience; that audience no
+// longer exists (SYSTEM_ISSUES_LIST M11), because students hold no logins and it
+// reached nobody.
 // ---------------------------------------------------------------------------
 
 const priorityTone: Record<AnnouncementPriority, 'neutral' | 'warning' | 'danger'> = {
@@ -60,7 +59,6 @@ const audienceLabels: Record<AnnouncementAudience, string> = {
   all: 'Entire School',
   teachers: 'All Teachers',
   parents: 'All Parents',
-  students: 'All Students',
   class: 'Specific Class',
 }
 

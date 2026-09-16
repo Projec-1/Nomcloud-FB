@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3, the attribution-and-scope batch M6, M7, M8, the parent-visibility-and-people-UI batch M4, M5, C1, C2, and the accounts-and-ownership batch M13, M14, M15, M16 (2026-09-16) resolved. Marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3, the attribution-and-scope batch M6, M7, M8, the parent-visibility-and-people-UI batch M4, M5, C1, C2, the accounts-and-ownership batch M13, M14, M15, M16, and the messaging-and-finance batch M9, M10, M11 (2026-09-16) resolved. **29 of 30 resolved; only M12 remains open.** Marked in place below; original evidence kept.
 **New capability:** *Revoke access* / *Restore access* for a teacher or guardian — suspends the login only, keeping the employment or family record (see S4).
 This list is the input for small fix batches, worked top to bottom.
 
@@ -108,9 +108,9 @@ From the academic-year investigation. Where this sweep touched them again it is 
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
 | SERIOUS | 11 | **11 — all resolved** |
-| MINOR | 16 | 12 (M1–M8, M13–M16) |
+| MINOR | 16 | 15 (M1–M11, M13–M16) — **M12 open** |
 | COSMETIC | 2 | **2 — all resolved** |
-| **Total new** | **30** | **26** |
+| **Total new** | **30** | **29** |
 
 ---
 
@@ -761,19 +761,89 @@ From the academic-year investigation. Where this sweep touched them again it is 
 
 ### Finance
 
-**M9 · Payments can be dated in the future — NEW**
+**M9 · Payments can be dated in the future — NEW — ✅ RESOLVED 2026-09-16**
+> Migration `20260916000007_messaging_and_finance_dates`: trigger `fee_payments_assert_not_future_dated`
+> (BEFORE INSERT OR UPDATE OF paid_on) refuses a `paid_on` after the school's **local** today with
+> PT422. It uses `school_local_today()`, the same expression `apply_payment_event` uses to stamp
+> provider payments, so a provider payment can never be refused. The payment form also sets
+> `max` to today and says so. **Measured:**
+> - F15 (2030-01-01) and tomorrow: OK → **PT422**
+> - editing a payment's date to next year: OK → **PT422**
+> - today and last week: still OK
+> - `amount_paid` sync unchanged; the S5 forgery is still 42501 and the S6 move still PT409
+>
+> **Real HTTP:** `recordPayment` dated 2030-01-01 is refused with the sentence; dated today it saves.
+>
+> **Also requested (not a listed item): a fee cannot be CREATED already overdue.** Trigger
+> `fee_records_assert_not_created_overdue` (BEFORE INSERT) refuses a `due_date` before the school's
+> local today with PT422; the fee form sets `min` to today for new fees. **Editing an existing fee's
+> due date to a past date stays allowed**, deliberately:
+> - the locked S5/S7 finance decision keeps due-date edits allowed;
+> - an edit is the correction path, and a record must be able to state its true due date;
+> - `updateFeeRecord` re-sends `due_date` on every edit, so an update rule would also block amount
+>   and category edits on any fee whose due date has passed.
+>
+> Measured: due yesterday **PT422**; due today, due in 30 days, editing a due date to last month,
+> and editing the amount of a past-due fee are all OK. Real HTTP: `createFeeRecord` due yesterday
+> refused, today and +30 saved.
+
 - **F15:** `paid_on = 2030-01-01` accepted, `OK rows=1`.
 - **Reach:** UI date field and API.
 
 ### Messaging & announcements
 
-**M10 · A participant can post anonymously or back-date a message — NEW**
+**M10 · A participant can post anonymously or back-date a message — NEW — ✅ RESOLVED 2026-09-16**
+> **Sender:** the attendance/grade attribution mechanism. `messages_participant_insert` now requires
+> `sender_id = auth.uid()` (it was "NULL or self"). The same change on the two sibling attribution
+> columns: `message_threads_admin_insert` gains `created_by = auth.uid()` (it had no check), and
+> `announcements_admin_insert` / `announcements_class_management_insert` tighten "NULL or self" to
+> "self".
+> **Timestamp:** the S5 column-grant mechanism. `sent_at`, `created_at` and `updated_at` are removed
+> from the messages INSERT grant, so only the database default can set them.
+> **Measured, before → after:**
+> - M6 (sender NULL): OK → **42501**
+> - M7 (forged sender): 42501 → 42501
+> - M8 (`sent_at` 2020) and `created_at` 2020: OK → **42501 permission denied**
+> - thread `created_by` NULL / forged: OK → **42501**
+> - announcement `created_by` NULL: OK → **42501**
+> - the legitimate message, thread and announcement: still OK
+>
+> **Real HTTP:** a dual-role administrator's `createThread` (the B1 path) and a guardian's
+> `sendMessage` both work; raw NULL, forged and back-dated inserts are refused; `fetchMessages` shows
+> both messages stamped today.
+
 - **M6:** message with `sender_id = NULL`. `OK rows=1`.
 - **M8:** `sent_at = 2020-01-01`. `OK rows=1`.
 - **Still refused:** impersonating another user (`42501`, sweep M7).
 - **Reach:** API.
 
-**M11 · "All Students" announcements reach nobody — NEW**
+**M11 · "All Students" announcements reach nobody — NEW — ✅ RESOLVED 2026-09-16**
+> Students hold no logins, and migration 14 deliberately made `students` readable by management
+> only; the parent screens already record that treating it as a parents audience would redirect a
+> message meant for children. So the audience has no readership by design, and the fix is to stop
+> offering it rather than invent one. `announcements_audience_check` no longer admits `students`
+> (0 rows used it), and the form, the type and the labels no longer include it. **Measured:** N1 OK
+> (guardian 0, teacher 0) → **23514**; changing an existing notice to `students` → **23514**; All
+> Parents / All Teachers / Entire School still publish. Real HTTP: refused, shown as "The value
+> entered for audience is not accepted."
+>
+> **Also requested (not a listed item): a class announcement to a class with no enrolled students.**
+> The only "message the whole class" feature is a `class` announcement. Families read it only
+> through an open enrolment (M5), so for an empty class it reached no family while the screen said
+> "Announcement published". Trigger `announcements_assert_class_has_recipients` (BEFORE INSERT OR
+> UPDATE OF audience, class_id) now refuses it with PT422: *class "…" currently has no enrolled
+> students, so this announcement would reach no families; it was not published.*
+> **Measured:**
+> - empty class: OK → **PT422**
+> - moving a notice to the empty class: OK → **PT422**
+> - a class whose pupils have all left: OK → **PT422**
+> - a class with pupils: OK
+> - pinning an existing notice after its class emptied: still OK
+>
+> **Real HTTP:** `createAnnouncement` to an empty class is refused with that sentence; to a class
+> with a pupil it publishes and the guardian reads it. Fee reminders already handled zero
+> recipients (the send button is disabled).
+
 - **N1:** an administrator creates an announcement with audience `students`.
 - **Actual result:** guardian sees **0**, teacher sees **0**. No student role exists and no
   policy reads `students`, but the form offers "All Students" and reports success.
@@ -849,9 +919,10 @@ From the academic-year investigation. Where this sweep touched them again it is 
 >
 > **Not changed:** existing schools are not backfilled. A migration cannot know who owns a running
 > school; S8's owner path or a platform administrator can name one.
-> **Found, messaging batch:** `fetchMessageableUsers` lists one entry per active membership without
+> ~~**Found, messaging batch:** `fetchMessageableUsers` lists one entry per active membership without
 > de-duplicating, so a person holding owner + administrator would appear twice in the message
-> recipient picker.
+> recipient picker.~~ **✅ Closed 2026-09-16:** one entry per person with combined roles, e.g.
+> "Owner / Administrator" (real HTTP: 2 membership rows → 1 entry).
 
 - **A6:** the new school gets only an `administrator` membership, 0 academic years (K1) and
   0 subjects.
@@ -1022,5 +1093,26 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 6. ~~The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.~~ (all resolved — this also clears the precondition for M8).
 6a. ~~Attribution and scope: M6, M7, M8.~~ (all resolved; follow-up found: attendance management policies lack the attribution check).
 6b. ~~Parent visibility and people UI: M4, M5, C1, C2.~~ (all resolved).
-6c. ~~Accounts and ownership: M13, M14, M15, M16.~~ (all resolved; found for the messaging batch: the recipient picker does not de-duplicate a person holding two roles).
-7. Remaining MINOR and COSMETIC items.
+6c. ~~Accounts and ownership: M13, M14, M15, M16.~~ (all resolved; the recipient-picker de-duplication it found is closed in 6d).
+6d. ~~Messaging and finance: M9, M10, M11, plus recipient de-duplication, empty-class announcements and fees created overdue.~~ (all resolved).
+7. **Still open:** M12 (a failed conversation cannot clean itself up), plus the follow-ups below, which are not numbered items.
+
+### Final state (2026-09-16)
+
+| Severity | Found | Resolved | Open |
+|---|---|---|---|
+| BLOCKER | 1 | 1 | 0 |
+| SERIOUS | 11 | 11 | 0 |
+| MINOR | 16 | 15 | **1 (M12)** |
+| COSMETIC | 2 | 2 | 0 |
+| **Total** | **30** | **29** | **1** |
+
+**Follow-ups found while fixing, not numbered items and not yet fixed:**
+- The attendance **management** policies have no `marked_by` attribution check (found in the M6 batch).
+- A different administrator cannot pin or unpin another administrator's announcement: 42501 before
+  and after this batch, because the announcement UPDATE policies keep "created_by is NULL or self".
+- `sendMessage` updates `message_threads.last_message_at`, but that table has no UPDATE policy for
+  school roles, so the update affects no rows and a thread's position does not move. Found by policy
+  inspection; not measured.
+- Teachers and guardians see other people as "School member" in the recipient picker and in threads,
+  because only administrators can read other profiles (real HTTP).

@@ -8,8 +8,9 @@ import type { AnnouncementAudience } from '@/services/communicationService'
 
 // Phase 8 batch 7. Real announcements for management.
 //
-// All five audiences are offered here, because announcements_admin_insert keys
-// on has_school_admin_role and admits any audience. The class list comes from
+// Every audience is offered here, because announcements_admin_insert keys on
+// has_school_admin_role and admits any audience. "All Students" is gone
+// (SYSTEM_ISSUES_LIST M11): students have no accounts, so it reached nobody. The class list comes from
 // real classes so a class notice carries a real class_id, which the
 // audience/class CHECK requires in both directions.
 
@@ -17,7 +18,6 @@ const audienceOptions: { value: AnnouncementAudience; label: string }[] = [
   { value: 'all', label: 'Entire School' },
   { value: 'teachers', label: 'All Teachers' },
   { value: 'parents', label: 'All Parents' },
-  { value: 'students', label: 'All Students' },
   { value: 'class', label: 'Specific Class' },
 ]
 
