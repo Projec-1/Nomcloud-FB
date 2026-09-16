@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3, and the attribution-and-scope batch M6, M7, M8 (2026-09-16) resolved. Marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3, the attribution-and-scope batch M6, M7, M8, and the parent-visibility-and-people-UI batch M4, M5, C1, C2 (2026-09-16) resolved. Marked in place below; original evidence kept.
 **New capability:** *Revoke access* / *Restore access* for a teacher or guardian — suspends the login only, keeping the employment or family record (see S4).
 This list is the input for small fix batches, worked top to bottom.
 
@@ -108,9 +108,9 @@ From the academic-year investigation. Where this sweep touched them again it is 
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
 | SERIOUS | 11 | **11 — all resolved** |
-| MINOR | 16 | 6 (M1, M2, M3, M6, M7, M8) |
-| COSMETIC | 2 | 0 |
-| **Total new** | **30** | **18** |
+| MINOR | 16 | 8 (M1–M8) |
+| COSMETIC | 2 | **2 — all resolved** |
+| **Total new** | **30** | **22** |
 
 ---
 
@@ -653,13 +653,37 @@ From the academic-year investigation. Where this sweep touched them again it is 
 
 ### People
 
-**M4 · Deleting a student who has fee payments fails, contradicting the dialog — NEW**
+**M4 · Deleting a student who has fee payments fails, contradicting the dialog — NEW — ✅ RESOLVED 2026-09-16**
+> The block stays: it protects the school's financial records. The wording now matches what happens.
+> **Dialog, as rendered in a real browser:** "A student with fee payments on record cannot be
+> removed: payment history must be kept for the school's financial records, so set their status to
+> Inactive or Transferred instead. For any other student, this permanently deletes their record
+> together with their attendance, grades, homework submissions, class enrolments, guardian links
+> and unpaid fee records. This cannot be undone." The cascade list was checked against the live
+> foreign keys.
+> **Confirming on a student with a payment** now gives *Student not removed — This student has fee
+> payments on record, so they cannot be deleted: payment history must be kept for the school's
+> financial records. Set their status to Inactive or Transferred instead.* `deleteStudent` maps
+> 23503 to that sentence. The student is still in the database. Probes: delete with payments →
+> 23503 (unchanged); delete without payments → cascades (unchanged).
+
 - **P6:** the dialog says the delete removes "attendance, grades and fees". Actual result:
   `23503 ... violates foreign key constraint "fee_payments_school_id_fee_record_id_fkey"`, shown
   as a generic readable error.
 - The block itself is correct money protection; the dialog is wrong. **Reach:** UI.
 
-**M5 · A guardian keeps seeing a class after their child leaves it — NEW**
+**M5 · A guardian keeps seeing a class after their child leaves it — NEW — ✅ RESOLVED 2026-09-16**
+> Migration `20260916000005_guardian_visibility_and_relationship`. `guardian_has_student_in_class`
+> gains `ce.left_on is null`, exactly the line `teaches_student` and `student_enrolled_in_class`
+> already use. Same signature, security and grants, so every policy that uses it tightens at once:
+> classes, class subjects, timetable, homework, exams and class announcements.
+> **Measured, before → after apply:** with Yusuf's 5A enrolment closed, Amina sees
+> `homework=4 timetable=1 subjects=2 class=1 exams=2 announcements=1` → all `0`. She still sees her
+> own child (student row, enrolment history, and `is_guardian_of_student` true, which gates grades,
+> attendance, submissions and fees) and the school-wide parents notice. **No regression:** Bashir,
+> whose child is still in 6B, sees `1/1/1/1/1/1` before and after, and nothing of 5A. Parent
+> screens read classes only through open enrolments, so none relied on the old behaviour.
+
 - **Cause:** `guardian_has_student_in_class` ignores `left_on`.
 - **Steps:** close Yusuf's 5A enrolment, then act as guardian Amina.
 - **Actual result (L2):** she still sees 5A homework (2), timetable (1), class subjects (2) and
@@ -791,13 +815,40 @@ From the academic-year investigation. Where this sweep touched them again it is 
 
 ## COSMETIC
 
-**C1 · Student status form offers 3 of the 4 database values**
+**C1 · Student status form offers 3 of the 4 database values — ✅ RESOLVED 2026-09-16**
+> The form now builds its options from `STUDENT_STATUSES` (studentService), which holds exactly the
+> four `students_status_check` values. If a saved value is ever outside that list, it is shown as
+> itself rather than silently as the first option. **Real browser:** an already-transferred student
+> opens with `transferred` / "Transferred" selected. Choosing Transferred for another student saves
+> `transferred`, and reopening shows it selected.
+
 - `students_status_check` allows `active`, `inactive`, `graduated`, `transferred`; the form omits
   `transferred`.
 - A transferred student opens with the wrong option shown. The saved value is not changed unless
   the field is touched.
 
-**C2 · Guardian relationship can never be set from the UI**
+**C2 · Guardian relationship can never be set from the UI — ✅ RESOLVED 2026-09-16**
+> Both linking paths (existing guardian and new guardian, on the student form, the only place a
+> guardian is linked) now have a required **Relationship to student** field: Mother / Father /
+> Other, the values the demo data and bulk-import plan use. The RPCs `link_guardian_to_student` and
+> `create_and_link_guardian` gained `p_relationship` (migration `20260916000005`):
+> - a new link stores it;
+> - an existing link given a different relationship is updated (`relationship_updated`, row count
+>   asserted);
+> - blank is stored as NULL;
+> - the old call shape still works;
+> - the S2 guards are unchanged (a teacher gets 42501, anon has no execute permission).
+>
+> The directory and the "Already linked" line show "Name (Relationship)". **Real browser:**
+> - saving without a relationship shows *Choose the guardian's relationship to the student.* and
+>   links nothing;
+> - linking with Father stores `Father` and the table shows "Existing Guardian (Father)";
+> - re-picking that guardian pre-fills Father; changing to Other stores `Other`, with the toast
+>   "…relationship is now Other";
+> - a new guardian added as Mother stores `Mother` and shows "New Probe Mother (Mother)".
+>
+> The column stays free text; no CHECK was added.
+
 - `student_guardians.relationship` exists (free text), but no form has the field, so every
   UI-created link stores NULL.
 
@@ -892,4 +943,5 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 5. ~~**S4, S10, S11, K3**~~ (all resolved).
 6. ~~The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.~~ (all resolved — this also clears the precondition for M8).
 6a. ~~Attribution and scope: M6, M7, M8.~~ (all resolved; follow-up found: attendance management policies lack the attribution check).
+6b. ~~Parent visibility and people UI: M4, M5, C1, C2.~~ (all resolved).
 7. Remaining MINOR and COSMETIC items.

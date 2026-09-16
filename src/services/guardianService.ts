@@ -221,6 +221,14 @@ export interface GuardianInput {
   phone: string
 }
 
+/**
+ * The relationships the interface offers when linking a guardian
+ * (SYSTEM_ISSUES_LIST C2). student_guardians.relationship is free text; these
+ * are the stored values the demo data and the bulk-import plan already use.
+ */
+export const GUARDIAN_RELATIONSHIPS = ['Mother', 'Father', 'Other'] as const
+export type GuardianRelationship = (typeof GUARDIAN_RELATIONSHIPS)[number]
+
 /** Every guardian in the school, for the student form's picker. */
 export async function fetchSchoolGuardians(schoolId: string): Promise<GuardianRow[]> {
   const { data, error } = await supabase
@@ -253,7 +261,7 @@ export async function createGuardian(schoolId: string, input: GuardianInput): Pr
 }
 
 /** What the database did, so the interface can say it plainly. */
-export type GuardianLinkOutcome = 'linked' | 'linked_primary' | 'promoted' | 'already_linked'
+export type GuardianLinkOutcome = 'linked' | 'linked_primary' | 'promoted' | 'relationship_updated' | 'already_linked'
 
 /**
  * Links a guardian to a student, optionally as the primary contact.
@@ -270,6 +278,9 @@ export type GuardianLinkOutcome = 'linked' | 'linked_primary' | 'promoted' | 'al
  * separable from a browser, which is what link_guardian_to_student does in one
  * transaction. Nothing is swallowed now: a refusal reaches the caller.
  *
+ * The relationship (C2) is stored on a new link; on an existing link a different
+ * relationship replaces the stored one ('relationship_updated').
+ *
  * Creating a guardian still does not give them an account. They can sign in, and
  * be messaged, only once an invitation is accepted.
  */
@@ -278,12 +289,14 @@ export async function linkGuardianToStudent(
   studentId: string,
   guardianId: string,
   makePrimary = false,
+  relationship: GuardianRelationship | null = null,
 ): Promise<GuardianLinkOutcome> {
   const { data, error } = await supabase.rpc('link_guardian_to_student', {
     p_school_id: schoolId,
     p_student_id: studentId,
     p_guardian_id: guardianId,
     p_make_primary: makePrimary,
+    p_relationship: relationship,
   })
   if (error) throw error
   return data as GuardianLinkOutcome
@@ -301,6 +314,7 @@ export async function createAndLinkGuardian(
   studentId: string,
   input: GuardianInput,
   makePrimary = false,
+  relationship: GuardianRelationship | null = null,
 ): Promise<string> {
   const { data, error } = await supabase.rpc('create_and_link_guardian', {
     p_school_id: schoolId,
@@ -309,6 +323,7 @@ export async function createAndLinkGuardian(
     p_phone: input.phone,
     p_email: input.email,
     p_make_primary: makePrimary,
+    p_relationship: relationship,
   })
   if (error) {
     if (error.code === '23505') throw new Error('A guardian with those details already exists at this school.')

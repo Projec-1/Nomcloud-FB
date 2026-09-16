@@ -23,13 +23,16 @@ import {
   enrolStudent,
   fetchStudentDirectory,
   updateStudent,
+  STUDENT_STATUSES,
   type DirectoryStudent,
   type StudentGender,
 } from '@/services/studentService'
 import {
   createAndLinkGuardian,
   fetchSchoolGuardians,
+  GUARDIAN_RELATIONSHIPS,
   linkGuardianToStudent,
+  type GuardianRelationship,
   type GuardianRow,
 } from '@/services/guardianService'
 import { minLength, type FieldErrors } from '@/utils/validators'
@@ -77,9 +80,16 @@ const emptyForm = {
   status: 'active',
   guardianId: '',
   guardianIsPrimary: false,
+  // C2: '' until chosen; required whenever a guardian is linked.
+  guardianRelationship: '' as GuardianRelationship | '',
   newGuardianName: '',
   newGuardianEmail: '',
   newGuardianPhone: '',
+}
+
+/** "Amina Yusuf (Mother)", or just the name when no relationship is recorded. */
+function guardianLabel(g: DirectoryStudent['guardians'][number]): string {
+  return g.relationship ? `${g.name} (${g.relationship})` : g.name
 }
 
 export default function AdminStudents() {
@@ -224,6 +234,7 @@ export default function AdminStudents() {
       // Primary is offered, not assumed: ticked only when the student has none,
       // and when it is ticked the swap is explicit (SYSTEM_ISSUES_LIST S2).
       guardianIsPrimary: !student.guardians.some((g) => g.isPrimary),
+      guardianRelationship: '',
       newGuardianName: '',
       newGuardianEmail: '',
       newGuardianPhone: '',
@@ -248,6 +259,9 @@ export default function AdminStudents() {
       next.classId = 'Set an active academic year before enrolling a student in a class.'
     }
     if (guardianMode === 'existing' && !form.guardianId) next.guardianId = 'Select a guardian.'
+    if (guardianMode !== 'none' && !form.guardianRelationship) {
+      next.guardianRelationship = "Choose the guardian's relationship to the student."
+    }
     if (guardianMode === 'new') {
       if (!minLength(form.newGuardianName, 2)) next.newGuardianName = "Enter the guardian's name."
       if (!minLength(form.newGuardianPhone, 6)) next.newGuardianPhone = 'Enter a phone number.'
@@ -290,14 +304,23 @@ export default function AdminStudents() {
       // refusal throws and lands in the catch below (SYSTEM_ISSUES_LIST S2).
       let guardianNote: string | undefined
       if (guardianMode === 'existing' && form.guardianId) {
-        const outcome = await linkGuardianToStudent(schoolId, studentId, form.guardianId, form.guardianIsPrimary)
+        const relationship = form.guardianRelationship || null
+        const outcome = await linkGuardianToStudent(
+          schoolId,
+          studentId,
+          form.guardianId,
+          form.guardianIsPrimary,
+          relationship,
+        )
         const name = guardians.find((g) => g.id === form.guardianId)?.full_name ?? 'The guardian'
         guardianNote =
           outcome === 'already_linked'
             ? `${name} was already linked to this student.`
-            : outcome === 'linked'
-              ? `${name} was linked.`
-              : `${name} is now the primary contact.`
+            : outcome === 'relationship_updated'
+              ? `${name}'s relationship is now ${relationship}.`
+              : outcome === 'linked'
+                ? `${name} was linked as ${relationship}.`
+                : `${name} is now the primary contact.`
       } else if (guardianMode === 'new') {
         await createAndLinkGuardian(
           schoolId,
@@ -308,6 +331,7 @@ export default function AdminStudents() {
             phone: form.newGuardianPhone,
           },
           form.guardianIsPrimary,
+          form.guardianRelationship || null,
         )
         guardianNote = form.guardianIsPrimary
           ? `${form.newGuardianName} was added as the primary contact.`
@@ -412,7 +436,7 @@ export default function AdminStudents() {
                         <td className="px-5 py-3.5 text-graphite">{s.admissionNo}</td>
                         <td className="px-5 py-3.5 text-graphite">{s.className ?? '—'}</td>
                         <td className="px-5 py-3.5 text-graphite">
-                          {s.guardians.length === 0 ? '—' : s.guardians.map((g) => g.name).join(', ')}
+                          {s.guardians.length === 0 ? '—' : s.guardians.map(guardianLabel).join(', ')}
                         </td>
                         <td className="px-5 py-3.5">
                           <Badge tone={s.status === 'active' ? 'success' : 'neutral'}>{s.status}</Badge>
@@ -515,10 +539,17 @@ export default function AdminStudents() {
                 </option>
               ))}
             </Select>
-            <Select label="Status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="graduated">Graduated</option>
+            <Select id="student-status" label="Status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              {STUDENT_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+              {/* A saved value the list does not know is still shown as itself,
+                  never as the first option (C1). */}
+              {!STUDENT_STATUSES.some((s) => s.value === form.status) && (
+                <option value={form.status}>{form.status}</option>
+              )}
             </Select>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -553,7 +584,18 @@ export default function AdminStudents() {
               ))}
             </div>
             {guardianMode === 'existing' && (
-              <Select value={form.guardianId} onChange={(e) => setForm({ ...form, guardianId: e.target.value })} error={errors.guardianId}>
+              <Select
+                aria-label="Guardian"
+                value={form.guardianId}
+                onChange={(e) => {
+                  const guardianId = e.target.value
+                  // Re-linking someone already linked starts from their saved relationship.
+                  const saved = editing?.guardians.find((g) => g.id === guardianId)?.relationship
+                  const known = GUARDIAN_RELATIONSHIPS.find((r) => r === saved)
+                  setForm({ ...form, guardianId, guardianRelationship: known ?? form.guardianRelationship })
+                }}
+                error={errors.guardianId}
+              >
                 <option value="">Select a guardian…</option>
                 {guardians.map((g) => (
                   <option key={g.id} value={g.id}>
@@ -588,6 +630,25 @@ export default function AdminStudents() {
             )}
             {guardianMode !== 'none' && (
               <div className="mt-3">
+                <Select
+                  id="guardian-relationship"
+                  label="Relationship to student"
+                  required
+                  value={form.guardianRelationship}
+                  onChange={(e) => setForm({ ...form, guardianRelationship: e.target.value as GuardianRelationship | '' })}
+                  error={errors.guardianRelationship}
+                >
+                  <option value="">Select a relationship…</option>
+                  {GUARDIAN_RELATIONSHIPS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+            {guardianMode !== 'none' && (
+              <div className="mt-3">
                 <label className="flex items-start gap-2.5 text-sm text-ink dark:text-white">
                   <input
                     type="checkbox"
@@ -611,7 +672,7 @@ export default function AdminStudents() {
             {editing && editing.guardians.length > 0 && (
               <p className="mt-2 text-xs text-graphite">
                 Already linked:{' '}
-                {editing.guardians.map((g) => `${g.name}${g.isPrimary ? ' (primary)' : ''}`).join(', ')}
+                {editing.guardians.map((g) => `${guardianLabel(g)}${g.isPrimary ? ' (primary)' : ''}`).join(', ')}
               </p>
             )}
             <p className="mt-2 text-xs text-graphite">
@@ -624,7 +685,7 @@ export default function AdminStudents() {
       <ConfirmDialog
         open={!!deleteTarget}
         title={`Remove ${deleteTarget?.name}?`}
-        description="This permanently removes the student's record, including attendance, grades and fees."
+        description="A student with fee payments on record cannot be removed: payment history must be kept for the school's financial records, so set their status to Inactive or Transferred instead. For any other student, this permanently deletes their record together with their attendance, grades, homework submissions, class enrolments, guardian links and unpaid fee records. This cannot be undone."
         confirmLabel="Remove Student"
         danger
         onConfirm={confirmDelete}

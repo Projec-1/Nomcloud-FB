@@ -112,6 +112,18 @@ export async function fetchSchoolStudents(schoolId: string): Promise<RosterStude
 /** Exactly the values students_gender_check accepts. */
 export type StudentGender = 'male' | 'female' | 'other'
 
+/**
+ * Exactly the values students_status_check accepts, in the order the form offers
+ * them (SYSTEM_ISSUES_LIST C1: 'transferred' used to be missing, so a transferred
+ * student opened with the wrong option shown).
+ */
+export const STUDENT_STATUSES = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'graduated', label: 'Graduated' },
+  { value: 'transferred', label: 'Transferred' },
+] as const
+
 export interface StudentInput {
   fullName: string
   admissionNo: string
@@ -163,10 +175,15 @@ export async function updateStudent(schoolId: string, id: string, input: Student
 /**
  * Removes a student.
  *
- * Fees, attendance, grades and enrolments cascade with the student, which is
- * what SCHEMA_DESIGN intends for a record that was created in error. A student
- * who has simply left should be given status 'inactive' instead, which is why
- * status is an editable field on the form.
+ * WHAT ACTUALLY HAPPENS (SYSTEM_ISSUES_LIST M4). Attendance, grades, homework
+ * submissions, enrolments, guardian links and fee records cascade with the
+ * student, which is what SCHEMA_DESIGN intends for a record created in error.
+ * But a fee record that has PAYMENTS cannot be deleted
+ * (fee_payments_school_id_fee_record_id_fkey is RESTRICT), so the whole delete
+ * is refused with 23503 once any payment exists. That is deliberate: payment
+ * history is the school's financial record and must be kept. The refusal is
+ * turned into a sentence here, and a student who has left should be given the
+ * status 'inactive' or 'transferred' instead.
  */
 export async function deleteStudent(schoolId: string, id: string): Promise<void> {
   const { data, error } = await supabase
@@ -175,7 +192,14 @@ export async function deleteStudent(schoolId: string, id: string): Promise<void>
     .eq('school_id', schoolId)
     .eq('id', id)
     .select('photo_path')
-  if (error) throw error
+  if (error) {
+    if (error.code === '23503') {
+      throw new Error(
+        'This student has fee payments on record, so they cannot be deleted: payment history must be kept for the school\'s financial records. Set their status to Inactive or Transferred instead.',
+      )
+    }
+    throw error
+  }
   // A Storage object has no foreign key to its row, so the photo is removed
   // here or it would outlive the student (FILE_STORAGE_PLAN section 3, rule 4).
   for (const row of (data ?? []) as { photo_path: string | null }[]) {
@@ -234,7 +258,7 @@ export interface DirectoryStudent {
   classId: string | null
   className: string | null
   /** Every linked guardian, through student_guardians. */
-  guardians: { id: string; name: string; isPrimary: boolean }[]
+  guardians: { id: string; name: string; isPrimary: boolean; relationship: string | null }[]
 }
 
 /**
@@ -277,7 +301,7 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
       .is('left_on', null),
     supabase
       .from('student_guardians')
-      .select('student_id, guardian_id, is_primary')
+      .select('student_id, guardian_id, is_primary, relationship')
       .eq('school_id', schoolId)
       .in('student_id', studentIds),
   ])
@@ -286,7 +310,12 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
   if (links.error) throw links.error
 
   const enrolRows = (enrolments.data ?? []) as { student_id: string; class_id: string }[]
-  const linkRows = (links.data ?? []) as { student_id: string; guardian_id: string; is_primary: boolean }[]
+  const linkRows = (links.data ?? []) as {
+    student_id: string
+    guardian_id: string
+    is_primary: boolean
+    relationship: string | null
+  }[]
 
   const classNames = new Map<string, string>()
   const classIds = Array.from(new Set(enrolRows.map((e) => e.class_id)))
@@ -315,11 +344,16 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
   const classByStudent = new Map<string, string>()
   for (const e of enrolRows) classByStudent.set(e.student_id, e.class_id)
 
-  const guardiansByStudent = new Map<string, { id: string; name: string; isPrimary: boolean }[]>()
+  const guardiansByStudent = new Map<string, DirectoryStudent['guardians']>()
   for (const l of linkRows) {
     guardiansByStudent.set(l.student_id, [
       ...(guardiansByStudent.get(l.student_id) ?? []),
-      { id: l.guardian_id, name: guardianNames.get(l.guardian_id) ?? 'Guardian', isPrimary: l.is_primary },
+      {
+        id: l.guardian_id,
+        name: guardianNames.get(l.guardian_id) ?? 'Guardian',
+        isPrimary: l.is_primary,
+        relationship: l.relationship,
+      },
     ])
   }
 
