@@ -234,7 +234,7 @@ export interface DirectoryStudent {
   classId: string | null
   className: string | null
   /** Every linked guardian, through student_guardians. */
-  guardians: { id: string; name: string }[]
+  guardians: { id: string; name: string; isPrimary: boolean }[]
 }
 
 /**
@@ -277,7 +277,7 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
       .is('left_on', null),
     supabase
       .from('student_guardians')
-      .select('student_id, guardian_id')
+      .select('student_id, guardian_id, is_primary')
       .eq('school_id', schoolId)
       .in('student_id', studentIds),
   ])
@@ -286,7 +286,7 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
   if (links.error) throw links.error
 
   const enrolRows = (enrolments.data ?? []) as { student_id: string; class_id: string }[]
-  const linkRows = (links.data ?? []) as { student_id: string; guardian_id: string }[]
+  const linkRows = (links.data ?? []) as { student_id: string; guardian_id: string; is_primary: boolean }[]
 
   const classNames = new Map<string, string>()
   const classIds = Array.from(new Set(enrolRows.map((e) => e.class_id)))
@@ -315,11 +315,11 @@ export async function fetchStudentDirectory(schoolId: string): Promise<Directory
   const classByStudent = new Map<string, string>()
   for (const e of enrolRows) classByStudent.set(e.student_id, e.class_id)
 
-  const guardiansByStudent = new Map<string, { id: string; name: string }[]>()
+  const guardiansByStudent = new Map<string, { id: string; name: string; isPrimary: boolean }[]>()
   for (const l of linkRows) {
     guardiansByStudent.set(l.student_id, [
       ...(guardiansByStudent.get(l.student_id) ?? []),
-      { id: l.guardian_id, name: guardianNames.get(l.guardian_id) ?? 'Guardian' },
+      { id: l.guardian_id, name: guardianNames.get(l.guardian_id) ?? 'Guardian', isPrimary: l.is_primary },
     ])
   }
 

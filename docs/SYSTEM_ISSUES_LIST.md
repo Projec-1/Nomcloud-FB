@@ -1,7 +1,8 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1, S6, S8 and S9 resolved; S5 partly resolved (the "moved" half) — all 2026-09-15, marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15) and S2, S3, S4 (2026-09-16) resolved; S5 partly resolved (the "moved" half). Marked in place below; original evidence kept.
+**New capability:** *Revoke access* / *Restore access* for a teacher or guardian — suspends the login only, keeping the employment or family record (see S4).
 This list is the input for small fix batches, worked top to bottom.
 
 ## How this was tested
@@ -60,10 +61,10 @@ From the academic-year investigation. Where this sweep touched them again it is 
 | Severity | Count | Resolved |
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
-| SERIOUS | 11 | 4 (S1, S6, S8, S9) + S5 partly |
+| SERIOUS | 11 | 7 (S1, S2, S3, S4, S6, S8, S9) + S5 partly |
 | MINOR | 16 | 0 |
 | COSMETIC | 2 | 0 |
-| **Total new** | **30** | **5** (+ S5 partly) |
+| **Total new** | **30** | **8** (+ S5 partly) |
 
 ---
 
@@ -146,7 +147,42 @@ From the academic-year investigation. Where this sweep touched them again it is 
   - After: attendance **0**, grades **0**, enrolments **0**, homework **0**, timetable **1**, class subjects **2**.
 - **Reach:** UI.
 
-### S2 · People · Adding a "New" guardian to a student who already has a primary guardian silently does nothing — NEW
+### S2 · People · Adding a "New" guardian to a student who already has a primary guardian silently does nothing — NEW — ✅ RESOLVED 2026-09-16
+
+> **Resolved.** Migration `20260916000001_people_access_guards` adds two SECURITY INVOKER
+> functions, and `guardianService` no longer swallows 23505.
+>
+> **UX decision: demote-and-promote, on an explicit tick — not a rejection.** The Students form
+> now carries a **Primary contact** checkbox, ticked by default only when the student has no
+> primary yet, and it names who would be replaced ("Amina Yusuf will stop being the primary
+> contact"). Telling the admin to "unset the existing primary first" would be a dead end: no
+> screen unsets one, so the only way out would be the very failure being reported. The swap is
+> therefore allowed, but only when the admin asks for it, and it happens in one transaction
+> (`link_guardian_to_student`) so the student is never left with two primaries or none.
+>
+> **Nothing is hidden any more.** The blind `if (error && error.code !== '23505') throw error` is
+> gone. Re-linking a pair that already exists returns `already_linked` (reported in the toast);
+> every other failure reaches the user.
+>
+> **Orphans cannot recur.** The "New guardian" path is now one call,
+> `create_and_link_guardian`, which creates the guardian and the link in a single transaction.
+> Measured: a refused link left **0** new guardian rows. (One orphan from earlier testing still
+> exists; historical test data, left alone as agreed.)
+>
+> **Verified (rolled back, before / dry run / after apply):** the old direct insert still fails
+> 23505; the new path returns `linked_primary`, `already_linked`, `linked`, `promoted`; exactly
+> one primary after every step; a refused cross-school create left no guardian; a teacher calling
+> the RPC gets `42501: only school management may link a guardian to a student`, and a guardian
+> gets 42501 on `guardians`. Over real HTTP an administrator got `already_linked` and a teacher
+> got 403/42501.
+>
+> **One flaw of my own, found and fixed mid-task:** the first version of the function relied on
+> RLS alone, so for a teacher the demote UPDATE was filtered to zero rows *silently* and the
+> function returned success — rebuilding the bug it was meant to remove. It now checks
+> `has_school_management_role` up front and asserts the promotion touched exactly one row.
+
+**Original finding:**
+
 - **Table:** `student_guardians` (unique index `student_guardians_school_id_student_id_primary_idx`,
   one primary per student)
 - **Steps:** Admin → Students → Edit Yusuf (already has a primary guardian) → Link a guardian →
@@ -159,7 +195,41 @@ From the academic-year investigation. Where this sweep touched them again it is 
   - The new guardian row is created but belongs to no student.
 - **Reach:** UI. Linking an **Existing** guardian is unaffected (`is_primary = false`).
 
-### S3 · People · Deleting a teacher silently removes their login access and class assignments — NEW
+### S3 · People · Deleting a teacher silently removes their login access and class assignments — NEW — ✅ RESOLVED 2026-09-16
+
+> **Resolved** with the S1 pattern. The same migration changes four foreign keys from CASCADE or
+> SET NULL to **RESTRICT**:
+>
+> | Link | Was | Now |
+> |---|---|---|
+> | `memberships (school_id, teacher_id)` → teachers | CASCADE | RESTRICT |
+> | `memberships (school_id, guardian_id)` → guardians | CASCADE | RESTRICT |
+> | `class_subjects (school_id, teacher_id)` → teachers | SET NULL | RESTRICT |
+> | `student_guardians (school_id, guardian_id)` → guardians | CASCADE | RESTRICT |
+>
+> **Guardians are treated exactly like teachers**, as the brief asked me to decide: a guardian row
+> carries the same two things — a login and a relationship record — and SCHEMA_DESIGN §10 makes
+> anonymisation, not deletion, the erasure path. Unlinking the children first is the same
+> deliberate step as unassigning a teacher's classes.
+>
+> **The dialog now matches reality:** "It is refused while they are the homeroom of a class, teach
+> a subject, or still have an app login — unassign their classes and revoke their access first. To
+> block their login only, use Revoke access instead." `deleteTeacher` says the same on 23503.
+>
+> **Unchanged, deliberately:** `timetable_slots.teacher_id` stays SET NULL (schedule configuration;
+> `teaches_class` never consulted it) and `invitations` stays CASCADE (a pending invitation to
+> become someone who no longer exists is meaningless).
+>
+> **Verified (rolled back):** deleting Sahra (login + subject) → 23503, her row, membership and
+> 5A Mathematics assignment all intact; homeroom teacher still 23503; a login-only teacher → 23503,
+> and after removing the membership the delete succeeds; an unassigned teacher with no login still
+> deletes; guardian with a login → 23503; guardian with only child links → 23503, and after
+> unlinking, deletes. Over real HTTP both teacher deletes returned 409/23503 and nothing was
+> removed. **Whole-school deletion still works** once the pre-existing `profiles` RESTRICT is
+> satisfied — the four new keys do not block it.
+
+**Original finding:**
+
 - **Table:** `teachers` → `memberships` (`ON DELETE CASCADE`), `class_subjects.teacher_id`
   (`SET NULL`)
 - **Steps:** Administrator deletes teacher Sahra, who has a login and teaches 5A Mathematics.
@@ -172,7 +242,43 @@ From the academic-year investigation. Where this sweep touched them again it is 
   link to Yusuf (sweep P4). There is no guardian delete in the UI, so that half is API only.
 - **Reach:** UI for teachers.
 
-### S4 · People · Marking a teacher "inactive" changes nothing about their access — NEW
+### S4 · People · Marking a teacher "inactive" changes nothing about their access — NEW — ✅ RESOLVED 2026-09-16
+
+> **Decision: the two stay separate, and the interface now shows both.** `teachers.status` is an
+> employment record; `memberships.status` is login access. Reasons: most teachers have no login at
+> all, so status cannot stand in for access; a trigger tying them would make re-activating
+> employment silently *restore* a login, a regression in the opposite direction; and a hidden side
+> effect is exactly what S3 was about.
+>
+> **What changed in the UI (`Teachers.tsx`):**
+> - The table's "Status" column is now **Staff status**, with a new **App access** column showing
+>   `Active`, `Revoked`, or `No login` for someone never invited.
+> - The edit form shows both, with the note "On its own this does not affect whether they can sign
+>   in."
+> - Marking someone inactive while their login is active offers an explicit toggle, **"Also revoke
+>   their app access"** (on by default). It is an offer, never silent — the toast says when access
+>   was revoked too.
+>
+> **New capability — Revoke access / Restore access** (`src/services/accessService.ts`, shield
+> action in the Teachers table): suspends the membership only, keeping the employment record, class
+> assignments and history. Restoring re-activates the same membership. **Granting access is
+> unchanged**: an invitation accepted through `accept_invitation` is still the only thing that
+> creates a membership, and this module can only suspend or re-activate one that already exists.
+> It needs no new privilege — `memberships_admin_update` already allowed it.
+>
+> **Verified (rolled back and over real HTTP):** an inactive teacher whose access was not revoked
+> still reads students (the decided behaviour, both states shown); after Revoke access the same
+> teacher reads 0 students, 0 guardians, 0 classes, `teaches_class` is false,
+> `current_teacher_id` is NULL, and marking attendance is refused 42501; the teacher row, homeroom
+> assignment, membership and profile all survive; Restore access brings the reads back. The same
+> works for a guardian: reads drop to 0 while their `student_guardians` links stay. Over HTTP:
+> revoke → 4 students becomes 0, restore → back to 4, employment record untouched.
+>
+> **Guardians have no management screen yet**, so the action is wired into the Teachers page;
+> `accessService` exposes `fetchGuardianAccess` for the guardian screen when it exists.
+
+**Original finding:**
+
 - **Table:** `teachers.status` (not consulted by `current_teacher_id` or `teaches_class`)
 - **Steps:** Administrator sets Faysal to `inactive`. Faysal then acts.
 - **Actual result:**
@@ -581,9 +687,9 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 ## Suggested batch order
 
 1. ~~**B1**~~ (messaging unusable). **Resolved.**
-2. ~~**S1**~~ (resolved), **S2, S3** (silent data loss and silent failure through the UI).
+2. ~~**S1, S2, S3**~~ (all resolved).
 3. ~~**S6**~~ (resolved), **S5** (moved: resolved; edited: open), **S7** (money integrity).
 4. ~~**S8, S9**~~ (resolved).
-5. **S4, S10, S11**, with K3 (one enrolment and attendance authority batch).
+5. ~~**S4**~~ (resolved), **S10, S11**, with K3 (one enrolment and attendance authority batch).
 6. The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.
 7. Remaining MINOR and COSMETIC items.

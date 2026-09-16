@@ -385,17 +385,24 @@ export async function updateTeacher(schoolId: string, id: string, input: Teacher
 }
 
 /**
- * Removes a teacher.
+ * Removes the teacher's EMPLOYMENT RECORD.
  *
- * A teacher who is the homeroom of a class, or named on a class_subjects row,
- * is protected by those foreign keys. The failure is surfaced rather than
- * worked around: unassign them first, deliberately.
+ * Refused by the database (23503) while the teacher is the homeroom of a class,
+ * named on a class_subjects row, or still holds a login. Migration
+ * 20260916000001 made the membership and class_subjects links RESTRICT so that
+ * deleting this row can no longer silently revoke someone's access or blank a
+ * subject assignment (SYSTEM_ISSUES_LIST S3).
+ *
+ * To take away access only, use revokeAccess in accessService: it keeps the
+ * employment record and its history.
  */
 export async function deleteTeacher(schoolId: string, id: string): Promise<void> {
   const { error } = await supabase.from('teachers').delete().eq('school_id', schoolId).eq('id', id)
   if (error) {
     if (error.code === '23503') {
-      throw new Error('This teacher is still assigned to a class. Unassign them first.')
+      throw new Error(
+        'This teacher still has a class or subject assigned, or an app login. Unassign their classes and remove their access first.',
+      )
     }
     throw error
   }

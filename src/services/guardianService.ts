@@ -252,24 +252,67 @@ export async function createGuardian(schoolId: string, input: GuardianInput): Pr
   return (data as { id: string }).id
 }
 
+/** What the database did, so the interface can say it plainly. */
+export type GuardianLinkOutcome = 'linked' | 'linked_primary' | 'promoted' | 'already_linked'
+
 /**
- * Links a guardian to a student.
+ * Links a guardian to a student, optionally as the primary contact.
  *
- * Creating the guardian does not give them an account. They become able to sign
- * in, and to be messaged, only once an invitation is accepted, which is why the
- * fee reminder reports guardians it cannot reach.
+ * WHY THIS GOES THROUGH AN RPC (SYSTEM_ISSUES_LIST S2). student_guardians allows
+ * ONE primary guardian per student, enforced by a partial unique index. This
+ * function used to insert directly and swallow EVERY 23505:
+ *
+ *     if (error && error.code !== '23505') throw error
+ *
+ * so linking a second primary failed the index, the error was discarded, and the
+ * page reported success while the guardian was linked to nobody. Making someone
+ * primary means demoting whoever holds it, and those two writes must not be
+ * separable from a browser, which is what link_guardian_to_student does in one
+ * transaction. Nothing is swallowed now: a refusal reaches the caller.
+ *
+ * Creating a guardian still does not give them an account. They can sign in, and
+ * be messaged, only once an invitation is accepted.
  */
 export async function linkGuardianToStudent(
   schoolId: string,
   studentId: string,
   guardianId: string,
-  isPrimary = false,
-): Promise<void> {
-  const { error } = await supabase.from('student_guardians').insert({
-    school_id: schoolId,
-    student_id: studentId,
-    guardian_id: guardianId,
-    is_primary: isPrimary,
+  makePrimary = false,
+): Promise<GuardianLinkOutcome> {
+  const { data, error } = await supabase.rpc('link_guardian_to_student', {
+    p_school_id: schoolId,
+    p_student_id: studentId,
+    p_guardian_id: guardianId,
+    p_make_primary: makePrimary,
   })
-  if (error && error.code !== '23505') throw error
+  if (error) throw error
+  return data as GuardianLinkOutcome
+}
+
+/**
+ * Creates a guardian and links them to a student in ONE transaction.
+ *
+ * Replaces createGuardian + linkGuardianToStudent for the "New guardian" path.
+ * Two calls could leave a guardian row belonging to no student when the link
+ * failed, which is how the orphan in S2 was created.
+ */
+export async function createAndLinkGuardian(
+  schoolId: string,
+  studentId: string,
+  input: GuardianInput,
+  makePrimary = false,
+): Promise<string> {
+  const { data, error } = await supabase.rpc('create_and_link_guardian', {
+    p_school_id: schoolId,
+    p_student_id: studentId,
+    p_full_name: input.fullName,
+    p_phone: input.phone,
+    p_email: input.email,
+    p_make_primary: makePrimary,
+  })
+  if (error) {
+    if (error.code === '23505') throw new Error('A guardian with those details already exists at this school.')
+    throw error
+  }
+  return data as string
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { GraduationCap, Plus, Pencil, Trash2 } from 'lucide-react'
+import { GraduationCap, Plus, Pencil, Trash2, ShieldOff, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -8,6 +8,7 @@ import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import Switch from '@/components/ui/Switch'
 import Input from '@/components/ui/Input'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
@@ -24,6 +25,7 @@ import {
 } from '@/services/teacherService'
 import { fetchSubjects, type SubjectRow } from '@/services/academicService'
 import { minLength, type FieldErrors } from '@/utils/validators'
+import { fetchTeacherAccess, revokeAccess, restoreAccess, type PersonAccess } from '@/services/accessService'
 import { formatDate } from '@/utils/format'
 import { errorMessage, toError } from '@/utils/errorMessage'
 
@@ -71,6 +73,13 @@ export default function AdminTeachers() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [deleteTarget, setDeleteTarget] = useState<TeacherRow | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  // APP ACCESS IS A SECOND, SEPARATE FACT from teachers.status (S4). It lives on
+  // memberships, exists only once an invitation was accepted, and is what every
+  // policy resolves through. Both are shown, so neither is mistaken for the
+  // other, and taking access away is its own action.
+  const [access, setAccess] = useState<Map<string, PersonAccess>>(new Map())
+  const [accessTarget, setAccessTarget] = useState<{ teacher: TeacherRow; current: PersonAccess } | null>(null)
+  const [alsoRevoke, setAlsoRevoke] = useState(true)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -82,11 +91,12 @@ export default function AdminTeachers() {
     }
     setIsLoading(true)
     setError(null)
-    Promise.all([fetchSchoolTeachers(schoolId), fetchSubjects(schoolId)])
-      .then(([rows, subs]) => {
+    Promise.all([fetchSchoolTeachers(schoolId), fetchSubjects(schoolId), fetchTeacherAccess(schoolId)])
+      .then(([rows, subs, accessMap]) => {
         if (cancelled) return
         setTeachers(rows)
         setSubjects(subs)
+        setAccess(accessMap)
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(toError(err))
@@ -149,6 +159,7 @@ export default function AdminTeachers() {
       status: t.status,
     })
     setErrors({})
+    setAlsoRevoke(true)
     setModalOpen(true)
   }
 
@@ -173,7 +184,17 @@ export default function AdminTeachers() {
     try {
       if (editing) {
         await updateTeacher(schoolId, editing.id, input)
-        showToast({ type: 'success', title: 'Teacher updated' })
+        // Explicit, never silent: the form asked, and only then does the
+        // separate membership write happen (S4).
+        const current = access.get(editing.id)
+        const revokingToo =
+          alsoRevoke && form.status === 'inactive' && editing.status === 'active' && current?.status === 'active'
+        if (revokingToo) await revokeAccess(schoolId, current.membershipId)
+        showToast({
+          type: 'success',
+          title: 'Teacher updated',
+          description: revokingToo ? 'Their app access has been revoked as well.' : undefined,
+        })
       } else {
         await createTeacher(schoolId, input)
         showToast({
@@ -192,6 +213,32 @@ export default function AdminTeachers() {
       })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const confirmAccessChange = async () => {
+    if (!accessTarget || !schoolId) return
+    const { teacher, current } = accessTarget
+    const revoking = current.status === 'active'
+    try {
+      if (revoking) await revokeAccess(schoolId, current.membershipId)
+      else await restoreAccess(schoolId, current.membershipId)
+      showToast({
+        type: 'success',
+        title: revoking ? 'Access revoked' : 'Access restored',
+        description: revoking
+          ? `${teacher.full_name} can no longer sign in. Their staff record is unchanged.`
+          : `${teacher.full_name} can sign in again.`,
+      })
+      reload()
+    } catch (err: unknown) {
+      showToast({
+        type: 'error',
+        title: revoking ? 'Access not revoked' : 'Access not restored',
+        description: errorMessage(err),
+      })
+    } finally {
+      setAccessTarget(null)
     }
   }
 
@@ -246,7 +293,8 @@ export default function AdminTeachers() {
                       <th className="px-5 py-3.5 font-medium">Staff No.</th>
                       <th className="px-5 py-3.5 font-medium">Primary Subject</th>
                       <th className="px-5 py-3.5 font-medium">Homeroom Of</th>
-                      <th className="px-5 py-3.5 font-medium">Status</th>
+                      <th className="px-5 py-3.5 font-medium">Staff status</th>
+                      <th className="px-5 py-3.5 font-medium">App access</th>
                       <th className="px-5 py-3.5 text-right font-medium">Actions</th>
                     </tr>
                   </thead>
@@ -273,6 +321,17 @@ export default function AdminTeachers() {
                           <Badge tone={t.status === 'active' ? 'success' : 'neutral'}>{t.status}</Badge>
                         </td>
                         <td className="px-5 py-3.5">
+                          {(() => {
+                            const a = access.get(t.id)
+                            if (!a) return <span className="text-xs text-graphite">No login</span>
+                            return (
+                              <Badge tone={a.status === 'active' ? 'brand' : 'danger'}>
+                                {a.status === 'active' ? 'Active' : 'Revoked'}
+                              </Badge>
+                            )
+                          })()}
+                        </td>
+                        <td className="px-5 py-3.5">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               type="button"
@@ -282,6 +341,22 @@ export default function AdminTeachers() {
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
+                            {(() => {
+                              const a = access.get(t.id)
+                              if (!a) return null
+                              const revoking = a.status === 'active'
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => setAccessTarget({ teacher: t, current: a })}
+                                  aria-label={`${revoking ? 'Revoke' : 'Restore'} app access for ${t.full_name}`}
+                                  title={revoking ? 'Revoke app access' : 'Restore app access'}
+                                  className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                                >
+                                  {revoking ? <ShieldOff className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+                                </button>
+                              )
+                            })()}
                             <button
                               type="button"
                               onClick={() => setDeleteTarget(t)}
@@ -338,10 +413,41 @@ export default function AdminTeachers() {
               ))}
             </Select>
           </div>
-          <Select label="Status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </Select>
+          <div>
+            <Select label="Staff status" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </Select>
+            <p className="mt-1.5 text-xs text-graphite">
+              Whether they currently work here. On its own this does not affect whether they can sign in.
+            </p>
+          </div>
+          {editing && (
+            <div className="rounded-xl bg-mist p-3 dark:bg-white/5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-ink dark:text-white">App access</p>
+                {(() => {
+                  const a = access.get(editing.id)
+                  if (!a) return <span className="text-xs text-graphite">No login yet — send an invitation</span>
+                  return (
+                    <Badge tone={a.status === 'active' ? 'brand' : 'danger'}>
+                      {a.status === 'active' ? 'Active' : 'Revoked'}
+                    </Badge>
+                  )
+                })()}
+              </div>
+              {access.get(editing.id)?.status === 'active' && form.status === 'inactive' && (
+                <div className="mt-2 border-t border-ink/5 pt-2 dark:border-white/10">
+                  <Switch
+                    checked={alsoRevoke}
+                    onChange={setAlsoRevoke}
+                    label="Also revoke their app access"
+                    description="Marking someone inactive does not block their login on its own."
+                  />
+                </div>
+              )}
+            </div>
+          )}
           {editing && <p className="text-xs text-graphite">Joined {formatDate(editing.joined_date)}</p>}
           <p className="text-xs text-graphite">
             This records a member of staff. It does not create a login. Send them an invitation so they can sign in and
@@ -351,9 +457,27 @@ export default function AdminTeachers() {
       </Modal>
 
       <ConfirmDialog
+        open={!!accessTarget}
+        title={
+          accessTarget?.current.status === 'active'
+            ? `Revoke ${accessTarget?.teacher.full_name}'s app access?`
+            : `Restore ${accessTarget?.teacher.full_name}'s app access?`
+        }
+        description={
+          accessTarget?.current.status === 'active'
+            ? 'They will be signed out of Nom Cloud and will not be able to sign in. Their staff record, classes and history are kept, and you can restore access at any time.'
+            : 'They will be able to sign in again with their existing account, in the same role.'
+        }
+        confirmLabel={accessTarget?.current.status === 'active' ? 'Revoke Access' : 'Restore Access'}
+        danger={accessTarget?.current.status === 'active'}
+        onConfirm={confirmAccessChange}
+        onCancel={() => setAccessTarget(null)}
+      />
+
+      <ConfirmDialog
         open={!!deleteTarget}
         title={`Remove ${deleteTarget?.full_name}?`}
-        description="A teacher still assigned to a class cannot be removed until they are unassigned."
+        description="This removes their staff record. It is refused while they are the homeroom of a class, teach a subject, or still have an app login — unassign their classes and revoke their access first. To block their login only, use Revoke access instead."
         confirmLabel="Remove Teacher"
         danger
         onConfirm={confirmDelete}

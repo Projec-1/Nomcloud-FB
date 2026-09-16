@@ -26,7 +26,12 @@ import {
   type DirectoryStudent,
   type StudentGender,
 } from '@/services/studentService'
-import { createGuardian, fetchSchoolGuardians, linkGuardianToStudent, type GuardianRow } from '@/services/guardianService'
+import {
+  createAndLinkGuardian,
+  fetchSchoolGuardians,
+  linkGuardianToStudent,
+  type GuardianRow,
+} from '@/services/guardianService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
@@ -71,6 +76,7 @@ const emptyForm = {
   dateOfBirth: '',
   status: 'active',
   guardianId: '',
+  guardianIsPrimary: false,
   newGuardianName: '',
   newGuardianEmail: '',
   newGuardianPhone: '',
@@ -199,7 +205,7 @@ export default function AdminStudents() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ ...emptyForm, classId: classes[0]?.id ?? '' })
+    setForm({ ...emptyForm, classId: classes[0]?.id ?? '', guardianIsPrimary: true })
     setGuardianMode('none')
     setErrors({})
     setModalOpen(true)
@@ -215,6 +221,9 @@ export default function AdminStudents() {
       dateOfBirth: student.dateOfBirth ?? '',
       status: student.status,
       guardianId: '',
+      // Primary is offered, not assumed: ticked only when the student has none,
+      // and when it is ticked the swap is explicit (SYSTEM_ISSUES_LIST S2).
+      guardianIsPrimary: !student.guardians.some((g) => g.isPrimary),
       newGuardianName: '',
       newGuardianEmail: '',
       newGuardianPhone: '',
@@ -223,6 +232,8 @@ export default function AdminStudents() {
     setErrors({})
     setModalOpen(true)
   }
+
+  const currentPrimaryName = editing?.guardians.find((g) => g.isPrimary)?.name ?? null
 
   const validate = () => {
     const next: FieldErrors = {}
@@ -275,18 +286,39 @@ export default function AdminStudents() {
         }
       }
 
+      // Both paths now report what actually happened. Nothing is swallowed: a
+      // refusal throws and lands in the catch below (SYSTEM_ISSUES_LIST S2).
+      let guardianNote: string | undefined
       if (guardianMode === 'existing' && form.guardianId) {
-        await linkGuardianToStudent(schoolId, studentId, form.guardianId)
+        const outcome = await linkGuardianToStudent(schoolId, studentId, form.guardianId, form.guardianIsPrimary)
+        const name = guardians.find((g) => g.id === form.guardianId)?.full_name ?? 'The guardian'
+        guardianNote =
+          outcome === 'already_linked'
+            ? `${name} was already linked to this student.`
+            : outcome === 'linked'
+              ? `${name} was linked.`
+              : `${name} is now the primary contact.`
       } else if (guardianMode === 'new') {
-        const guardianId = await createGuardian(schoolId, {
-          fullName: form.newGuardianName,
-          email: form.newGuardianEmail || null,
-          phone: form.newGuardianPhone,
-        })
-        await linkGuardianToStudent(schoolId, studentId, guardianId, true)
+        await createAndLinkGuardian(
+          schoolId,
+          studentId,
+          {
+            fullName: form.newGuardianName,
+            email: form.newGuardianEmail || null,
+            phone: form.newGuardianPhone,
+          },
+          form.guardianIsPrimary,
+        )
+        guardianNote = form.guardianIsPrimary
+          ? `${form.newGuardianName} was added as the primary contact.`
+          : `${form.newGuardianName} was added as a guardian.`
       }
 
-      showToast({ type: 'success', title: editing ? 'Student updated' : 'Student added' })
+      showToast({
+        type: 'success',
+        title: editing ? 'Student updated' : 'Student added',
+        description: guardianNote,
+      })
       setModalOpen(false)
       reload()
     } catch (err: unknown) {
@@ -554,9 +586,32 @@ export default function AdminStudents() {
                 </div>
               </div>
             )}
+            {guardianMode !== 'none' && (
+              <div className="mt-3">
+                <label className="flex items-start gap-2.5 text-sm text-ink dark:text-white">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-ink/20 text-brand focus:ring-brand"
+                    checked={form.guardianIsPrimary}
+                    onChange={(e) => setForm({ ...form, guardianIsPrimary: e.target.checked })}
+                  />
+                  <span>
+                    Primary contact
+                    <span className="block text-xs text-graphite">
+                      {currentPrimaryName
+                        ? form.guardianIsPrimary
+                          ? `${currentPrimaryName} will stop being the primary contact.`
+                          : `${currentPrimaryName} stays the primary contact.`
+                        : 'A student has one primary contact, reached first.'}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
             {editing && editing.guardians.length > 0 && (
               <p className="mt-2 text-xs text-graphite">
-                Already linked: {editing.guardians.map((g) => g.name).join(', ')}
+                Already linked:{' '}
+                {editing.guardians.map((g) => `${g.name}${g.isPrimary ? ' (primary)' : ''}`).join(', ')}
               </p>
             )}
             <p className="mt-2 text-xs text-graphite">
