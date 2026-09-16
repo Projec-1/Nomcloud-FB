@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1 and S6 resolved; S5 partly resolved (the "moved" half) — all 2026-09-15, marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8 and S9 resolved; S5 partly resolved (the "moved" half) — all 2026-09-15, marked in place below; original evidence kept.
 This list is the input for small fix batches, worked top to bottom.
 
 ## How this was tested
@@ -60,10 +60,10 @@ From the academic-year investigation. Where this sweep touched them again it is 
 | Severity | Count | Resolved |
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
-| SERIOUS | 11 | 2 (S1, S6) + S5 partly |
+| SERIOUS | 11 | 4 (S1, S6, S8, S9) + S5 partly |
 | MINOR | 16 | 0 |
 | COSMETIC | 2 | 0 |
-| **Total new** | **30** | **3** (+ S5 partly) |
+| **Total new** | **30** | **5** (+ S5 partly) |
 
 ---
 
@@ -257,7 +257,38 @@ From the academic-year investigation. Where this sweep touched them again it is 
     (the fee is now SOS, the payments USD).
 - **Reach:** API only (the payment form always sends the fee's currency).
 
-### S8 · Roles · An administrator can create an owner, and suspend or delete the owner — NEW
+### S8 · Roles · An administrator can create an owner, and suspend or delete the owner — NEW — ✅ RESOLVED 2026-09-15
+
+> **Resolved** under the locked decision "only an existing owner may create or remove an owner".
+> Migration `20260915000007_owner_and_thread_self_add_guards` **refines the existing policies**
+> (`ALTER POLICY`, none added or dropped) on `memberships` and `invitations`, for INSERT, UPDATE
+> (old and new row) and DELETE. Each keeps `has_school_admin_role(school_id)` and adds
+> `role <> 'owner' OR has_school_owner_role(school_id)`, where the new helper
+> `has_school_owner_role` means an **active** owner membership.
+>
+> **Why invitations too:** `accept_invitation` turns an invitation's role into a membership
+> without passing through memberships RLS, so an owner invitation is an owner membership in waiting.
+>
+> **Verified (rolled back, before, as a dry run, and after apply):**
+> - Administrator **and** director creating an owner membership, an owner invitation, or promoting
+>   a principal to owner: each refused `42501`.
+> - Administrator or director deleting, suspending or demoting the owner, or touching the owner
+>   invitation: 0 rows each. Owner row confirmed `owner/active`, invitation intact.
+> - The owner creating and revoking or deleting owner invitations, and removing or suspending an
+>   owner membership: allowed.
+> - Unchanged: administrator and director still create, edit and remove teacher, guardian and
+>   principal memberships and non-owner invitations. Cross-school and teacher writes still refused.
+>
+> **One-owner rule unchanged (CAMPUS_ROLE_DESIGN J2).** An owner creating a *second* owner
+> membership passes the policy and is refused by `memberships_school_id_owner_idx` (`23505`), as
+> J2 intends.
+>
+> **Open, needs decisions:**
+> - Ownership **transfer** has no path except a platform admin.
+> - The first owner of a new school can only be set by a platform admin (see M15).
+
+**Original finding:**
+
 - **Tables:** `invitations`, `memberships`. The policies check only `has_school_admin_role`,
   which includes administrator, so the role hierarchy is not enforced.
 - **Steps and actual results:**
@@ -271,7 +302,43 @@ From the academic-year investigation. Where this sweep touched them again it is 
   settled before one is built.
 - **Needs a decision:** which roles may grant, change or remove which roles.
 
-### S9 · Messaging · An administrator can join any private conversation and read it — NEW
+### S9 · Messaging · An administrator can join any private conversation and read it — NEW — ✅ RESOLVED 2026-09-15
+
+> **Resolved** under the locked decision "no role may add itself to a thread it was not part of".
+>
+> **It was a gap, not a design choice.** Migration 14 states the self-add prohibition and relies on
+> having no self-insert policy. But `message_thread_participants_admin_insert` checked only
+> `has_school_admin_role`, so the prohibition held for teachers and guardians and not for owner,
+> director or administrator.
+>
+> **The refined policy** (same migration, `ALTER POLICY`) allows a participant row only when
+> either:
+> - it is for **someone else** and the actor is **already a participant**; or
+> - the actor is **setting up their own new thread**, via the new DEFINER helper
+>   `can_seed_thread_participants`: `created_by` is the caller, and there are no participants and
+>   no messages yet.
+>
+> That is exactly how `createThread` works, so opening a conversation is unaffected.
+>
+> **Verified (rolled back, dry run and after apply):**
+> - The exact S9 exploit is refused `42501`, and the administrator reads 0 messages. Director and
+>   owner self-add are refused too.
+> - Also refused: adding a colleague to a thread the actor is not in; self-add to a thread whose
+>   `created_by` was forged; self-add to a thread already set up without the actor; re-entering a
+>   thread the creator emptied of participants but that still has message history (helper returns
+>   `false`).
+> - Allowed: a new thread with self + two others in one statement, then the opening message, read
+>   back immediately. Adding another person to a thread the administrator is in also works.
+> - Teacher, guardian and cross-school inserts are still refused. The real HTTP createThread flow
+>   still returns 201/201/201, with the uninvited administrator reading 0.
+>
+> **M14 (removing participants), measured:** with self-add closed, a non-participant administrator
+> removing people from a thread now affects **0 rows**, because rows you cannot see cannot be
+> deleted. The DELETE policy itself was not changed. An administrator who is a participant can still
+> remove others; decide separately whether that should stay.
+
+**Original finding:**
+
 - **Table:** `message_thread_participants` (`message_thread_participants_admin_insert` checks
   only `has_school_admin_role`)
 - **Steps:** A private thread exists between teacher Faysal and guardian Bashir; the
@@ -516,7 +583,7 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 1. ~~**B1**~~ (messaging unusable). **Resolved.**
 2. ~~**S1**~~ (resolved), **S2, S3** (silent data loss and silent failure through the UI).
 3. ~~**S6**~~ (resolved), **S5** (moved: resolved; edited: open), **S7** (money integrity).
-4. **S8, S9** (role and privacy decisions first, then policies).
+4. ~~**S8, S9**~~ (resolved).
 5. **S4, S10, S11**, with K3 (one enrolment and attendance authority batch).
 6. The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.
 7. Remaining MINOR and COSMETIC items.
