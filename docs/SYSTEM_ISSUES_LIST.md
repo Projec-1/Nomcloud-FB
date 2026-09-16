@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3, the attribution-and-scope batch M6, M7, M8, and the parent-visibility-and-people-UI batch M4, M5, C1, C2 (2026-09-16) resolved. Marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3, the attribution-and-scope batch M6, M7, M8, the parent-visibility-and-people-UI batch M4, M5, C1, C2, and the accounts-and-ownership batch M13, M14, M15, M16 (2026-09-16) resolved. Marked in place below; original evidence kept.
 **New capability:** *Revoke access* / *Restore access* for a teacher or guardian — suspends the login only, keeping the employment or family record (see S4).
 This list is the input for small fix batches, worked top to bottom.
 
@@ -108,9 +108,9 @@ From the academic-year investigation. Where this sweep touched them again it is 
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
 | SERIOUS | 11 | **11 — all resolved** |
-| MINOR | 16 | 8 (M1–M8) |
+| MINOR | 16 | 12 (M1–M8, M13–M16) |
 | COSMETIC | 2 | **2 — all resolved** |
-| **Total new** | **30** | **22** |
+| **Total new** | **30** | **26** |
 
 ---
 
@@ -786,27 +786,105 @@ From the academic-year investigation. Where this sweep touched them again it is 
 
 ### Invitations & accounts
 
-**M13 · Every staff member can read pending invitations, including token hashes — NEW**
+**M13 · Every staff member can read pending invitations, including token hashes — NEW — ✅ RESOLVED 2026-09-16**
+> Migration `20260916000006_accounts_and_ownership`: `invitations_staff_select` (all staff) is replaced
+> by `invitations_admin_select` on `has_school_admin_role`, covering owner, director and
+> administrator. That is the group the invitation insert/update/delete policies already use.
+> (In this schema, `has_school_management_role` also includes principal.) Accepting an
+> invitation goes through the SECURITY DEFINER `accept_invitation` and is unaffected.
+> **Measured, before → after:**
+> - I6 teacher: 2 rows with hashes → **0**
+> - principal: 2 → **0**
+> - guardian and the other school's administrator: 0 → 0
+> - administrator, director, owner and platform admin: still read them
+> - an administrator creating an invitation with read-back: still OK
+
 - **I6:** a teacher reads 5 invitations, token hashes visible.
 - **I7:** redeeming one with the hash is still refused (`email_mismatch`), because acceptance
   checks the signed-in email. So this is hardening, not a working exploit.
 - **Reach:** API.
 
-**M14 · Only `demo` is a reserved shortcode — NEW**
+**M14 · Only `demo` is a reserved shortcode — NEW — ✅ RESOLVED 2026-09-16**
+> The existing mechanism (`reserved_shortcodes` plus the `schools_reject_reserved_shortcode`
+> trigger, which binds the approval RPC and a school rename alike) gains eight entries:
+> - `www`, `app`, `api`: the login resolver treats these hosts as non-school; `www` and `app` are
+>   the live `nomcloud.academy` hosts.
+> - `admin`, `login`, `mail`: the standard set; `admin` and `mail` are also in SCHEMA_DESIGN §2.
+> - `status`, `class`: documented in SCHEMA_DESIGN §2; `class` is also the school domain,
+>   `class.so`.
+>
+> The repository has no vercel.json or DNS configuration naming any other host.
+> **Measured, before → after:**
+> - A2, approving with `www`: approved → **23514** "shortcode "www" is reserved…"
+> - the same for all eight new entries and `demo`, and an administrator renaming their school to
+>   `admin`
+> - the application stays pending with no school created
+> - a genuine unique shortcode still approves
+>
+> The approval edge function already deletes the auth user it created when the RPC refuses.
+
 - **A2:** a platform admin approves a school with shortcode **`www`**: `OK rows=1`.
 - `www`, `app`, `api`, `admin`, `login` and `mail` are all unreserved.
 - The login page treats `www`, `app` and `api` as non-school hosts, so such a school's login
   branding would never load.
 - **Reach:** platform admin UI.
 
-**M15 · Newly approved schools have no owner, so nobody has billing access — NEW (needs a decision)**
+**M15 · Newly approved schools have no owner, so nobody has billing access — NEW — ✅ RESOLVED 2026-09-16 (decision: the approved administrator becomes Owner)**
+> **Implemented as TWO membership rows, `administrator` and `owner`, not one `owner` row.**
+> - The six-role model is multi-role by construction: the key is `UNIQUE (user_id, role)`, and the
+>   interface unions roles into workspaces.
+> - `owner` has **no frontend workspace** (`src/lib/roles.ts` maps it to null by design), so an
+>   owner-only membership would lock the approved person out of the application.
+> - In the database, owner already includes every administrator permission and adds billing and
+>   owner management.
+>
+> `approve_school_application` now inserts both rows; nothing else in it changed. **One owner per
+> school holds:** the school is created in the same transaction, so this is its first owner.
+> **Measured, before → after:**
+> - A6/A8, the applicant's memberships: `administrator` → **`owner` + `administrator`**
+> - owners at the new school: 0 → **1**
+> - billing / owner / admin / management checks as the applicant: false → **all true**
+> - a second owner at that school → **23505** `memberships_school_id_owner_idx`, so the one-owner
+>   rule still applies
+>
+> **Not changed:** existing schools are not backfilled. A migration cannot know who owns a running
+> school; S8's owner path or a platform administrator can name one.
+> **Found, messaging batch:** `fetchMessageableUsers` lists one entry per active membership without
+> de-duplicating, so a person holding owner + administrator would appear twice in the message
+> recipient picker.
+
 - **A6:** the new school gets only an `administrator` membership, 0 academic years (K1) and
   0 subjects.
 - **A8:** that administrator has `has_school_billing_role = false`. Billing is owner/director
   only, and nobody can become one except through S8.
 - **Reach:** UI (platform approval).
 
-**M16 · An administrator can suspend their own membership — NEW**
+**M16 · An administrator can suspend their own membership — NEW — ✅ RESOLVED 2026-09-16**
+> **Rule:** a person may not suspend, delete or re-role **their own** active owner, director or
+> administrator membership when no **other** active owner, director or administrator membership
+> would remain at the school. The refusal is PT409 (HTTP 409). A trigger enforces it:
+> `memberships_keep_school_administered`, BEFORE UPDATE OR DELETE.
+> - **Why this group:** owner, director and administrator are the only roles that can manage
+>   memberships, invitations and settings. A school left with only a principal is still locked out.
+> - **Why "other membership":** someone holding administrator + owner (every newly approved school)
+>   may give up one role, because the school is still administered through the other.
+> - **Why only one's own membership:** anyone changing someone else's membership is an active member
+>   of the group, so they can never leave zero. Platform administrators, the service role and
+>   cascades are not affected.
+> - **Concurrency:** the school row is locked before counting, so two sole-pair administrators
+>   leaving at once are handled one after the other.
+>
+> **Measured, before → after:**
+> - R4, the sole administrator (the second school's real administrator suspended inside the
+>   rolled-back probe): suspends self OK → **PT409**; deletes own membership OK → **PT409**; changes
+>   own role to principal OK → **PT409**
+> - a harmless self-edit: OK → OK
+> - a platform admin suspending that administrator: OK → OK
+> - suspending self with a director also active, or at the demo school with others active: OK → OK
+> - the approved owner-administrator: can suspend their administrator row, then **cannot** suspend
+>   their owner row (PT409)
+> - S8 (an administrator suspending the owner): still 0 rows
+
 - **R4:** update accepted, `OK rows=1`.
 - If they are the school's only administrator, the school is locked out of administration.
 - **Reach:** API.
@@ -944,4 +1022,5 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 6. ~~The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.~~ (all resolved — this also clears the precondition for M8).
 6a. ~~Attribution and scope: M6, M7, M8.~~ (all resolved; follow-up found: attendance management policies lack the attribution check).
 6b. ~~Parent visibility and people UI: M4, M5, C1, C2.~~ (all resolved).
+6c. ~~Accounts and ownership: M13, M14, M15, M16.~~ (all resolved; found for the messaging batch: the recipient picker does not de-duplicate a person holding two roles).
 7. Remaining MINOR and COSMETIC items.
