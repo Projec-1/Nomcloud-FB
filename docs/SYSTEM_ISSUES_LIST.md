@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, and the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3 (2026-09-16) resolved. Marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3, and the attribution-and-scope batch M6, M7, M8 (2026-09-16) resolved. Marked in place below; original evidence kept.
 **New capability:** *Revoke access* / *Restore access* for a teacher or guardian — suspends the login only, keeping the employment or family record (see S4).
 This list is the input for small fix batches, worked top to bottom.
 
@@ -108,9 +108,9 @@ From the academic-year investigation. Where this sweep touched them again it is 
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
 | SERIOUS | 11 | **11 — all resolved** |
-| MINOR | 16 | 3 (M1, M2, M3) |
+| MINOR | 16 | 6 (M1, M2, M3, M6, M7, M8) |
 | COSMETIC | 2 | 0 |
-| **Total new** | **30** | **15** |
+| **Total new** | **30** | **18** |
 
 ---
 
@@ -668,18 +668,67 @@ From the academic-year investigation. Where this sweep touched them again it is 
 
 ### Grades / homework / attendance attribution
 
-**M6 · Attribution can be erased or forged — NEW**
+**M6 · Attribution can be erased or forged — NEW — ✅ RESOLVED 2026-09-16**
+> Migration `20260916000004_attribution_and_subject_scope`, using the S11 attendance mechanism:
+> the attribution column must equal `auth.uid()` in the WITH CHECK of every policy that writes the
+> row. `grade_records.recorded_by` and `homework.created_by`: teacher insert/update tightened from
+> "NULL or self" to "self", and management insert/update, which had no check, gained the same one.
+> As with attendance, whoever edits a record becomes its attribution. `invitations.invited_by`:
+> must be the caller on insert. On update it is **immutable**, removed from the UPDATE column grant
+> (the S5 mechanism), because it means *who sent* the invitation, and revoking it (possibly by a
+> different administrator) must not rewrite that.
+> **Measured, before → after apply:** G4 (teacher clears `recorded_by`) OK → 42501; teacher NULL or
+> forged grade → 42501; admin forged or NULL grade OK → 42501; H4 OK → 42501; admin NULL
+> homework, teacher NULL homework, teacher clearing `created_by` OK → 42501; I2 OK → 42501;
+> rewriting `invited_by` OK → `42501 permission denied`; a different administrator revoking still
+> OK, and the invitation still names its original sender. Normal self-attributed writes: OK
+> throughout.
+> **Found, not in this batch:** the attendance **management** policies still have no attribution
+> check. An administrator can mark attendance with `marked_by` set to a teacher (`OK rows=1`).
+> S11 tightened only the teacher policies. A one-line follow-up using the same mechanism.
+
 - **G4:** a subject teacher overwrites an **administrator's** mark (score 90 → 10) and clears
   `recorded_by`. `OK rows=1`.
 - **H4:** management creates homework with `created_by` set to another teacher. `OK rows=1`.
 - **I2:** management creates an invitation with `invited_by` set to another user. `OK rows=1`.
 - **Reach:** API.
 
-**M7 · A grade can be recorded in a subject the class does not take — NEW**
+**M7 · A grade can be recorded in a subject the class does not take — NEW — ✅ RESOLVED 2026-09-16**
+> **Same gap on homework and exams: investigated and confirmed.** All three tables name
+> (class, subject). The teacher policies were already safe (`teaches_class_subject` needs a
+> `class_subjects` row), but the management policies check only `can_manage_class`, which does
+> not look at the subject. Before the fix, an Arabic grade, moving a grade to Arabic, Arabic
+> homework and an Arabic exam in 5A were **all** `OK rows=1`.
+> **Fix:** one SECURITY DEFINER trigger function `assert_subject_taught_in_class()` on all three
+> tables, firing BEFORE INSERT OR UPDATE OF subject_id, class_id, raising **PT422**
+> `class "Grade 5A" does not take subject "Arabic"`. This follows the M3 pattern. After apply, all
+> four are refused. English grade and homework (a subject the class takes but with no teacher
+> assigned) and a Maths exam are still accepted.
+
 - **G6:** administrator records an Arabic grade in 5A, which has no Arabic. `OK rows=1`.
 - **Reach:** API (the screen lists only class subjects).
 
-**M8 · One conflicting student fails a whole class's attendance save — NEW to this list**
+**M8 · One conflicting student fails a whole class's attendance save — NEW to this list — ✅ RESOLVED 2026-09-16**
+> **Verified against K5 first, as asked.** The original setup can no longer happen. Enrolling a pupil
+> who is open in 5A into 6B under another year → PT422 (K5 year guard); under the same year → 23505
+> (unique open enrolment); no pupil holds two open enrolments; both whole-class saves succeed.
+> **But the symptom still occurred through a legitimate route: a same-day transfer.** The 5A
+> register is taken in the morning, then the office ends the pupil's 5A enrolment and enrols them
+> in 6B. The 6B teacher's whole-register save → `42501 (USING expression)`, and **every** 6B
+> pupil's mark was lost. The database refusal is correct: that day's row belongs to 5A, which the
+> 6B teacher does not teach. The loss of the rest of the class is the bug.
+> **Fix (application only, no guard widened):** `saveAttendance` still tries one upsert. On a
+> `42501` for a multi-pupil save, it retries each pupil on their own, saves everyone the database
+> accepts, and returns the refused pupils. It still throws if every pupil is refused or on any
+> other error. The register screen shows a warning, "Attendance saved for N of M. Not saved for
+> <names>…", pointing to the school office, which can correct it.
+> **Verified over real HTTP**, running the real bundled `saveAttendance` as two real teachers on a
+> throwaway school (removed afterwards). Normal saves return no refusals. After a same-day
+> transfer, the old single upsert → 42501 with the other pupils' changes lost. The new
+> `saveAttendance` returns `refused: [the transferred pupil]`, the other two pupils are saved and
+> attributed to that teacher, and the transferred pupil's 5A mark is untouched. A save where every
+> pupil is refused still throws, and nothing changes.
+
 - **Evidence:** reproduced in the academic-year investigation (its probe G2), **not re-run in
   this sweep**.
 - **Cause:** attendance is unique per student per day across classes, and the class saves in one
@@ -842,4 +891,5 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 4. ~~**S8, S9**~~ (resolved).
 5. ~~**S4, S10, S11, K3**~~ (all resolved).
 6. ~~The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.~~ (all resolved — this also clears the precondition for M8).
+6a. ~~Attribution and scope: M6, M7, M8.~~ (all resolved; follow-up found: attendance management policies lack the attribution check).
 7. Remaining MINOR and COSMETIC items.

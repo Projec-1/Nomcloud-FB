@@ -141,47 +141,80 @@ export async function fetchAttendance(
  * Phase 3, not something this batch can resolve; it is recorded as an open
  * question rather than worked around here.
  */
+/** What a register save achieved: everyone was saved except these pupils. */
+export interface AttendanceSaveResult {
+  refusedStudentIds: string[]
+}
+
+/**
+ * Saves a class register for one date.
+ *
+ * ONE PUPIL MUST NOT SINK THE WHOLE REGISTER (SYSTEM_ISSUES_LIST M8). The
+ * register is saved as a single upsert, and attendance is one row per pupil per
+ * day across ALL classes. When a pupil moves class during a day, the morning's
+ * register already holds their row under the old class; the new class's teacher
+ * does not teach that class, so the database correctly refuses to overwrite it
+ * (42501). As one statement, that refusal used to discard every other pupil's
+ * mark too. Now a 42501 on a multi-pupil save is retried pupil by pupil: the
+ * rest of the class is saved, and the pupils the database refused are returned
+ * so the screen can name them. Nothing is widened — the refused pupil stays
+ * refused, and the school office (which manages every class) can correct it.
+ */
 export async function saveAttendance(
   schoolId: string,
   classId: string,
   date: string,
   entries: AttendanceEntry[],
-): Promise<void> {
-  if (entries.length === 0) return
+): Promise<AttendanceSaveResult> {
+  if (entries.length === 0) return { refusedStudentIds: [] }
 
   const markedBy = await currentUserId()
 
-  // GROUP A (SYSTEM_ISSUES_LIST K3, S11). The teacher policies now also require
-  // the pupil to have an OPEN enrolment in this class, and marked_by to be the
-  // caller, so a refusal here is a real condition worth naming rather than a
-  // generic permission error.
-  const { error } = await supabase.from('attendance_records').upsert(
-    entries.map((e) => ({
-      school_id: schoolId,
-      class_id: classId,
-      student_id: e.studentId,
-      date,
-      status: e.status,
-      note: e.note,
-      // The policy accepts NULL or auth.uid(); nothing else. Sending the live
-      // session id keeps the record attributable without letting a caller claim
-      // to be someone else.
-      marked_by: markedBy,
-    })),
-    { onConflict: 'school_id,student_id,date' },
-  )
+  // K3, S11: the teacher policies require an OPEN enrolment in this class and
+  // marked_by = auth.uid() — the live session id, never NULL, never another
+  // person's. K4: the date must fall inside the class's academic year.
+  const rows = entries.map((e) => ({
+    school_id: schoolId,
+    class_id: classId,
+    student_id: e.studentId,
+    date,
+    status: e.status,
+    note: e.note,
+    marked_by: markedBy,
+  }))
 
-  if (error) {
-    if (error.code === '42501') {
-      throw new Error(
-        'Attendance can only be marked for pupils currently enrolled in this class, and only by a teacher of it.',
-      )
+  const upsert = (payload: typeof rows) =>
+    supabase.from('attendance_records').upsert(payload, { onConflict: 'school_id,student_id,date' })
+
+  const { error } = await upsert(rows)
+  if (!error) return { refusedStudentIds: [] }
+
+  if (error.code === '42501' && rows.length > 1) {
+    const refusedStudentIds: string[] = []
+    for (const row of rows) {
+      const { error: rowError } = await upsert([row])
+      if (!rowError) continue
+      if (rowError.code === '42501') {
+        refusedStudentIds.push(row.student_id)
+        continue
+      }
+      throw attendanceError(rowError)
     }
-    if (error.code === 'PT409') throw new Error(error.message)
-    throw error
+    if (refusedStudentIds.length === rows.length) throw attendanceError(error)
+    return { refusedStudentIds }
   }
 
-  if (error) throw error
+  throw attendanceError(error)
+}
+
+function attendanceError(error: { code?: string; message: string }): Error {
+  if (error.code === '42501') {
+    return new Error(
+      'Attendance can only be marked for pupils currently enrolled in this class, and only by a teacher of it.',
+    )
+  }
+  if (error.code === 'PT409' || error.code === 'PT422') return new Error(error.message)
+  return new Error(error.message)
 }
 
 // ===========================================================================

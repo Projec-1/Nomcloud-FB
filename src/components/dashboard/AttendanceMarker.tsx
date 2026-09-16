@@ -134,12 +134,22 @@ export default function AttendanceMarker({ classes, schoolId, timeZone }: Attend
     }))
 
     try {
-      await saveAttendance(schoolId, selectedClass.id, date, entries)
-      showToast({
-        type: 'success',
-        title: 'Attendance saved',
-        description: `${selectedClass.name} attendance for ${date} has been recorded.`,
-      })
+      const { refusedStudentIds } = await saveAttendance(schoolId, selectedClass.id, date, entries)
+      if (refusedStudentIds.length === 0) {
+        showToast({
+          type: 'success',
+          title: 'Attendance saved',
+          description: `${selectedClass.name} attendance for ${date} has been recorded.`,
+        })
+      } else {
+        // M8: the rest of the register saved; name the pupils who did not.
+        const names = refusedStudentIds.map((id) => students.find((s) => s.id === id)?.name ?? 'A pupil')
+        showToast({
+          type: 'warning',
+          title: `Attendance saved for ${entries.length - refusedStudentIds.length} of ${entries.length}`,
+          description: `Not saved for ${names.join(', ')} — usually because they were already marked today in another class after moving. The school office can correct it.`,
+        })
+      }
     } catch (err: unknown) {
       // A refused INSERT raises 42501 and lands here. The message is shown
       // rather than swallowed, because a teacher who is not assigned to this
