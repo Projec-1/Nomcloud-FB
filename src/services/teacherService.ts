@@ -189,9 +189,27 @@ async function fetchAssignedClassIds(schoolId: string, teacherId: string): Promi
  * state — a teacher can exist before being given a class. The caller renders
  * that as `empty`, never as `denied`.
  */
-export async function fetchTeacherWorkspace(schoolId: string, teacherId: string): Promise<TeacherWorkspace> {
+export async function fetchTeacherWorkspace(
+  schoolId: string,
+  teacherId: string,
+  /** K6: narrow to one academic year's classes; null shows every year. */
+  academicYearId: string | null = null,
+): Promise<TeacherWorkspace> {
   const teacher = await fetchTeacher(schoolId, teacherId)
-  const classIds = await fetchAssignedClassIds(schoolId, teacherId)
+  let classIds = await fetchAssignedClassIds(schoolId, teacherId)
+
+  // Resolve the year filter FIRST, so the roster, subject and timetable reads
+  // below are scoped to the same classes as the list itself.
+  if (academicYearId && classIds.length > 0) {
+    const { data, error } = await supabase
+      .from('classes')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('academic_year_id', academicYearId)
+      .in('id', classIds)
+    if (error) throw error
+    classIds = ((data ?? []) as { id: string }[]).map((c) => c.id)
+  }
 
   if (classIds.length === 0) {
     return { teacher, classes: [], timetable: [] }

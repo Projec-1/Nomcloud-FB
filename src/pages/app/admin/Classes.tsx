@@ -55,10 +55,13 @@ const emptyForm = {
 export default function AdminClasses() {
   const { school } = useAuth()
   const { showToast } = useToast()
-  const { state, classes, schoolId, reload } = useRecordableClasses()
+  // K6: the current year by default; any other year, or all of them, on request.
+  const [yearScope, setYearScope] = useState<string>('active')
+  const { state, classes, schoolId, reload } = useRecordableClasses(yearScope)
   const { state: academicState } = useAcademicStructure()
 
   const activeYearId = academicState.status === 'ready' ? (academicState.data.activeYear?.id ?? '') : ''
+  const years = academicState.status === 'ready' ? academicState.data.years : []
 
   const [teachers, setTeachers] = useState<TeacherRow[]>([])
   const [subjects, setSubjects] = useState<SubjectRow[]>([])
@@ -168,7 +171,8 @@ export default function AdminClasses() {
     const next: FieldErrors = {}
     if (!minLength(form.name, 2)) next.name = 'Enter a class name.'
     if (!minLength(form.grade, 1)) next.grade = 'Enter a grade.'
-    if (!activeYearId) next.name = 'Set an active academic year before creating classes.'
+    // Only a NEW class needs the active year; an edit keeps the class's own year.
+    if (!editing && !activeYearId) next.name = 'Set an active academic year before creating classes.'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -283,9 +287,42 @@ export default function AdminClasses() {
         }
       />
 
+      {years.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <Select
+            aria-label="Academic year"
+            value={yearScope}
+            onChange={(e) => setYearScope(e.target.value)}
+            className="sm:w-64"
+          >
+            <option value="active">Current year{activeYearId ? '' : ' (none set)'}</option>
+            {years.map((y) => (
+              <option key={y.id} value={y.id}>
+                {y.label} · {y.status}
+              </option>
+            ))}
+            <option value="all">All years</option>
+          </Select>
+          <p className="text-xs text-graphite">
+            {yearScope === 'active'
+              ? 'Showing the current academic year. Earlier years stay available here.'
+              : yearScope === 'all'
+                ? 'Showing every academic year, including closed ones.'
+                : 'Showing a single academic year. New classes are always created in the current year.'}
+          </p>
+        </div>
+      )}
+
       <ResourceGate
         state={state}
-        empty={{ icon: BookOpen, title: 'No classes yet', description: 'Create your first class to get started.' }}
+        empty={{
+          icon: BookOpen,
+          title: yearScope === 'active' ? 'No classes in the current year yet' : 'No classes in this view',
+          description:
+            yearScope === 'active'
+              ? 'Create your first class for this year to get started.'
+              : 'Choose another year above, or return to the current year.',
+        }}
         deniedHint="Class records are available to school staff."
       >
         {(rows) => (

@@ -33,12 +33,21 @@ import type { ClassSummary } from '@/services/teacherService'
  * Shapes ClassSummary so the attendance, grading and homework screens are the
  * same components for management as for a teacher.
  */
-export async function fetchManagedClasses(schoolId: string): Promise<ClassSummary[]> {
-  const { data: classRows, error: classError } = await supabase
+export async function fetchManagedClasses(
+  schoolId: string,
+  /**
+   * K6: the academic year to show. A year id narrows to that year's classes;
+   * null shows every year, which is how history stays reachable. Callers
+   * default this to the active year so screens stop mixing years together.
+   */
+  academicYearId: string | null = null,
+): Promise<ClassSummary[]> {
+  let query = supabase
     .from('classes')
     .select('id, name, grade, section, room, capacity, class_teacher_id')
     .eq('school_id', schoolId)
-    .order('name', { ascending: true })
+  if (academicYearId) query = query.eq('academic_year_id', academicYearId)
+  const { data: classRows, error: classError } = await query.order('name', { ascending: true })
 
   if (classError) throw classError
 
@@ -166,11 +175,17 @@ export async function createClass(schoolId: string, input: ClassInput): Promise<
   return (data as { id: string }).id
 }
 
+/**
+ * Edits a class. Its ACADEMIC YEAR IS NOT EDITABLE and is deliberately not sent:
+ * a class belongs to the year it was created in. The form used to send the
+ * active year on every edit, which silently moved a historical class into the
+ * current year the moment anyone corrected its room (found in the calendar
+ * batch, SYSTEM_ISSUES_LIST K6).
+ */
 export async function updateClass(schoolId: string, id: string, input: ClassInput): Promise<void> {
   const { error } = await supabase
     .from('classes')
     .update({
-      academic_year_id: input.academicYearId,
       name: input.name,
       grade: input.grade,
       section: input.section,

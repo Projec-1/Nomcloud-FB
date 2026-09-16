@@ -117,6 +117,126 @@ export async function fetchSubjects(schoolId: string): Promise<SubjectRow[]> {
   return (data ?? []) as SubjectRow[]
 }
 
+// ===========================================================================
+// WRITES — academic calendar. SYSTEM_ISSUES_LIST K1, K2, K5, M1.
+// ===========================================================================
+// Phase 8 batch 2 left this page read-only on purpose, because switching the
+// active year was two statements a browser cannot make atomic. Migration
+// 20260916000003 supplies what was missing:
+//
+//   activate_academic_year   closes the outgoing year, activates the new one,
+//                            and ends the outgoing year's open enrolments —
+//                            one transaction, never a moment with no active year
+//   seven validation guards  a term inside its year and not overlapping another,
+//                            years not overlapping, no writes into a closed
+//                            year, attendance inside its class's year, grades
+//                            and exams on their class's own terms
+//
+// The guards raise PT422 with a sentence already written for a person, so
+// calendarError passes the database's own message through rather than
+// re-wording it here; the rule lives in one place.
+
+function calendarError(error: { code?: string; message: string }): Error {
+  if (error.code === 'PT422') return new Error(error.message)
+  if (error.code === '23505') {
+    return new Error(
+      /terms/i.test(error.message)
+        ? 'That term name is already used in this academic year.'
+        : 'An academic year with that label already exists at this school.',
+    )
+  }
+  if (error.code === '23514') return new Error('The end date must be after the start date.')
+  if (error.code === '42501') return new Error('Only school management can change the academic calendar.')
+  return new Error(error.message)
+}
+
+export interface AcademicYearInput {
+  label: string
+  startDate: string
+  endDate: string
+}
+
+/**
+ * Creates an academic year.
+ *
+ * A school's FIRST year is created already active, because there is nothing to
+ * close and a school with no active year cannot create a single class. Every
+ * later year is created 'upcoming', and becomes current only through
+ * activateAcademicYear, so the switch always goes through the atomic function.
+ */
+export async function createAcademicYear(
+  schoolId: string,
+  input: AcademicYearInput,
+  isFirstYear: boolean,
+): Promise<AcademicYearRow> {
+  const { data, error } = await supabase
+    .from('academic_years')
+    .insert({
+      school_id: schoolId,
+      label: input.label.trim(),
+      start_date: input.startDate,
+      end_date: input.endDate,
+      status: isFirstYear ? 'active' : 'upcoming',
+    })
+    .select('*')
+    .single()
+
+  if (error) throw calendarError(error)
+  return data as AcademicYearRow
+}
+
+export interface TermInput {
+  academicYearId: string
+  name: string
+  startDate: string
+  endDate: string
+  sortOrder: number
+}
+
+export async function createTerm(schoolId: string, input: TermInput): Promise<void> {
+  const { error } = await supabase.from('terms').insert({
+    school_id: schoolId,
+    academic_year_id: input.academicYearId,
+    name: input.name.trim(),
+    start_date: input.startDate,
+    end_date: input.endDate,
+    sort_order: input.sortOrder,
+  })
+  if (error) throw calendarError(error)
+}
+
+export interface YearActivation {
+  outcome: 'switched' | 'already_active'
+  activatedYearLabel: string
+  previousYearLabel: string | null
+  enrolmentsClosed: number
+}
+
+/**
+ * Makes a year the active one, closing the current year and its open enrolments
+ * in the same transaction (activate_academic_year). Management only; the
+ * function checks that itself.
+ */
+export async function activateAcademicYear(schoolId: string, academicYearId: string): Promise<YearActivation> {
+  const { data, error } = await supabase.rpc('activate_academic_year', {
+    p_school_id: schoolId,
+    p_academic_year_id: academicYearId,
+  })
+  if (error) throw calendarError(error)
+  const r = data as {
+    outcome: YearActivation['outcome']
+    activated_year_label: string
+    previous_year_label: string | null
+    enrolments_closed: number
+  }
+  return {
+    outcome: r.outcome,
+    activatedYearLabel: r.activated_year_label,
+    previousYearLabel: r.previous_year_label,
+    enrolmentsClosed: r.enrolments_closed,
+  }
+}
+
 /** The active academic year, or null when the school has not set one. */
 export function activeAcademicYear(years: AcademicYearRow[]): AcademicYearRow | null {
   return years.find((year) => year.status === 'active') ?? null

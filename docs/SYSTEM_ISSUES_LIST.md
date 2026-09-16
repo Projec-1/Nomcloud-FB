@@ -1,7 +1,7 @@
 # Nom Cloud — System Issues List
 
 **Status:** Read-only bug sweep, 2026-09-15. The sweep itself changed nothing.
-**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15) and S2, S3, S4, S5 (in full), S7, S10, S11, K3 (2026-09-16) resolved. Marked in place below; original evidence kept.
+**Fixes since:** B1, S1, S6, S8, S9 (2026-09-15); S2, S3, S4, S5 (in full), S7, S10, S11, K3, and the academic-calendar batch K1, K2, K4, K5, K6, M1, M2, M3 (2026-09-16) resolved. Marked in place below; original evidence kept.
 **New capability:** *Revoke access* / *Restore access* for a teacher or guardian — suspends the login only, keeping the employment or family record (see S4).
 This list is the input for small fix batches, worked top to bottom.
 
@@ -47,12 +47,58 @@ From the academic-year investigation. Where this sweep touched them again it is 
 
 | Ref | Issue |
 |---|---|
-| **K1** | No way to create an academic year from the app (the API accepts it — sweep A9 — but no screen offers it) |
-| **K2** | Switching the active year is two unsafe steps with a window of zero active years |
+| ~~**K1**~~ | ~~No way to create an academic year from the app~~ — **✅ RESOLVED 2026-09-16** |
+| ~~**K2**~~ | ~~Switching the active year is two unsafe steps with a window of zero active years~~ — **✅ RESOLVED 2026-09-16** |
 | ~~**K3**~~ | ~~A teacher can mark attendance for a student not enrolled in their class~~ — **✅ RESOLVED 2026-09-16** with S10/S11 (enrolment check on all three teaching tables) |
-| **K4** | Attendance can be dated outside any valid academic year |
-| **K5** | A student can end up with two open enrolments |
-| **K6** | Screens mix every year's classes together |
+| ~~**K4**~~ | ~~Attendance can be dated outside any valid academic year~~ — **✅ RESOLVED 2026-09-16** |
+| ~~**K5**~~ | ~~A student can end up with two open enrolments~~ — **✅ RESOLVED 2026-09-16** |
+| ~~**K6**~~ | ~~Screens mix every year's classes together~~ — **✅ RESOLVED 2026-09-16** |
+
+> **✅ K1, K2, K4, K5, K6 RESOLVED 2026-09-16** — academic-calendar batch, migration
+> `20260916000003_academic_calendar_integrity` plus the new Academic Years screen. Details below
+> each row.
+>
+> - **K1:** the Academic Years page is no longer read-only. "Add academic year" sits in the page
+>   header, and a school with **no** years sees *Set up your first academic year* with a
+>   *Create your first academic year* button. Defaults: September to June of the current school
+>   year, named "2026 / 2027"; later years default to the September after the latest year ends,
+>   so the suggestion never overlaps. A school's first year is created **active** (nothing to
+>   close, and no class can exist without one); every later year is created **upcoming**. Each
+>   year card also has *Add term*, with defaults that follow on from the previous term.
+> - **K2:** `activate_academic_year(school, year)` — SECURITY DEFINER, empty `search_path`,
+>   explicit `has_school_management_role` check. It closes the current year and activates the
+>   chosen one in **one transaction**, never leaving a moment with zero active years. Each year
+>   card offers *Set as current*, with a confirmation that says what will close.
+> - **K5:** in the same transaction, every still-open enrolment of the outgoing year gets
+>   `left_on` = the year's end date, or today if the switch happens mid-year, never before the
+>   pupil enrolled. A new guard also requires an enrolment to name **its class's own year**;
+>   without that, closing a year would miss enrolments filed under another.
+> - **K6:** class lists default to the **current year**. `fetchManagedClasses` and
+>   `fetchTeacherWorkspace` take a year, and `useRecordableClasses` defaults to the active one, so
+>   Attendance, Grades, Homework, Exams, Students and Classes stop mixing years. The Classes page
+>   has a year selector: current year, any single year, or **All years** — history stays reachable
+>   and nothing is hidden. Also found and fixed: editing a class used to send the active year, which
+>   silently moved a historical class into the current year; a class's year is now fixed at
+>   creation.
+> - **K4:** `attendance_records_assert_within_year` refuses a date outside the class's academic
+>   year (PT422).
+>
+> **Verified in a real browser** on a throwaway school with zero years (removed afterwards):
+> created the first year from the empty state (defaults 2026-09-01 → 2027-06-30, "2026 / 2027",
+> saved as active), added Term 1, created Grade 1A; added a second year (defaulted to 2027/2028,
+> saved as upcoming) and switched to it through the confirmation — 2026/2027 closed and 2027/2028
+> active; the Classes page then defaulted to "No classes in the current year yet", and **All
+> years** showed Grade 1A. No console errors.
+>
+> **Verified with rolled-back probes** (before / dry run / after apply): the switch returned
+> `switched` with 4 enrolments closed, exactly one active year after, no pupil with two open
+> enrolments; re-activating the active year is a no-op; another school's year is refused;
+> switching back works. K4 dates in the closed year, in no year, and a moved date are all PT422,
+> while an in-year date is accepted. A teacher, a guardian and another school's administrator get
+> 42501; anonymous callers have no execute permission.
+>
+> **Behaviour to know:** switching *back* to a year re-activates it but does **not** reopen the
+> enrolments that were closed when it was closed; those pupils need re-enrolling.
 
 ---
 
@@ -62,9 +108,9 @@ From the academic-year investigation. Where this sweep touched them again it is 
 |---|---|---|
 | BLOCKER | 1 | 1 (B1) |
 | SERIOUS | 11 | **11 — all resolved** |
-| MINOR | 16 | 0 |
+| MINOR | 16 | 3 (M1, M2, M3) |
 | COSMETIC | 2 | 0 |
-| **Total new** | **30** | **12** |
+| **Total new** | **30** | **15** |
 
 ---
 
@@ -573,7 +619,12 @@ From the academic-year investigation. Where this sweep touched them again it is 
 
 ### Academic structure
 
-**M1 · Terms and years are not validated against each other — NEW**
+**M1 · Terms and years are not validated against each other — NEW — ✅ RESOLVED 2026-09-16**
+> `terms_assert_within_year` (a term inside its year, not overlapping another term of that year) and
+> `academic_years_assert_no_overlap` (years of one school do not overlap), both PT422. Measured:
+> the 2030 term, the overlapping term, the overlapping year and moving Term 1 outside its year are
+> all refused; a non-overlapping year and a valid Term 4 are accepted.
+
 - **Steps and results:**
   - **S1:** a term dated **2030** inside academic year 2026/2027. `OK rows=1`.
   - **S2:** a term overlapping Term 1. `OK rows=1`.
@@ -581,12 +632,21 @@ From the academic-year investigation. Where this sweep touched them again it is 
 - **Why it matters:** the current term is derived from dates, so overlaps make it ambiguous.
 - **Reach:** API only (no term or year editor exists).
 
-**M2 · Classes can be created in, and students enrolled into, a closed year — NEW**
+**M2 · Classes can be created in, and students enrolled into, a closed year — NEW — ✅ RESOLVED 2026-09-16**
+> `classes_assert_year_open` and `class_enrollments_assert_year` (PT422). Measured: creating a class
+> in closed 2025/2026, moving a class into it, and enrolling a pupil into a class of it are all
+> refused — including for the table owner, so "closed means closed" holds everywhere. The closed
+> year and its classes stay fully readable.
+
 - **S4:** class created in closed year 2025/2026. `OK rows=1`.
 - **S5:** a student enrolled into it. `OK rows=1`.
 - **Reach:** API. Related to K5 and K6.
 
-**M3 · Grades and exams may use a term from a different academic year — NEW**
+**M3 · Grades and exams may use a term from a different academic year — NEW — ✅ RESOLVED 2026-09-16**
+> `grade_records_assert_term_year` and `exams_assert_term_year` (one shared function, PT422).
+> Measured: the G3 grade and the E1 exam using a 2027/2028 term on a 2026/2027 class are both
+> refused; the same grade with the class's own term is accepted.
+
 - **G3:** a grade on a 2026/2027 class using a 2027/2028 term. `OK rows=1`.
 - **E1:** an exam in a 2027/2028 term dated **2031**. `OK rows=1`.
 - **Reach:** API.
@@ -781,5 +841,5 @@ Regression checks that passed. Listed so the fix batches know what not to re-ope
 3. ~~**S5, S6, S7**~~ (all resolved — money integrity).
 4. ~~**S8, S9**~~ (resolved).
 5. ~~**S4, S10, S11, K3**~~ (all resolved).
-6. The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.
+6. ~~The academic-year batch: K1, K2, K4, K5, K6, M1, M2, M3.~~ (all resolved — this also clears the precondition for M8).
 7. Remaining MINOR and COSMETIC items.

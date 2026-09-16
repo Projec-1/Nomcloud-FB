@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext'
 import { deriveResourceState, type ResourceState } from '@/lib/resourceState'
 import { fetchManagedClasses } from '@/services/classService'
 import { fetchTeacherWorkspace, type ClassSummary } from '@/services/teacherService'
+import { useAcademicStructure } from '@/hooks/useAcademicStructure'
 import { toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
@@ -36,8 +37,17 @@ export interface UseRecordableClassesResult {
   reload: () => void
 }
 
-export function useRecordableClasses(): UseRecordableClassesResult {
+/**
+ * Which academic year's classes to load (SYSTEM_ISSUES_LIST K6).
+ *   'active'   the default: only the current year, so screens stop mixing years
+ *   'all'      every year — history, on request
+ *   <year id>  one particular year
+ */
+export type ClassYearScope = 'active' | 'all' | string
+
+export function useRecordableClasses(yearScope: ClassYearScope = 'active'): UseRecordableClassesResult {
   const { activeMembership, school, authState } = useAuth()
+  const { state: academicState } = useAcademicStructure()
 
   const role = activeMembership?.role ?? null
   const canManage = role !== null && (MANAGEMENT_ROLES as readonly string[]).includes(role)
@@ -51,10 +61,24 @@ export function useRecordableClasses(): UseRecordableClassesResult {
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
+  // Resolve the scope to a year id. 'active' with no active year yet means there
+  // is no current year to show classes for, which is reported as empty rather
+  // than silently widened to every year.
+  const academicReady = academicState.status === 'ready' || academicState.status === 'empty'
+  const activeYearId = academicState.status === 'ready' ? (academicState.data.activeYear?.id ?? null) : null
+  const yearId = yearScope === 'all' ? null : yearScope === 'active' ? activeYearId : yearScope
+  const noCurrentYear = yearScope === 'active' && academicReady && activeYearId === null
+
   useEffect(() => {
     let cancelled = false
 
     if (authState !== 'ready') return
+    if (yearScope === 'active' && !academicReady) return
+    if (noCurrentYear) {
+      setIsLoading(false)
+      setClasses([])
+      return
+    }
     if (!schoolId || (!canManage && !teacherId)) {
       setIsLoading(false)
       setClasses([])
@@ -65,8 +89,8 @@ export function useRecordableClasses(): UseRecordableClassesResult {
     setError(null)
 
     const load = canManage
-      ? fetchManagedClasses(schoolId)
-      : fetchTeacherWorkspace(schoolId, teacherId as string).then((w) => w.classes)
+      ? fetchManagedClasses(schoolId, yearId)
+      : fetchTeacherWorkspace(schoolId, teacherId as string, yearId).then((w) => w.classes)
 
     load
       .then((result) => {
@@ -82,7 +106,7 @@ export function useRecordableClasses(): UseRecordableClassesResult {
     return () => {
       cancelled = true
     }
-  }, [schoolId, canManage, teacherId, authState, nonce])
+  }, [schoolId, canManage, teacherId, authState, nonce, yearScope, yearId, academicReady, noCurrentYear])
 
   const state = deriveResourceState<ClassSummary[]>({
     isLoading: authState !== 'ready' || isLoading,
