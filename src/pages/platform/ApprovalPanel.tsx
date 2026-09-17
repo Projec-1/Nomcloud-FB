@@ -133,7 +133,7 @@ export default function ApprovalPanel() {
       <section className="max-w-xl rounded-2xl border border-red-200 bg-red-50 p-6 dark:border-red-900/50 dark:bg-red-950/20">
         <h1 className="text-xl font-semibold text-red-800 dark:text-red-200">Platform-admin access required</h1>
         <p className="mt-2 text-sm text-red-700 dark:text-red-300">
-          This development panel is restricted to an unrevoked platform-admin account.
+          School application approval is restricted to an unrevoked platform-admin account.
         </p>
         <Button className="mt-5" variant="outline" onClick={logout}>
           Sign out
@@ -145,7 +145,7 @@ export default function ApprovalPanel() {
   return (
     <section className="space-y-6">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand">Development only</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand">Platform administration</p>
         <h1 className="mt-2 text-2xl font-semibold text-ink dark:text-white">Approve school application</h1>
         <p className="mt-2 text-sm text-graphite">
           This panel calls the approval RPC using the current authenticated session. The temporary password is shown

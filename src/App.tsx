@@ -1,5 +1,4 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import ScrollToTop from '@/components/layout/ScrollToTop'
 import PublicLayout from '@/components/layout/PublicLayout'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -60,8 +59,7 @@ import ParentNotifications from '@/pages/app/parent/Notifications'
 import ParentMessages from '@/pages/app/parent/Messages'
 import ParentTutorials from '@/pages/app/parent/Tutorials'
 import PlatformPlaceholder from '@/pages/platform/Placeholder'
-
-const DevApprovalPanel = import.meta.env.DEV ? lazy(() => import('@/pages/dev/ApprovalPanel')) : null
+import PlatformApprovalPanel from '@/pages/platform/ApprovalPanel'
 
 export default function App() {
   return (
@@ -85,18 +83,9 @@ export default function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        {import.meta.env.DEV && DevApprovalPanel ? (
-          <Route
-            path="/dev/approval"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<div className="p-8 text-sm text-graphite">Loading development panel…</div>}>
-                  <DevApprovalPanel />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
-        ) : null}
+        {/* The approval screen used to exist only in development builds at this
+            path. It now lives in the platform workspace; the old address still works. */}
+        <Route path="/dev/approval" element={<Navigate to="/platform/applications" replace />} />
 
         <Route
           path="/platform"
@@ -107,6 +96,7 @@ export default function App() {
           }
         >
           <Route index element={<PlatformPlaceholder />} />
+          <Route path="applications" element={<PlatformApprovalPanel />} />
         </Route>
 
         <Route
