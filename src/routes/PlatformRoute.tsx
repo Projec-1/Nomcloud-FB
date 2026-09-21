@@ -2,9 +2,10 @@ import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { PageLoader } from '@/components/ui/Loader'
+import { mustChangePassword } from '@/services/accountService'
 
 export default function PlatformRoute({ children }: { children: ReactNode }) {
-  const { authState, platformAdmin } = useAuth()
+  const { authState, authUser, platformAdmin } = useAuth()
   const location = useLocation()
 
   if (authState === 'initialising' || authState === 'loading_profile') {
@@ -17,6 +18,11 @@ export default function PlatformRoute({ children }: { children: ReactNode }) {
 
   if (authState === 'error') {
     return <div className="flex min-h-[50vh] items-center justify-center px-6 text-center text-sm text-red-500">We could not verify your platform access. Please try again.</div>
+  }
+
+  // Same requirement for the platform workspace. See ProtectedRoute.
+  if (authState === 'ready' && mustChangePassword(authUser)) {
+    return <Navigate to="/first-login" replace />
   }
 
   if (platformAdmin) {

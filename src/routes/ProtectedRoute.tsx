@@ -2,9 +2,10 @@ import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { PageLoader } from '@/components/ui/Loader'
+import { mustChangePassword } from '@/services/accountService'
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { authState, logout } = useAuth()
+  const { authState, authUser, logout } = useAuth()
   const location = useLocation()
 
   if (authState === 'initialising' || authState === 'loading_profile') {
@@ -42,6 +43,12 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
         </div>
       </div>
     )
+  }
+
+  // Provisioned with a temporary password and has not replaced it yet: no
+  // workspace, whatever was asked for, until they have.
+  if (authState === 'ready' && mustChangePassword(authUser)) {
+    return <Navigate to="/first-login" replace />
   }
 
   if (authState === 'ready') return <>{children}</>
