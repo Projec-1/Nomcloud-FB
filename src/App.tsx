@@ -21,6 +21,8 @@ import Terms from '@/pages/public/Terms'
 import Cookies from '@/pages/public/Cookies'
 import Login from '@/pages/public/Login'
 import Signup from '@/pages/public/Signup'
+import ResetPassword from '@/pages/public/ResetPassword'
+import FirstLoginPassword from '@/pages/public/FirstLoginPassword'
 import NotFound from '@/pages/public/NotFound'
 
 import AdminDashboard from '@/pages/app/admin/Dashboard'
@@ -83,6 +85,13 @@ export default function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        {/* Where Supabase's password-recovery link lands. Public by design: the
+            person following it is signed out and cannot reach anything else. */}
+        <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Where the guards send someone provisioned with a temporary password.
+            The page checks the session itself, so it is not wrapped in
+            ProtectedRoute — that guard redirects here and would otherwise loop. */}
+        <Route path="/first-login" element={<FirstLoginPassword />} />
         {/* The approval screen used to exist only in development builds at this
             path. It now lives in the platform workspace; the old address still works. */}
         <Route path="/dev/approval" element={<Navigate to="/platform/applications" replace />} />
