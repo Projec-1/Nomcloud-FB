@@ -23,6 +23,7 @@ import Login from '@/pages/public/Login'
 import Signup from '@/pages/public/Signup'
 import ResetPassword from '@/pages/public/ResetPassword'
 import FirstLoginPassword from '@/pages/public/FirstLoginPassword'
+import ActivateAccount from '@/pages/public/ActivateAccount'
 import NotFound from '@/pages/public/NotFound'
 
 import AdminDashboard from '@/pages/app/admin/Dashboard'
@@ -92,6 +93,9 @@ export default function App() {
             The page checks the session itself, so it is not wrapped in
             ProtectedRoute — that guard redirects here and would otherwise loop. */}
         <Route path="/first-login" element={<FirstLoginPassword />} />
+        {/* Where the activation email lands. Public: the person following it is
+            signed out until Supabase's link opens their session. */}
+        <Route path="/activate" element={<ActivateAccount />} />
         {/* The approval screen used to exist only in development builds at this
             path. It now lives in the platform workspace; the old address still works. */}
         <Route path="/dev/approval" element={<Navigate to="/platform/applications" replace />} />

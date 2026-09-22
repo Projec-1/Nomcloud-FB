@@ -36,6 +36,12 @@ export const recoveryLanding = {
   /** The page was opened by following a password-recovery link. */
   isRecovery: type === 'recovery',
   /**
+   * The page was opened by following an ACTIVATION link. Supabase marks a fresh
+   * invite as 'invite'; a resend to an account that already has a password comes
+   * back as 'recovery', and both land on /activate, so both count here.
+   */
+  isActivation: type === 'invite' || type === 'recovery',
+  /**
    * Supabase reported the link itself as unusable — expired, already used, or
    * tampered with. Its own sentence is kept so the screen can show it.
    */

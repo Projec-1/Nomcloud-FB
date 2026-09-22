@@ -7,7 +7,10 @@ const corsHeaders = {
 
 interface ApprovalRequest {
   application_id: string
-  shortcode: string
+  /** Required to approve; omitted when action is 'resend'. */
+  shortcode?: string
+  /** 'resend' re-sends the activation email for an already-approved school. */
+  action?: 'approve' | 'resend'
 }
 
 const json = (body: unknown, status = 200) =>
@@ -16,10 +19,57 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
-const temporaryPassword = () => {
-  const bytes = new Uint8Array(18)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+// ---------------------------------------------------------------------------
+// ACTIVATION, NOT A PASSWORD.
+//
+// This function used to generate a temporary password, set it on the new
+// account and return it, leaving the platform administrator to pass it on. It
+// no longer generates, stores, returns, logs or emails a password of any kind.
+//
+// Instead the account is created by Supabase Auth's own invite, which emails a
+// single-use link (expiring per the project's Email OTP setting) to the address
+// on the application. Following it opens a session in which the administrator
+// chooses their own password on /activate. Supabase owns the link, its expiry
+// and its single use; nothing parallel is built here.
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the activation link should land. Taken from the origin the approval
+ * screen is served from, never hard-coded, and only when it is https. Supabase
+ * additionally refuses any origin outside its own redirect allow-list, and falls
+ * back to the project's Site URL, so a bad value cannot redirect a person
+ * somewhere unexpected.
+ */
+const activationRedirect = (request: Request): string | undefined => {
+  const origin = request.headers.get('Origin') ?? ''
+  try {
+    const url = new URL(origin)
+    return url.protocol === 'https:' ? `${url.origin}/activate` : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Sends the activation email.
+ *
+ * An account that has not been activated yet can simply be invited again, which
+ * issues a fresh link and invalidates the old one. Once it HAS been activated
+ * Supabase refuses a second invite (422), and the right email is then a password
+ * recovery link, which reaches the same screen.
+ */
+async function sendActivationEmail(
+  adminClient: SupabaseClient,
+  email: string,
+  redirectTo: string | undefined,
+): Promise<{ sent: boolean; kind: 'invite' | 'recovery'; error?: string }> {
+  const invite = await adminClient.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined)
+  if (!invite.error) return { sent: true, kind: 'invite' }
+
+  const recovery = await adminClient.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined)
+  if (!recovery.error) return { sent: true, kind: 'recovery' }
+
+  return { sent: false, kind: 'invite', error: recovery.error.message }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +171,8 @@ Deno.serve(async (request) => {
   ) {
     return json({ error: 'Application id must be a UUID' }, 400)
   }
-  if (typeof input.shortcode !== 'string' || !/^[a-z0-9]([a-z0-9-]{1,61})[a-z0-9]$/.test(input.shortcode)) {
+  const isResend = input.action === 'resend'
+  if (!isResend && (typeof input.shortcode !== 'string' || !/^[a-z0-9]([a-z0-9-]{1,61})[a-z0-9]$/.test(input.shortcode))) {
     return json({ error: 'Shortcode must be DNS-safe, lowercase, and 3-63 characters' }, 400)
   }
 
@@ -133,18 +184,30 @@ Deno.serve(async (request) => {
 
   if (applicationError) return json({ error: applicationError.message }, 500)
   if (!application) return json({ error: 'Application not found' }, 404)
+
+  const redirectTo = activationRedirect(request)
+
+  // ---- resend: an already-approved school whose administrator needs a new link
+  if (isResend) {
+    if (application.status !== 'approved') {
+      return json({ error: 'This application has not been approved yet, so there is nothing to activate.' }, 409)
+    }
+    const resent = await sendActivationEmail(adminClient, application.email, redirectTo)
+    if (!resent.sent) return json({ error: `Activation email could not be sent: ${resent.error}` }, 502)
+    return json({ activation_email_sent: true, email: application.email, email_kind: resent.kind })
+  }
+
   if (application.status !== 'pending') return json({ error: 'Application is no longer pending' }, 409)
 
-  const password = temporaryPassword()
   let authUserId: string
   let reusedExistingAccount = false
 
-  const { data: createdUser, error: createUserError } = await adminClient.auth.admin.createUser({
-    email: application.email,
-    password,
-    email_confirm: true,
-    user_metadata: { must_change_password: true },
-  })
+  // Creates the account AND sends the activation email in one step. No password
+  // is set, so the account cannot be signed into until its owner chooses one.
+  const { data: createdUser, error: createUserError } = await adminClient.auth.admin.inviteUserByEmail(
+    application.email,
+    redirectTo ? { redirectTo } : undefined,
+  )
 
   if (!createUserError && createdUser.user) {
     authUserId = createdUser.user.id
@@ -185,15 +248,8 @@ Deno.serve(async (request) => {
       }, 409)
     }
 
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(existing.id, {
-      password,
-      email_confirm: true,
-      user_metadata: { ...(existing.user_metadata ?? {}), must_change_password: true },
-    })
-    if (updateError) {
-      return json({ error: `Existing account ${application.email} could not be prepared for reuse: ${updateError.message}` }, 502)
-    }
-
+    // Reusing an orphaned account: no password is set on it either. The
+    // activation email below is what lets its owner in.
     authUserId = existing.id
     reusedExistingAccount = true
   }
@@ -217,9 +273,18 @@ Deno.serve(async (request) => {
     return json({ error: approvalError.message }, 400)
   }
 
+  // The school exists now, so the activation email is sent last: a failure here
+  // is reported without undoing the approval, and the screen offers a resend.
+  const sent = reusedExistingAccount
+    ? await sendActivationEmail(adminClient, application.email, redirectTo)
+    : { sent: true, kind: 'invite' as const }
+
   return json({
     ...approval,
     reused_existing_account: reusedExistingAccount,
-    temporary_password: password,
+    email: application.email,
+    activation_email_sent: sent.sent,
+    email_kind: sent.kind,
+    ...(sent.sent ? {} : { activation_email_error: sent.error }),
   })
 })

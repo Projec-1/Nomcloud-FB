@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
@@ -162,6 +163,21 @@ export default function Signup() {
           <p className="mt-5 text-sm leading-relaxed text-graphite">
             We have received your school application. Our team will review it and contact you using the details provided.
           </p>
+          <p className="mt-3 text-sm leading-relaxed text-graphite">
+            When your school is approved, you will receive an email to activate your account.
+          </p>
+          <div className="mt-7 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link to="/login" className="sm:w-auto">
+              <Button variant="accent" className="w-full sm:w-auto">
+                Back to sign in <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link to="/" className="sm:w-auto">
+              <Button variant="outline" className="w-full sm:w-auto">
+                Back to home
+              </Button>
+            </Link>
+          </div>
         </div>
       </AuthLayout>
     )
@@ -256,6 +272,13 @@ export default function Signup() {
             {submitError && <p className="text-sm font-medium text-red-500">{submitError}</p>}
           </>
         )}
+
+        <p className="pt-1 text-sm text-graphite">
+          Already have an account?{' '}
+          <Link to="/login" className="link-underline font-medium text-accent">
+            Sign in
+          </Link>
+        </p>
 
         <div className="flex justify-between gap-3 pt-2">
           {step > 1 ? (
