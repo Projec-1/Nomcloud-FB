@@ -206,8 +206,10 @@ export default function ApprovalPanel() {
             </p>
           ) : (
             <p className="mt-1.5 text-sm font-medium text-red-600 dark:text-red-400">
-              The school was created, but the activation email could not be sent
-              {result.activation_email_error ? `: ${result.activation_email_error}` : '.'} Use Resend below.
+              The school, the administrator&rsquo;s account and their membership all exist, but{' '}
+              <strong>no activation email was sent</strong> to {result.email}, so nothing has reached them and they
+              cannot sign in yet. Use &ldquo;Resend activation email&rdquo; once email is working.
+              {result.activation_email_error ? ` Mail server: ${result.activation_email_error}` : ''}
             </p>
           )}
           <div className="mt-4 flex flex-wrap items-center gap-3">

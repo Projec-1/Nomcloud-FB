@@ -57,6 +57,13 @@ const activationRedirect = (request: Request): string | undefined => {
  * issues a fresh link and invalidates the old one. Once it HAS been activated
  * Supabase refuses a second invite (422), and the right email is then a password
  * recovery link, which reaches the same screen.
+ *
+ * "SENT" MEANS THE MAIL SERVER ACCEPTED THE MESSAGE, AND NOTHING ELSE. The
+ * recovery fallback is therefore only tried for an address that ALREADY has an
+ * account. resetPasswordForEmail is deliberately non-enumerable: for an address
+ * Supabase does not know, it answers 200 and sends nothing at all. Reading that
+ * 200 as delivery is how the sibling invitation function once reported three
+ * invitations as sent to people who were never emailed.
  */
 async function sendActivationEmail(
   adminClient: SupabaseClient,
@@ -66,11 +73,25 @@ async function sendActivationEmail(
   const invite = await adminClient.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined)
   if (!invite.error) return { sent: true, kind: 'invite' }
 
+  let hasAccount: boolean
+  try {
+    hasAccount = (await findAuthUserByEmail(adminClient, email)) !== null
+  } catch (lookupError) {
+    const message = lookupError instanceof Error ? lookupError.message : String(lookupError)
+    return { sent: false, kind: 'invite', error: `${invite.error.message} (the account lookup also failed: ${message})` }
+  }
+
+  // No account: an invite that failed is simply an email that was not sent.
+  if (!hasAccount) return { sent: false, kind: 'invite', error: invite.error.message }
+
   const recovery = await adminClient.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined)
   if (!recovery.error) return { sent: true, kind: 'recovery' }
 
-  return { sent: false, kind: 'invite', error: recovery.error.message }
+  return { sent: false, kind: 'recovery', error: recovery.error.message }
 }
+
+/** The mail server's own words, flattened so they fit in one readable line. */
+const tidy = (reason: string | undefined) => (reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 220)
 
 // ---------------------------------------------------------------------------
 // Existing-account handling.
@@ -193,7 +214,11 @@ Deno.serve(async (request) => {
       return json({ error: 'This application has not been approved yet, so there is nothing to activate.' }, 409)
     }
     const resent = await sendActivationEmail(adminClient, application.email, redirectTo)
-    if (!resent.sent) return json({ error: `Activation email could not be sent: ${resent.error}` }, 502)
+    if (!resent.sent) {
+      return json({
+        error: `No activation email was sent to ${application.email}. Nothing has reached them — use “Resend activation email” again once email is working.${tidy(resent.error) ? ` Mail server: ${tidy(resent.error)}` : ''}`,
+      }, 502)
+    }
     return json({ activation_email_sent: true, email: application.email, email_kind: resent.kind })
   }
 
@@ -232,7 +257,13 @@ Deno.serve(async (request) => {
           error: `An account with ${application.email} already exists but the Auth service cannot load it, so it cannot be reused. It was created outside Supabase Auth and must be removed by an operator before this application can be approved.`,
         }, 409)
       }
-      return json({ error: createUserError?.message ?? 'Auth user creation failed' }, 502)
+      // The invite both creates the account and sends the link, so a mail
+      // server refusal lands here. Nothing has been approved: no school, no
+      // profile, no membership, and the application is still pending. Say so,
+      // rather than leaving the operator guessing what was half-built.
+      return json({
+        error: `The administrator's account could not be created, so nothing was approved: there is no school, no profile and no membership, and this application is still pending. Try again once the problem below is fixed. Reason: ${tidy(createUserError?.message) || 'unknown'}`,
+      }, 502)
     }
 
     let orphaned: boolean
@@ -285,6 +316,6 @@ Deno.serve(async (request) => {
     email: application.email,
     activation_email_sent: sent.sent,
     email_kind: sent.kind,
-    ...(sent.sent ? {} : { activation_email_error: sent.error }),
+    ...(sent.sent ? {} : { activation_email_error: tidy(sent.error) }),
   })
 })
