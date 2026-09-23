@@ -31,6 +31,7 @@ export const navByRole: Record<Role, NavItem[]> = {
     { to: '/app/admin', labelKey: 'dash.nav.dashboard', icon: LayoutDashboard, end: true },
     { to: '/app/admin/students', labelKey: 'dash.nav.students', icon: Users },
     { to: '/app/admin/teachers', labelKey: 'dash.nav.teachers', icon: GraduationCap },
+    { to: '/app/admin/guardians', labelKey: 'dash.nav.guardians', icon: UserCircle },
     { to: '/app/admin/classes', labelKey: 'dash.nav.classes', icon: BookOpen },
     { to: '/app/admin/attendance', labelKey: 'dash.nav.attendance', icon: CalendarCheck },
     { to: '/app/admin/grades', labelKey: 'dash.nav.grades', icon: ClipboardList },

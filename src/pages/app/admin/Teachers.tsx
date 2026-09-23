@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { GraduationCap, Plus, Pencil, Trash2, ShieldOff, ShieldCheck } from 'lucide-react'
+import { GraduationCap, Plus, Pencil, Trash2, ShieldOff, ShieldCheck, Mail } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -26,6 +26,7 @@ import {
 import { fetchSubjects, type SubjectRow } from '@/services/academicService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { fetchTeacherAccess, revokeAccess, restoreAccess, type PersonAccess } from '@/services/accessService'
+import { listLiveInvitations, sendInvitation, type InvitationRow } from '@/services/invitationService'
 import { formatDate } from '@/utils/format'
 import { errorMessage, toError } from '@/utils/errorMessage'
 
@@ -78,6 +79,10 @@ export default function AdminTeachers() {
   // policy resolves through. Both are shown, so neither is mistaken for the
   // other, and taking access away is its own action.
   const [access, setAccess] = useState<Map<string, PersonAccess>>(new Map())
+  // Live invitations by email, so a row can say "Invited" instead of "No login"
+  // and the button can offer a resend rather than a duplicate.
+  const [invitations, setInvitations] = useState<Map<string, InvitationRow>>(new Map())
+  const [inviting, setInviting] = useState<string | null>(null)
   const [accessTarget, setAccessTarget] = useState<{ teacher: TeacherRow; current: PersonAccess } | null>(null)
   const [alsoRevoke, setAlsoRevoke] = useState(true)
 
@@ -91,12 +96,13 @@ export default function AdminTeachers() {
     }
     setIsLoading(true)
     setError(null)
-    Promise.all([fetchSchoolTeachers(schoolId), fetchSubjects(schoolId), fetchTeacherAccess(schoolId)])
-      .then(([rows, subs, accessMap]) => {
+    Promise.all([fetchSchoolTeachers(schoolId), fetchSubjects(schoolId), fetchTeacherAccess(schoolId), listLiveInvitations(schoolId)])
+      .then(([rows, subs, accessMap, live]) => {
         if (cancelled) return
         setTeachers(rows)
         setSubjects(subs)
         setAccess(accessMap)
+        setInvitations(new Map(live.filter((i) => i.role === 'teacher').map((i) => [i.email.toLowerCase(), i])))
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(toError(err))
@@ -216,6 +222,37 @@ export default function AdminTeachers() {
     }
   }
 
+  /**
+   * Invites one teacher. The outcome is shown plainly, including the reason a
+   * person was skipped, because "nothing happened" is the worst possible answer
+   * to a button that is supposed to send an email.
+   */
+  const invite = async (teacher: TeacherRow) => {
+    if (!schoolId) return
+    setInviting(teacher.id)
+    try {
+      const outcome = await sendInvitation({ schoolId, role: 'teacher', personId: teacher.id })
+      if (outcome.status === 'sent') {
+        showToast({
+          type: 'success',
+          title: `Invitation sent to ${outcome.email}`,
+          description: `${teacher.full_name} can now create their password.`,
+        })
+      } else {
+        showToast({
+          type: outcome.status === 'skipped' ? 'warning' : 'error',
+          title: outcome.status === 'skipped' ? `Not invited: ${teacher.full_name}` : `Invitation not sent to ${teacher.full_name}`,
+          description: outcome.message,
+        })
+      }
+      reload()
+    } catch (err: unknown) {
+      showToast({ type: 'error', title: 'Invitation not sent', description: errorMessage(err) })
+    } finally {
+      setInviting(null)
+    }
+  }
+
   const confirmAccessChange = async () => {
     if (!accessTarget || !schoolId) return
     const { teacher, current } = accessTarget
@@ -323,7 +360,14 @@ export default function AdminTeachers() {
                         <td className="px-5 py-3.5">
                           {(() => {
                             const a = access.get(t.id)
-                            if (!a) return <span className="text-xs text-graphite">No login</span>
+                            if (!a) {
+                              const pending = t.email ? invitations.get(t.email.toLowerCase()) : undefined
+                              return pending ? (
+                                <Badge tone="warning">Invited</Badge>
+                              ) : (
+                                <span className="text-xs text-graphite">No login</span>
+                              )
+                            }
                             return (
                               <Badge tone={a.status === 'active' ? 'brand' : 'danger'}>
                                 {a.status === 'active' ? 'Active' : 'Revoked'}
@@ -341,6 +385,23 @@ export default function AdminTeachers() {
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
+                            {(() => {
+                              const a = access.get(t.id)
+                              if (a) return null
+                              const pending = t.email ? invitations.get(t.email.toLowerCase()) : undefined
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={!t.email || inviting === t.id}
+                                  onClick={() => void invite(t)}
+                                  aria-label={`${pending ? 'Resend invitation to' : 'Invite'} ${t.full_name}`}
+                                  title={t.email ? (pending ? 'Resend invitation' : 'Invite to Nom Cloud') : 'Add an email address first'}
+                                  className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
+                                >
+                                  <Mail className="h-4 w-4" />
+                                </button>
+                              )
+                            })()}
                             {(() => {
                               const a = access.get(t.id)
                               if (!a) return null

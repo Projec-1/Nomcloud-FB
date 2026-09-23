@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase'
 import { recoveryLanding } from '@/lib/recoveryLanding'
 import { useAuth } from '@/context/AuthContext'
+import { claimPendingInvitation } from '@/services/invitationService'
 import { workspacesForMembershipRoles } from '@/lib/roles'
 import { errorMessage } from '@/utils/errorMessage'
 import { MIN_PASSWORD_LENGTH, isValidPassword } from '@/utils/validators'
@@ -38,7 +39,7 @@ const SESSION_WAIT_MS = 8000
 
 export default function ActivateAccount() {
   const navigate = useNavigate()
-  const { authState, school, memberships, displayName } = useAuth()
+  const { authState, school, memberships, displayName, refreshIdentity } = useAuth()
   const [status, setStatus] = useState<Status>('checking')
   const [invalidReason, setInvalidReason] = useState<string | null>(null)
   const [password, setPassword] = useState('')
@@ -89,11 +90,43 @@ export default function ActivateAccount() {
     }
   }, [])
 
-  // A valid link for an account that belongs to no school: the link works, but
-  // it is not the account this activation is for.
+  // A teacher or guardian arrives with no membership yet — and no profile
+  // either, because accept_invitation is what creates one. AuthContext cannot
+  // resolve an identity for them and reports 'error', which is correct and is
+  // NOT a reason to wait: the claim below is exactly what turns this account
+  // into a member. So it runs as soon as a session exists, whatever the
+  // identity state, and the identity is then re-read.
+  //
+  // An administrator activating already has profile and memberships from
+  // approval, so the call finds nothing pending and changes nothing.
+  const [claimed, setClaimed] = useState(false)
   useEffect(() => {
-    if (status === 'ready' && authState === 'ready' && memberships.length === 0) setStatus('no_school')
-  }, [status, authState, memberships.length])
+    if (status !== 'ready' || claimed) return
+    let cancelled = false
+    void claimPendingInvitation()
+      .then((outcome) => {
+        if (outcome === 'accepted') refreshIdentity()
+      })
+      .catch(() => {
+        // Not fatal: the screen below says "wrong account" rather than
+        // pretending an invitation was found.
+      })
+      .finally(() => {
+        if (!cancelled) setClaimed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [status, claimed, refreshIdentity])
+
+  // A valid link whose account belongs to no school: the link worked, but this
+  // is not the account the activation was for. 'error' counts too — it is what
+  // an account with no profile looks like once the claim has found nothing.
+  useEffect(() => {
+    if (status !== 'ready' || !claimed) return
+    if (authState === 'ready' && memberships.length === 0) setStatus('no_school')
+    if (authState === 'error') setStatus('no_school')
+  }, [status, authState, claimed, memberships.length])
 
   const roleLabel = (() => {
     const roles = memberships.map((membership) => membership.role)

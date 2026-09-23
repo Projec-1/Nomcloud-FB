@@ -229,6 +229,56 @@ export interface GuardianInput {
 export const GUARDIAN_RELATIONSHIPS = ['Mother', 'Father', 'Other'] as const
 export type GuardianRelationship = (typeof GUARDIAN_RELATIONSHIPS)[number]
 
+/** A guardian as the Guardians page shows them: with their children and access. */
+export interface GuardianDirectoryRow extends GuardianRow {
+  /** Names of the students this guardian is linked to, in display order. */
+  studentNames: string[]
+}
+
+/**
+ * Every guardian with the students they are linked to.
+ *
+ * Three scoped reads rather than an embedded select, for the reason every batch
+ * has given: these tables meet through COMPOSITE foreign keys, and a silent
+ * PostgREST embedding failure would look like a school with no guardians.
+ */
+export async function fetchGuardianDirectory(schoolId: string): Promise<GuardianDirectoryRow[]> {
+  const guardians = await fetchSchoolGuardians(schoolId)
+  if (guardians.length === 0) return []
+
+  const { data: links, error: linkError } = await supabase
+    .from('student_guardians')
+    .select('guardian_id, student_id')
+    .eq('school_id', schoolId)
+    .in('guardian_id', guardians.map((g) => g.id))
+  if (linkError) throw linkError
+
+  const linkRows = (links ?? []) as { guardian_id: string; student_id: string }[]
+  const studentIds = Array.from(new Set(linkRows.map((l) => l.student_id)))
+  const names = new Map<string, string>()
+  if (studentIds.length > 0) {
+    const { data: students, error: studentError } = await supabase
+      .from('students')
+      .select('id, full_name')
+      .eq('school_id', schoolId)
+      .in('id', studentIds)
+    if (studentError) throw studentError
+    for (const s of (students ?? []) as { id: string; full_name: string }[]) names.set(s.id, s.full_name)
+  }
+
+  const byGuardian = new Map<string, string[]>()
+  for (const link of linkRows) {
+    const name = names.get(link.student_id)
+    if (!name) continue
+    byGuardian.set(link.guardian_id, [...(byGuardian.get(link.guardian_id) ?? []), name])
+  }
+
+  return guardians.map((guardian) => ({
+    ...guardian,
+    studentNames: (byGuardian.get(guardian.id) ?? []).sort((a, b) => a.localeCompare(b)),
+  }))
+}
+
 /** Every guardian in the school, for the student form's picker. */
 export async function fetchSchoolGuardians(schoolId: string): Promise<GuardianRow[]> {
   const { data, error } = await supabase

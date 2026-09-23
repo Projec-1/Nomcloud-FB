@@ -29,6 +29,7 @@ import NotFound from '@/pages/public/NotFound'
 import AdminDashboard from '@/pages/app/admin/Dashboard'
 import AdminStudents from '@/pages/app/admin/Students'
 import AdminTeachers from '@/pages/app/admin/Teachers'
+import AdminGuardians from '@/pages/app/admin/Guardians'
 import AdminClasses from '@/pages/app/admin/Classes'
 import AdminAttendance from '@/pages/app/admin/Attendance'
 import AdminGrades from '@/pages/app/admin/Grades'
@@ -125,6 +126,7 @@ export default function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="students" element={<AdminStudents />} />
           <Route path="teachers" element={<AdminTeachers />} />
+          <Route path="guardians" element={<AdminGuardians />} />
           <Route path="classes" element={<AdminClasses />} />
           <Route path="attendance" element={<AdminAttendance />} />
           <Route path="grades" element={<AdminGrades />} />

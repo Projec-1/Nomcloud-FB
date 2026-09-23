@@ -1,7 +1,15 @@
 import { supabase } from '@/lib/supabase'
 import type { MembershipRole } from '@/types/auth'
 
-const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000
+// ---------------------------------------------------------------------------
+// Invitations, as the interface sees them.
+//
+// Sending one is NOT done from here: a browser cannot email anybody, and the
+// raw token must never exist in a page. sendInvitation calls the Edge Function,
+// which writes the row as the caller and lets Supabase Auth deliver the link.
+// Reading and revoking stay here, because both are ordinary table operations the
+// invitation policies already govern (owner, director, administrator only).
+// ---------------------------------------------------------------------------
 
 export interface InvitationRow {
   id: string
@@ -19,69 +27,83 @@ export interface InvitationRow {
   updated_at: string
 }
 
-export interface CreateInvitationInput {
+/** What inviting one person did. Every answer is shown to the administrator. */
+export type InviteStatus = 'sent' | 'skipped' | 'failed'
+
+export interface InviteOutcome {
+  status: InviteStatus
+  /** Present when the person was skipped or the send failed. */
+  reason?: 'no_email' | 'already_active' | 'already_invited' | 'access_revoked' | 'not_found' | 'not_allowed' | 'email' | 'database'
+  message?: string
+  email?: string
+  name?: string
+}
+
+/**
+ * Invites one teacher or guardian.
+ *
+ * The work happens in the send-invitation Edge Function: it writes the
+ * invitation with the CALLER's own session, so the database decides who may
+ * invite, then has Supabase Auth email a single-use activation link. Nothing
+ * secret comes back here — no password, no token, no link.
+ *
+ * One person per call by design, so a bulk invitation is a paced loop in which
+ * one refusal never stops the rest.
+ */
+export async function sendInvitation(input: {
   schoolId: string
-  email: string
-  role: MembershipRole
-  invitedBy: string
-  teacherId?: string
-  guardianId?: string
-}
+  role: 'teacher' | 'guardian'
+  personId: string
+}): Promise<InviteOutcome> {
+  const { data, error } = await supabase.functions.invoke('send-invitation', {
+    body: { school_id: input.schoolId, role: input.role, person_id: input.personId },
+  })
 
-function generateToken(): string {
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-}
+  if (error) {
+    // The function answers non-2xx for refusals too, and its body carries the
+    // real sentence; supabase-js hides that behind a generic wrapper.
+    const context = (error as { context?: unknown }).context
+    if (context instanceof Response) {
+      try {
+        const body = (await context.clone().json()) as InviteOutcome
+        if (body?.status) return body
+        if (typeof body?.message === 'string') return { status: 'failed', reason: 'database', message: body.message }
+      } catch {
+        // fall through to the generic message below
+      }
+    }
+    return { status: 'failed', reason: 'database', message: 'The invitation could not be sent. Please try again.' }
+  }
 
-async function hashToken(token: string): Promise<string> {
-  const encoded = new TextEncoder().encode(token)
-  const digest = await crypto.subtle.digest('SHA-256', encoded)
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return data as InviteOutcome
 }
 
 const invitationColumns =
   'id,school_id,email,role,teacher_id,guardian_id,expires_at,accepted_at,accepted_by,invited_by,revoked_at,created_at,updated_at'
 
-export async function createInvitation(input: CreateInvitationInput): Promise<InvitationRow> {
-  const email = input.email.trim().toLowerCase()
-  const token = generateToken()
-  const tokenHash = await hashToken(token)
-  const expiresAt = new Date(Date.now() + INVITATION_LIFETIME_MS).toISOString()
+/** The seven answers accept_invitation can give. */
+export type InvitationAcceptanceOutcome =
+  | 'accepted'
+  | 'already_accepted'
+  | 'expired'
+  | 'revoked'
+  | 'not_found'
+  | 'email_mismatch'
+  | 'role_already_held'
 
-  const { data, error } = await supabase
-    .from('invitations')
-    .insert({
-      school_id: input.schoolId,
-      email,
-      role: input.role,
-      teacher_id: input.teacherId || null,
-      guardian_id: input.guardianId || null,
-      token_hash: tokenHash,
-      expires_at: expiresAt,
-      invited_by: input.invitedBy,
-      accepted_at: null,
-      accepted_by: null,
-      revoked_at: null,
-    })
-    .select(invitationColumns)
-    .single()
-
-  if (error) {
-    if (error.code === '23505') {
-      throw new Error('A live invitation already exists for this email and role. Revoke it before sending a replacement.')
-    }
-    throw error
-  }
-
-  const invitationUrl = `${window.location.origin}/signup?token=${encodeURIComponent(token)}`
-  // TODO: hand invitationUrl to the approved email-delivery service. Do not log, persist, or return it.
-  void invitationUrl
-
-  return data as InvitationRow
+/**
+ * Claims the invitation belonging to the signed-in account's own email.
+ *
+ * Used by the activation screen: Supabase's link proves the mailbox, and this
+ * turns the pending invitation into a real membership. The caller is taken from
+ * the session inside the database function, never passed in, so nobody can claim
+ * somebody else's invitation. 'not_found' is an ordinary answer — an
+ * administrator activating already has their memberships.
+ */
+export async function claimPendingInvitation(): Promise<InvitationAcceptanceOutcome> {
+  const { data, error } = await supabase.rpc('accept_pending_invitation')
+  if (error) throw error
+  return data as InvitationAcceptanceOutcome
 }
 
 export async function listLiveInvitations(schoolId: string): Promise<InvitationRow[]> {

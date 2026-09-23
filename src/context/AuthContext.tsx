@@ -26,6 +26,12 @@ interface AuthContextValue {
   refreshSchool: (next: SchoolRow) => void
   /** Replace the cached profile row after an in-app edit (file storage: avatar). */
   refreshProfile: (next: ProfileRow) => void
+  /**
+   * Re-read profile, memberships and school from the database. Needed when a
+   * membership appears outside this context — activation claiming an invitation
+   * is the first such case.
+   */
+  refreshIdentity: () => void
   displayName: string
   authState: AuthState
   activeRole: Role | null
@@ -44,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>('initialising')
   const [activeRole, setActiveRoleState] = useState<Role | null>(null)
   const supabaseUserRef = useRef<AuthSessionUser | null>(null)
+  const [identityNonce, setIdentityNonce] = useState(0)
 
   useEffect(() => {
     window.localStorage.removeItem('nomcloud_auth_users')
@@ -151,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true
       unsubscribe?.()
     }
-  }, [])
+  }, [identityNonce])
 
   const logout = () => {
     setAuthUser(null)
@@ -190,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         school,
         refreshSchool: setSchool,
         refreshProfile: setProfile,
+        refreshIdentity: () => setIdentityNonce((n) => n + 1),
         displayName: profile?.full_name ?? '',
         authState,
         activeRole,
