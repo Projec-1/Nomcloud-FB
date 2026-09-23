@@ -199,7 +199,7 @@ Deno.serve(async (request) => {
 
   const { data: application, error: applicationError } = await adminClient
     .from('school_applications')
-    .select('id, email, status')
+    .select('id, email, status, school_name, administrator_name')
     .eq('id', input.application_id)
     .maybeSingle()
 
@@ -231,7 +231,16 @@ Deno.serve(async (request) => {
   // is set, so the account cannot be signed into until its owner chooses one.
   const { data: createdUser, error: createUserError } = await adminClient.auth.admin.inviteUserByEmail(
     application.email,
-    redirectTo ? { redirectTo } : undefined,
+    {
+      ...(redirectTo ? { redirectTo } : {}),
+      // Read by the Invite email template as {{ .Data.school_name }} and
+      // {{ .Data.role_label }}; see send-invitation for the same contract.
+      data: {
+        school_name: application.school_name ?? '',
+        role_label: 'Administrator',
+        full_name: application.administrator_name ?? '',
+      },
+    },
   )
 
   if (!createUserError && createdUser.user) {

@@ -11,12 +11,16 @@ export function minLength(value: string, len: number): boolean {
 }
 
 /**
- * The project's password rule, and the only one: Supabase Auth refuses anything
- * shorter (`minimum_password_length = 6` in supabase/config.toml, confirmed
- * against the live project). Checking it here only produces a better message;
- * Supabase remains the authority.
+ * The project's password rule, and the only one. Every password screen —
+ * activation, reset and forced first-login change — imports this constant, so
+ * the rule cannot drift between them.
+ *
+ * It is deliberately a MIRROR, not the enforcement. Supabase Auth's own
+ * "Minimum password length" setting is the authority, because only it also
+ * governs someone calling the API directly instead of using a form. Both are
+ * set to 8; if you change one, change the other.
  */
-export const MIN_PASSWORD_LENGTH = 6
+export const MIN_PASSWORD_LENGTH = 8
 
 export function isValidPassword(value: string): boolean {
   return value.length >= MIN_PASSWORD_LENGTH

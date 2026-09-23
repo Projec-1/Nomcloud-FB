@@ -97,8 +97,17 @@ async function sendActivationEmail(
   email: string,
   redirectTo: string | undefined,
   hasAccount: boolean,
+  metadata: Record<string, string>,
 ) {
-  const invite = await adminClient.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined)
+  // `metadata` becomes auth.users.user_metadata, which the Invite email
+  // template reads as {{ .Data.<key> }}. Without it the template has no way to
+  // name the school or the role, and Go templates render a missing key as
+  // "<no value>" — so the keys written here and the keys used in the template
+  // must stay in step.
+  const invite = await adminClient.auth.admin.inviteUserByEmail(email, {
+    ...(redirectTo ? { redirectTo } : {}),
+    data: metadata,
+  })
   if (!invite.error) return { sent: true, kind: 'invite' as const }
 
   if (!hasAccount) return { sent: false, kind: 'invite' as const, error: invite.error.message }
@@ -205,7 +214,16 @@ Deno.serve(async (request) => {
     return json({ status: 'failed', reason: 'database', email, name: person.full_name, message: invitationError.message }, 500)
   }
 
-  const sent = await sendActivationEmail(adminClient, email, activationRedirect(request), existingUser !== null)
+  // The school's own name, for the email. Read with the service role because
+  // the email must say the same thing whoever triggered it; authority to invite
+  // was already settled by the insert above.
+  const { data: school } = await adminClient.from('schools').select('name').eq('id', input.school_id).maybeSingle()
+
+  const sent = await sendActivationEmail(adminClient, email, activationRedirect(request), existingUser !== null, {
+    school_name: school?.name ?? '',
+    role_label: input.role === 'teacher' ? 'Teacher' : 'Parent',
+    full_name: person.full_name ?? '',
+  })
   if (!sent.sent) {
     // Keep the record honest: nothing was delivered, so nothing is pending. If
     // even the revoke fails, say so — a row left live would otherwise block the

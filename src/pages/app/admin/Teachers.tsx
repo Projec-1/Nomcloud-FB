@@ -27,6 +27,8 @@ import { fetchSubjects, type SubjectRow } from '@/services/academicService'
 import { minLength, type FieldErrors } from '@/utils/validators'
 import { fetchTeacherAccess, revokeAccess, restoreAccess, type PersonAccess } from '@/services/accessService'
 import { listLiveInvitations, sendInvitation, type InvitationRow } from '@/services/invitationService'
+import BulkInviteBar from '@/components/ui/BulkInviteBar'
+import { runBulkInvite, type BulkInviteProgress, type BulkInviteResult } from '@/services/bulkInvite'
 import { formatDate } from '@/utils/format'
 import { errorMessage, toError } from '@/utils/errorMessage'
 
@@ -83,6 +85,11 @@ export default function AdminTeachers() {
   // and the button can offer a resend rather than a duplicate.
   const [invitations, setInvitations] = useState<Map<string, InvitationRow>>(new Map())
   const [inviting, setInviting] = useState<string | null>(null)
+  // Bulk invitation — the same paced loop the Guardians page uses.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkRunning, setBulkRunning] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<BulkInviteProgress | null>(null)
+  const [bulkResults, setBulkResults] = useState<BulkInviteResult[] | null>(null)
   const [accessTarget, setAccessTarget] = useState<{ teacher: TeacherRow; current: PersonAccess } | null>(null)
   const [alsoRevoke, setAlsoRevoke] = useState(true)
 
@@ -222,6 +229,46 @@ export default function AdminTeachers() {
     }
   }
 
+  const toggle = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((t) => selected.has(t.id))
+  const toggleAll = () => setSelected(allFilteredSelected ? new Set() : new Set(filtered.map((t) => t.id)))
+
+  /**
+   * Invites everybody selected, paced, through the same function the single-row
+   * button uses. A failed send has already revoked its own invitation before it
+   * is reported, and re-running answers 'already_invited' rather than sending
+   * a second email.
+   */
+  const inviteSelected = async () => {
+    if (!schoolId || selected.size === 0) return
+    const targets = filtered
+      .filter((t) => selected.has(t.id))
+      .map((t) => ({ id: t.id, name: t.full_name, email: t.email }))
+
+    setBulkRunning(true)
+    setBulkResults(null)
+    setBulkProgress({ done: 0, total: targets.length, current: null, pausing: false })
+    try {
+      const results = await runBulkInvite({ schoolId, role: 'teacher', targets, onProgress: setBulkProgress })
+      setBulkResults(results)
+      const sentIds = new Set(results.filter((r) => r.outcome.status === 'sent').map((r) => r.id))
+      setSelected((current) => new Set([...current].filter((id) => !sentIds.has(id))))
+    } catch (err: unknown) {
+      showToast({ type: 'error', title: 'Bulk invitation stopped', description: errorMessage(err) })
+    } finally {
+      setBulkRunning(false)
+      setBulkProgress(null)
+      reload()
+    }
+  }
+
   /**
    * Invites one teacher. The outcome is shown plainly, including the reason a
    * person was skipped, because "nothing happened" is the worst possible answer
@@ -319,13 +366,33 @@ export default function AdminTeachers() {
               <SearchInput value={search} onChange={setSearch} placeholder="Search by name, staff number or email…" className="sm:w-80" />
             </div>
 
+            <BulkInviteBar
+              selectedCount={selected.size}
+              running={bulkRunning}
+              progress={bulkProgress}
+              results={bulkResults}
+              onInvite={() => void inviteSelected()}
+              onClear={() => setSelected(new Set())}
+              onDismissResults={() => setBulkResults(null)}
+            />
+
             {filtered.length === 0 ? (
               <EmptyState icon={GraduationCap} title="No teachers found" description="Try a different search." />
             ) : (
               <div className="card overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[820px] text-sm">
                   <thead>
                     <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
+                      <th className="w-10 px-5 py-3.5">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all teachers"
+                          checked={allFilteredSelected}
+                          onChange={toggleAll}
+                          disabled={bulkRunning}
+                          className="h-4 w-4 rounded border-ink/20 accent-brand"
+                        />
+                      </th>
                       <th className="px-5 py-3.5 font-medium">Teacher</th>
                       <th className="px-5 py-3.5 font-medium">Staff No.</th>
                       <th className="px-5 py-3.5 font-medium">Primary Subject</th>
@@ -338,6 +405,16 @@ export default function AdminTeachers() {
                   <tbody>
                     {filtered.map((t) => (
                       <tr key={t.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
+                        <td className="px-5 py-3.5">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${t.full_name}`}
+                            checked={selected.has(t.id)}
+                            onChange={() => toggle(t.id)}
+                            disabled={bulkRunning}
+                            className="h-4 w-4 rounded border-ink/20 accent-brand"
+                          />
+                        </td>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
                             <Avatar name={t.full_name} size="sm" />

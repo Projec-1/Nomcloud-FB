@@ -14,6 +14,8 @@ import { fetchGuardianDirectory, type GuardianDirectoryRow } from '@/services/gu
 import { avatarColorForId } from '@/services/studentService'
 import { fetchGuardianAccess, revokeAccess, restoreAccess, type PersonAccess } from '@/services/accessService'
 import { listLiveInvitations, sendInvitation, type InvitationRow } from '@/services/invitationService'
+import BulkInviteBar from '@/components/ui/BulkInviteBar'
+import { runBulkInvite, type BulkInviteProgress, type BulkInviteResult } from '@/services/bulkInvite'
 import { errorMessage, toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
@@ -44,6 +46,12 @@ export default function AdminGuardians() {
   const [search, setSearch] = useState('')
   const [inviting, setInviting] = useState<string | null>(null)
   const [accessTarget, setAccessTarget] = useState<{ guardian: GuardianDirectoryRow; current: PersonAccess } | null>(null)
+  // Bulk invitation. `selected` holds ids, so it survives re-filtering and a
+  // reload without ever selecting somebody the administrator cannot see.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkRunning, setBulkRunning] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<BulkInviteProgress | null>(null)
+  const [bulkResults, setBulkResults] = useState<BulkInviteResult[] | null>(null)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -115,6 +123,56 @@ export default function AdminGuardians() {
     }
   }
 
+  const toggle = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  // "Select all" means everything the current search is showing, and nothing
+  // it is hiding — selecting rows the administrator cannot see would be a trap.
+  const allFilteredSelected = filtered.length > 0 && filtered.every((g) => selected.has(g.id))
+  const toggleAll = () => setSelected(allFilteredSelected ? new Set() : new Set(filtered.map((g) => g.id)))
+
+  /**
+   * Invites everybody selected, paced. Each row's outcome comes from the same
+   * function the single-row button uses, so a failed send has already revoked
+   * its own invitation by the time it is reported here.
+   *
+   * Re-running is safe: anybody invited a moment ago now has a live invitation,
+   * and the function answers 'already_invited' for them instead of sending a
+   * second email. Their row is also dropped from the selection below.
+   */
+  const inviteSelected = async () => {
+    if (!schoolId || selected.size === 0) return
+    const targets = filtered
+      .filter((g) => selected.has(g.id))
+      .map((g) => ({ id: g.id, name: g.full_name, email: g.email }))
+
+    setBulkRunning(true)
+    setBulkResults(null)
+    setBulkProgress({ done: 0, total: targets.length, current: null, pausing: false })
+    try {
+      const results = await runBulkInvite({
+        schoolId,
+        role: 'guardian',
+        targets,
+        onProgress: setBulkProgress,
+      })
+      setBulkResults(results)
+      const sentIds = new Set(results.filter((r) => r.outcome.status === 'sent').map((r) => r.id))
+      setSelected((current) => new Set([...current].filter((id) => !sentIds.has(id))))
+    } catch (err: unknown) {
+      showToast({ type: 'error', title: 'Bulk invitation stopped', description: errorMessage(err) })
+    } finally {
+      setBulkRunning(false)
+      setBulkProgress(null)
+      reload()
+    }
+  }
+
   const confirmAccessChange = async () => {
     if (!accessTarget || !schoolId) return
     const revoking = accessTarget.current.status === 'active'
@@ -152,13 +210,33 @@ export default function AdminGuardians() {
               <SearchInput value={search} onChange={setSearch} placeholder="Search by name, email, phone or child…" className="sm:w-96" />
             </div>
 
+            <BulkInviteBar
+              selectedCount={selected.size}
+              running={bulkRunning}
+              progress={bulkProgress}
+              results={bulkResults}
+              onInvite={() => void inviteSelected()}
+              onClear={() => setSelected(new Set())}
+              onDismissResults={() => setBulkResults(null)}
+            />
+
             {filtered.length === 0 ? (
               <EmptyState icon={Users} title="No guardians found" description="Try adjusting your search." />
             ) : (
               <div className="card overflow-x-auto">
-                <table className="w-full min-w-[820px] text-sm">
+                <table className="w-full min-w-[880px] text-sm">
                   <thead>
                     <tr className="border-b border-ink/5 text-left text-xs text-graphite dark:border-white/10">
+                      <th className="w-10 px-5 py-3.5">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all guardians"
+                          checked={allFilteredSelected}
+                          onChange={toggleAll}
+                          disabled={bulkRunning}
+                          className="h-4 w-4 rounded border-ink/20 accent-brand"
+                        />
+                      </th>
                       <th className="px-5 py-3.5 font-medium">Guardian</th>
                       <th className="px-5 py-3.5 font-medium">Email</th>
                       <th className="px-5 py-3.5 font-medium">Phone</th>
@@ -173,6 +251,16 @@ export default function AdminGuardians() {
                       const pending = g.email ? invitations.get(g.email.toLowerCase()) : undefined
                       return (
                         <tr key={g.id} className="border-b border-ink/5 last:border-b-0 dark:border-white/5">
+                          <td className="px-5 py-3.5">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${g.full_name}`}
+                              checked={selected.has(g.id)}
+                              onChange={() => toggle(g.id)}
+                              disabled={bulkRunning}
+                              className="h-4 w-4 rounded border-ink/20 accent-brand"
+                            />
+                          </td>
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <Avatar name={g.full_name} color={avatarColorForId(g.id)} size="sm" />

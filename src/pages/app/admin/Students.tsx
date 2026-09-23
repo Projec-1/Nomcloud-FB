@@ -35,7 +35,8 @@ import {
   type GuardianRelationship,
   type GuardianRow,
 } from '@/services/guardianService'
-import { minLength, type FieldErrors } from '@/utils/validators'
+import { isValidEmail, minLength, type FieldErrors } from '@/utils/validators'
+import { sendInvitation } from '@/services/invitationService'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
 import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
@@ -85,6 +86,9 @@ const emptyForm = {
   newGuardianName: '',
   newGuardianEmail: '',
   newGuardianPhone: '',
+  // B1: invite the guardian as soon as they exist, without a second trip to
+  // the Guardians page. Only meaningful when there is an address to send to.
+  inviteGuardian: false,
 }
 
 /** "Amina Yusuf (Mother)", or just the name when no relationship is recorded. */
@@ -238,6 +242,7 @@ export default function AdminStudents() {
       newGuardianName: '',
       newGuardianEmail: '',
       newGuardianPhone: '',
+      inviteGuardian: false,
     })
     setGuardianMode('none')
     setErrors({})
@@ -303,6 +308,9 @@ export default function AdminStudents() {
       // Both paths now report what actually happened. Nothing is swallowed: a
       // refusal throws and lands in the catch below (SYSTEM_ISSUES_LIST S2).
       let guardianNote: string | undefined
+      // Which guardian the invitation, if asked for, should go to.
+      let guardianId: string | null = null
+      let guardianEmail: string | null = null
       if (guardianMode === 'existing' && form.guardianId) {
         const relationship = form.guardianRelationship || null
         const outcome = await linkGuardianToStudent(
@@ -312,7 +320,10 @@ export default function AdminStudents() {
           form.guardianIsPrimary,
           relationship,
         )
-        const name = guardians.find((g) => g.id === form.guardianId)?.full_name ?? 'The guardian'
+        const chosen = guardians.find((g) => g.id === form.guardianId)
+        guardianId = form.guardianId
+        guardianEmail = chosen?.email ?? null
+        const name = chosen?.full_name ?? 'The guardian'
         guardianNote =
           outcome === 'already_linked'
             ? `${name} was already linked to this student.`
@@ -322,7 +333,7 @@ export default function AdminStudents() {
                 ? `${name} was linked as ${relationship}.`
                 : `${name} is now the primary contact.`
       } else if (guardianMode === 'new') {
-        await createAndLinkGuardian(
+        guardianId = await createAndLinkGuardian(
           schoolId,
           studentId,
           {
@@ -333,15 +344,32 @@ export default function AdminStudents() {
           form.guardianIsPrimary,
           form.guardianRelationship || null,
         )
+        guardianEmail = form.newGuardianEmail || null
         guardianNote = form.guardianIsPrimary
           ? `${form.newGuardianName} was added as the primary contact.`
           : `${form.newGuardianName} was added as a guardian.`
       }
 
+      // The invitation goes through send-invitation, exactly as the Guardians
+      // page does — no second sending path. The student is already saved, so a
+      // refused invitation is reported on its own and never undoes the save.
+      let inviteNote: string | undefined
+      if (form.inviteGuardian && guardianId && schoolId) {
+        try {
+          const outcome = await sendInvitation({ schoolId, role: 'guardian', personId: guardianId })
+          inviteNote =
+            outcome.status === 'sent'
+              ? `Invitation sent to ${outcome.email ?? guardianEmail ?? 'their email'}.`
+              : `Not invited: ${outcome.message ?? 'the invitation could not be sent.'}`
+        } catch (inviteError: unknown) {
+          inviteNote = `Not invited: ${errorMessage(inviteError)}`
+        }
+      }
+
       showToast({
         type: 'success',
         title: editing ? 'Student updated' : 'Student added',
-        description: guardianNote,
+        description: [guardianNote, inviteNote].filter(Boolean).join(' ') || undefined,
       })
       setModalOpen(false)
       reload()
@@ -628,6 +656,39 @@ export default function AdminStudents() {
                 </div>
               </div>
             )}
+            {guardianMode !== 'none' && (() => {
+              // Enabled only when there is somewhere to send it: the address
+              // being typed for a new guardian, or the saved one for an
+              // existing guardian.
+              const targetEmail =
+                guardianMode === 'new'
+                  ? form.newGuardianEmail.trim()
+                  : (guardians.find((g) => g.id === form.guardianId)?.email ?? '')
+              const canInvite = isValidEmail(targetEmail)
+              return (
+                <label
+                  className={`mt-3 flex items-start gap-2.5 rounded-xl px-3 py-2.5 ${canInvite ? 'bg-brand/5' : 'bg-ink/5 dark:bg-white/5'}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-ink/20 accent-brand"
+                    checked={form.inviteGuardian && canInvite}
+                    disabled={!canInvite}
+                    onChange={(e) => setForm({ ...form, inviteGuardian: e.target.checked })}
+                  />
+                  <span className="text-sm">
+                    <span className={canInvite ? 'text-ink dark:text-white' : 'text-graphite'}>
+                      Invite this guardian to Nom Cloud
+                    </span>
+                    <span className="block text-xs text-graphite">
+                      {canInvite
+                        ? `They will be emailed a single-use link at ${targetEmail} to choose their own password.`
+                        : 'Add an email address for this guardian to invite them.'}
+                    </span>
+                  </span>
+                </label>
+              )
+            })()}
             {guardianMode !== 'none' && (
               <div className="mt-3">
                 <Select
