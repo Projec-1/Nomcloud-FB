@@ -84,14 +84,32 @@ async function findAuthUserByEmail(adminClient: SupabaseClient, email: string) {
  * Sends the activation email: an invite for an account that has never been
  * activated, a recovery link for one that already has a password. Both land on
  * /activate, which claims the invitation.
+ *
+ * THE RECOVERY FALLBACK ONLY APPLIES TO AN ADDRESS THAT ALREADY HAS AN ACCOUNT.
+ * /recover is deliberately non-enumerable: for an address Supabase does not
+ * know, it answers 200 and sends nothing at all. Reading that 200 as delivery
+ * is how this function once reported "invitation sent" for three people who
+ * were never emailed, leaving their invitations live. For a new invitee a
+ * failed invite is simply a failed send, and is reported as one.
  */
-async function sendActivationEmail(adminClient: SupabaseClient, email: string, redirectTo: string | undefined) {
+async function sendActivationEmail(
+  adminClient: SupabaseClient,
+  email: string,
+  redirectTo: string | undefined,
+  hasAccount: boolean,
+) {
   const invite = await adminClient.auth.admin.inviteUserByEmail(email, redirectTo ? { redirectTo } : undefined)
   if (!invite.error) return { sent: true, kind: 'invite' as const }
+
+  if (!hasAccount) return { sent: false, kind: 'invite' as const, error: invite.error.message }
+
   const recovery = await adminClient.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined)
   if (!recovery.error) return { sent: true, kind: 'recovery' as const }
-  return { sent: false, kind: 'invite' as const, error: recovery.error.message }
+  return { sent: false, kind: 'recovery' as const, error: recovery.error.message }
 }
+
+/** The mail server's own words, flattened so they fit in one readable line. */
+const tidy = (reason: string | undefined) => (reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 220)
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -187,11 +205,31 @@ Deno.serve(async (request) => {
     return json({ status: 'failed', reason: 'database', email, name: person.full_name, message: invitationError.message }, 500)
   }
 
-  const sent = await sendActivationEmail(adminClient, email, activationRedirect(request))
+  const sent = await sendActivationEmail(adminClient, email, activationRedirect(request), existingUser !== null)
   if (!sent.sent) {
-    // Keep the record honest: nothing was delivered, so nothing is pending.
-    await adminClient.from('invitations').update({ revoked_at: new Date().toISOString() }).eq('id', invitation.id)
-    return json({ status: 'failed', reason: 'email', email, name: person.full_name, message: sent.error ?? 'The invitation email could not be sent.' }, 502)
+    // Keep the record honest: nothing was delivered, so nothing is pending. If
+    // even the revoke fails, say so — a row left live would otherwise block the
+    // next attempt with "a live invitation already exists", and the
+    // administrator would have no idea why.
+    const { error: revokeError } = await adminClient
+      .from('invitations')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('id', invitation.id)
+
+    const why = tidy(sent.error)
+    return json(
+      {
+        status: 'failed',
+        reason: 'email',
+        email,
+        name: person.full_name,
+        revoked: !revokeError,
+        message: revokeError
+          ? `No email could be sent to ${email}, and the invitation could not be cancelled afterwards. Revoke it by hand before trying again.${why ? ` Mail server: ${why}` : ''}`
+          : `No email could be sent to ${email}, so the invitation was cancelled. Nothing has reached them — you can try again once email is working.${why ? ` Mail server: ${why}` : ''}`,
+      },
+      502,
+    )
   }
 
   return json({ status: 'sent', email, name: person.full_name, invitation_id: invitation.id, email_kind: sent.kind })

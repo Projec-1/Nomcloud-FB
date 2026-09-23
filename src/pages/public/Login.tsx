@@ -9,7 +9,7 @@ import { isValidEmail } from '@/utils/validators'
 import { useToast } from '@/context/ToastContext'
 import { useLanguage } from '@/context/LanguageContext'
 import { supabase } from '@/lib/supabase'
-import { fetchActiveMemberships, fetchPlatformAdminStatus } from '@/services/identityService'
+import { fetchActiveMemberships, fetchPlatformAdminStatus, isTransientIdentityFailure } from '@/services/identityService'
 import { workspacesForMembershipRoles } from '@/lib/roles'
 import { mustChangePassword } from '@/services/accountService'
 import { resolveSchoolShortcode } from '@/lib/schoolShortcode'
@@ -134,8 +134,16 @@ export default function Login() {
 
       showToast({ type: 'success', title: 'Welcome back!' })
       navigate(destination)
-    } catch {
-      setError('We could not load your workspace. Please try again.')
+    } catch (identityError: unknown) {
+      // Reaching here does NOT mean this account has no workspace — that case is
+      // answered above, in its own sentence. This is the server refusing or
+      // failing to answer, and saying "we could not load your workspace" for it
+      // reads as a verdict on the account, which is both wrong and frightening.
+      setError(
+        isTransientIdentityFailure(identityError)
+          ? 'We could not reach the server just now. Please try signing in again.'
+          : 'Something went wrong while loading your account. Please try again, or contact your administrator if this continues.',
+      )
     } finally {
       setLoading(false)
     }
