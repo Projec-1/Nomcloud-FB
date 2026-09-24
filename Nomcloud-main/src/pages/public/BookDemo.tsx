@@ -7,6 +7,7 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
 import Button from '@/components/ui/Button'
+import RequestProcessing from '@/components/ui/RequestProcessing'
 import { isValidEmail, isValidPhone, minLength, type FieldErrors } from '@/utils/validators'
 import { submitDemoRequest, type DemoRequestPayload } from '@/services/demoService'
 import { useToast } from '@/context/ToastContext'
@@ -100,7 +101,9 @@ export default function BookDemo() {
 
           <Reveal delay={150} className="lg:col-span-3">
             <div className="card p-8 sm:p-10">
-              {submitted ? (
+              {loading ? (
+                <RequestProcessing title="Preparing your Nom Cloud walkthrough" description="Your request is being securely delivered to our team." />
+              ) : submitted ? (
                 <div className="flex flex-col items-center py-10 text-center animate-fade-up">
                   <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
                     <CheckCircle2 className="h-10 w-10" />

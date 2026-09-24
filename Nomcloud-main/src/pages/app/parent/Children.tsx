@@ -128,7 +128,7 @@ export default function ParentChildren() {
                 </div>
                 {selectedChild?.id === child.id && <Badge tone="brand">Selected</Badge>}
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div className="mt-4 grid grid-cols-3 gap-1.5 text-center sm:gap-2">
                 <div className="rounded-xl bg-mist p-2.5 dark:bg-white/5">
                   <CalendarCheck className="mx-auto mb-1 h-3.5 w-3.5 text-emerald-500" />
                   <p className="text-sm font-semibold text-ink dark:text-white">

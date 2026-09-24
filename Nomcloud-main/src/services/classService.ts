@@ -282,3 +282,36 @@ export async function deleteTimetableSlot(schoolId: string, id: string): Promise
   const { error } = await supabase.from('timetable_slots').delete().eq('school_id', schoolId).eq('id', id)
   if (error) throw error
 }
+
+/** Updates a lesson or break while keeping the same class and slot identity. */
+export async function updateTimetableSlot(schoolId: string, id: string, input: TimetableSlotInput): Promise<void> {
+  if (input.teacherId) {
+    const { data: conflict, error: conflictError } = await supabase
+      .from('timetable_slots')
+      .select('id, class_id')
+      .eq('school_id', schoolId)
+      .eq('teacher_id', input.teacherId)
+      .eq('day_of_week', input.dayOfWeek)
+      .eq('period', input.period)
+      .neq('id', id)
+      .maybeSingle()
+    if (conflictError) throw conflictError
+    if (conflict && conflict.class_id !== input.classId) {
+      throw new Error('This teacher is already scheduled for another class at that time.')
+    }
+  }
+  const { error } = await supabase
+    .from('timetable_slots')
+    .update({
+      subject_id: input.subjectId,
+      teacher_id: input.teacherId,
+      day_of_week: input.dayOfWeek,
+      period: input.period,
+      start_time: input.startTime,
+      end_time: input.endTime,
+      room: input.room,
+    })
+    .eq('school_id', schoolId)
+    .eq('id', id)
+  if (error) throw error
+}

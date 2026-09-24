@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Pin, Trash2, Megaphone } from 'lucide-react'
+import { Plus, Pin, Megaphone, Pencil, Archive, Trash2 } from 'lucide-react'
 import { useToast } from '@/context/ToastContext'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -14,7 +14,9 @@ import { formatDate } from '@/utils/format'
 import { cn } from '@/utils/cn'
 import {
   createAnnouncement,
+  archiveAnnouncement,
   deleteAnnouncement,
+  updateAnnouncement,
   setAnnouncementPinned,
   type AnnouncementAudience,
   type AnnouncementPriority,
@@ -25,20 +27,11 @@ import { errorMessage } from '@/utils/errorMessage'
 // ---------------------------------------------------------------------------
 // Phase 8 batch 7. Real announcements.
 //
-// AUTHORING IS MANAGEMENT-ONLY, AND THAT CLOSES HALF OF DECISION 6.
+// Administrators manage all audiences. Teachers are granted class-scoped
+// authoring by the later teacher announcements migration.
 //
-// announcements has two INSERT policies, announcements_admin_insert keyed on
-// has_school_admin_role and announcements_class_management_insert keyed on
-// can_manage_class. A teacher satisfies neither: can_manage_class covers
-// management, not teaching staff. So a teacher cannot publish an announcement
-// of any audience, including to their own class.
-//
-// The prototype's teacher screen invited exactly that, with the description
-// "Post updates to your class". The compose control is now shown only where the
-// signed-in user can actually publish. This is the same treatment batch 1 gave
-// logo upload, batch 5 gave guardian homework submission and batch 6 gave the
-// parent payment button: a control the database refuses is removed rather than
-// left to fail.
+// The board receives separate canManage/canPublish flags so a teacher only
+// gets the class audience and class records supplied by their teacher scope.
 //
 // READERSHIP IS NOT FILTERED HERE. The five SELECT policies decide who sees
 // what by audience, and the service deliberately does not restate that matrix
@@ -57,8 +50,10 @@ const priorityTone: Record<AnnouncementPriority, 'neutral' | 'warning' | 'danger
 
 const audienceLabels: Record<AnnouncementAudience, string> = {
   all: 'Entire School',
+  group: 'Specific Group',
   teachers: 'All Teachers',
   parents: 'All Parents',
+  students: 'All Students',
   class: 'Specific Class',
 }
 
@@ -69,6 +64,8 @@ interface AnnouncementBoardProps {
   schoolId: string
   /** True only for owner, director and administrator. Gates every write control. */
   canManage: boolean
+  /** Allows a teacher to publish within the classes supplied to this board. */
+  canPublish?: boolean
   audienceOptions: { value: AnnouncementAudience; label: string }[]
   onChanged: () => void
 }
@@ -78,6 +75,7 @@ export default function AnnouncementBoard({
   classes,
   schoolId,
   canManage,
+  canPublish = false,
   audienceOptions,
   onChanged,
 }: AnnouncementBoardProps) {
@@ -89,19 +87,59 @@ export default function AnnouncementBoard({
     body: '',
     audience: (audienceOptions[0]?.value ?? 'all') as AnnouncementAudience,
     classId: classes[0]?.id ?? '',
+    groupId: '',
+    groupName: '',
     priority: 'normal' as AnnouncementPriority,
+    publishAt: '',
+    expiresAt: '',
   })
   const [errors, setErrors] = useState<FieldErrors>({})
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementView | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [editing, setEditing] = useState<AnnouncementView | null>(null)
+  const [permanentDelete, setPermanentDelete] = useState(false)
 
   const openAdd = () => {
+    setEditing(null)
     setForm({
       title: '',
       body: '',
       audience: (audienceOptions[0]?.value ?? 'all') as AnnouncementAudience,
       classId: classes[0]?.id ?? '',
+      groupId: '',
+      groupName: '',
       priority: 'normal',
+      publishAt: '',
+      expiresAt: '',
+    })
+    setErrors({})
+    setModalOpen(true)
+  }
+
+  const visibleAnnouncements = canManage
+    ? announcements
+    : announcements.filter((announcement) => {
+        const now = Date.now()
+        return Boolean(
+          announcement.publishedAt &&
+          new Date(announcement.publishedAt).getTime() <= now &&
+          !announcement.archivedAt &&
+          (!announcement.expiresAt || new Date(announcement.expiresAt).getTime() > now),
+        )
+      })
+
+  const openEdit = (announcement: AnnouncementView) => {
+    setEditing(announcement)
+    setForm({
+      title: announcement.title,
+      body: announcement.body,
+      audience: announcement.audience,
+      classId: announcement.classId ?? classes[0]?.id ?? '',
+      groupId: announcement.groupId ?? '',
+      groupName: announcement.groupName ?? '',
+      priority: announcement.priority,
+      publishAt: announcement.publishedAt ? announcement.publishedAt.slice(0, 16) : '',
+      expiresAt: announcement.expiresAt ? announcement.expiresAt.slice(0, 16) : '',
     })
     setErrors({})
     setModalOpen(true)
@@ -114,6 +152,7 @@ export default function AnnouncementBoard({
     // announcements_audience_class_check enforces this pairing in the database,
     // in both directions. Checking here only produces a better message.
     if (form.audience === 'class' && !form.classId) next.classId = 'Select the class.'
+    if (form.audience === 'group' && !form.groupId) next.groupId = 'Select the group.'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -122,20 +161,29 @@ export default function AnnouncementBoard({
     if (!validate()) return
     setIsSaving(true)
     try {
-      await createAnnouncement(schoolId, {
+      const input = {
         title: form.title,
         body: form.body,
         audience: form.audience,
         classId: form.audience === 'class' ? form.classId : null,
+        groupId: form.audience === 'group' ? form.groupId : null,
+        groupName: form.audience === 'group' ? form.groupName : null,
         priority: form.priority,
-      })
-      showToast({ type: 'success', title: 'Announcement published' })
+        publishedAt: form.publishAt ? new Date(form.publishAt).toISOString() : null,
+        expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
+      }
+      if (editing) {
+        await updateAnnouncement(schoolId, editing.id, input)
+      } else {
+        await createAnnouncement(schoolId, input)
+      }
+      showToast({ type: 'success', title: editing ? 'Announcement updated' : form.publishAt ? 'Announcement scheduled' : 'Announcement published' })
       setModalOpen(false)
       onChanged()
     } catch (err: unknown) {
       showToast({
         type: 'error',
-        title: 'Announcement not published',
+        title: editing ? 'Announcement not updated' : 'Announcement not published',
         description: errorMessage(err),
       })
     } finally {
@@ -159,8 +207,13 @@ export default function AnnouncementBoard({
   const confirmDelete = async () => {
     if (!deleteTarget) return
     try {
-      await deleteAnnouncement(schoolId, deleteTarget.id)
-      showToast({ type: 'success', title: 'Announcement removed' })
+      if (permanentDelete) {
+        await deleteAnnouncement(schoolId, deleteTarget.id)
+        showToast({ type: 'success', title: 'Announcement deleted' })
+      } else {
+        await archiveAnnouncement(schoolId, deleteTarget.id)
+        showToast({ type: 'success', title: 'Announcement archived' })
+      }
       onChanged()
     } catch (err: unknown) {
       showToast({
@@ -170,20 +223,21 @@ export default function AnnouncementBoard({
       })
     } finally {
       setDeleteTarget(null)
+      setPermanentDelete(false)
     }
   }
 
   return (
     <div>
-      {canManage && audienceOptions.length > 0 && (
+      {(canManage || canPublish) && audienceOptions.length > 0 && (
         <div className="mb-6 flex justify-end">
-          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
+          <Button onClick={openAdd} className="w-full sm:w-auto" icon={<Plus className="h-4 w-4" />}>
             New Announcement
           </Button>
         </div>
       )}
 
-      {announcements.length === 0 ? (
+      {visibleAnnouncements.length === 0 ? (
         <EmptyState
           icon={Megaphone}
           title="No announcements yet"
@@ -191,10 +245,10 @@ export default function AnnouncementBoard({
         />
       ) : (
         <div className="space-y-4">
-          {announcements.map((a) => (
+          {visibleAnnouncements.map((a) => (
             <div
               key={a.id}
-              className={cn('card p-5', a.pinned && 'border-brand/30 ring-1 ring-brand/20')}
+              className={cn('card p-5', a.pinned && 'border-brand/30 ring-1 ring-brand/20', a.archivedAt && 'opacity-60')}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -204,8 +258,13 @@ export default function AnnouncementBoard({
                     <Badge tone="neutral">
                       {a.audience === 'class'
                         ? classes.find((c) => c.id === a.classId)?.name ?? 'Class'
+                        : a.audience === 'group'
+                          ? a.groupName ?? 'Group'
                         : audienceLabels[a.audience]}
                     </Badge>
+                    {!a.publishedAt && <Badge tone="neutral">Draft</Badge>}
+                    {a.publishedAt && new Date(a.publishedAt) > new Date() && <Badge tone="warning">Scheduled</Badge>}
+                    {a.archivedAt && <Badge tone="neutral">Archived</Badge>}
                   </div>
                   <p className="font-medium text-ink dark:text-white">{a.title}</p>
                   <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-graphite">{a.body}</p>
@@ -213,9 +272,9 @@ export default function AnnouncementBoard({
                     {a.authorName} · {formatDate(a.publishedAt ?? a.createdAt)}
                   </p>
                 </div>
-                {canManage && (
+                {(canManage || (canPublish && a.audience === 'class')) && (
                   <div className="flex flex-shrink-0 items-center gap-1.5">
-                    <button
+                    {canManage && <button
                       type="button"
                       onClick={() => togglePin(a)}
                       aria-label={a.pinned ? `Unpin ${a.title}` : `Pin ${a.title}`}
@@ -225,15 +284,33 @@ export default function AnnouncementBoard({
                       )}
                     >
                       <Pin className="h-4 w-4" />
+                    </button>}
+                    <button
+                      type="button"
+                      onClick={() => openEdit(a)}
+                      aria-label={`Edit ${a.title}`}
+                      className="rounded-lg p-2 text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                    >
+                      <Pencil className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(a)}
-                      aria-label={`Delete ${a.title}`}
+                      aria-label={`Archive ${a.title}`}
                       className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Archive className="h-4 w-4" />
                     </button>
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => { setPermanentDelete(true); setDeleteTarget(a) }}
+                        aria-label={`Delete ${a.title}`}
+                        className="rounded-lg p-2 text-graphite hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -245,14 +322,14 @@ export default function AnnouncementBoard({
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="New Announcement"
+        title={editing ? 'Edit Announcement' : 'New Announcement'}
         footer={
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={isSaving}>
-              {isSaving ? 'Publishing…' : 'Publish'}
+              {isSaving ? 'Saving…' : editing ? 'Save changes' : form.publishAt ? 'Schedule announcement' : 'Publish'}
             </Button>
           </>
         }
@@ -310,15 +387,29 @@ export default function AnnouncementBoard({
               ))}
             </Select>
           )}
+          {form.audience === 'group' && (
+            <Select label="Group" required value={form.groupName} onChange={(e) => setForm({ ...form, groupId: e.target.value, groupName: e.target.options[e.target.selectedIndex]?.text ?? '' })}>
+              <option value="">Select a group</option>
+              <option value="teachers">Teachers</option>
+              <option value="parents">Parents</option>
+              <option value="students">Students</option>
+            </Select>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Publish date (optional)" type="datetime-local" value={form.publishAt} onChange={(e) => setForm({ ...form, publishAt: e.target.value })} />
+            <Input label="Expires (optional)" type="datetime-local" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
+          </div>
         </div>
       </Modal>
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title={`Delete "${deleteTarget?.title}"?`}
-        description="This announcement will no longer be visible to anyone."
-        confirmLabel="Delete"
-        danger
+        title={`${permanentDelete ? 'Delete' : 'Archive'} "${deleteTarget?.title}"?`}
+        description={permanentDelete
+          ? 'This permanently removes the announcement and it cannot be restored.'
+          : 'This announcement will be hidden from school dashboards but kept in the administrator record.'}
+        confirmLabel={permanentDelete ? 'Delete' : 'Archive'}
+        danger={permanentDelete}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />

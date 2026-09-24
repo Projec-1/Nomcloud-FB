@@ -34,6 +34,7 @@ function toFormState(school: SchoolRow): SchoolSettingsUpdate {
     primary_color: school.primary_color,
     grading_scale: school.grading_scale,
     timezone: school.timezone,
+    weekend_days: school.weekend_days,
     attendance_cutoff_time: school.attendance_cutoff_time,
     email_notifications: school.email_notifications,
     sms_notifications: school.sms_notifications,
@@ -197,6 +198,35 @@ function SettingsForm({
                   </Button>
                 )}
               </div>
+            </div>
+
+            <div className="card p-6">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="rounded-xl bg-accent/10 p-2.5 text-accent">
+                  <School className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-ink dark:text-white">School timetable</h3>
+                  <p className="mt-1 text-xs text-graphite">Set the school week used by timetable and calendar screens.</p>
+                </div>
+              </div>
+              <Select
+                label="School week"
+                value={form.weekend_days.includes(4) ? 'five' : 'six'}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    weekend_days: event.target.value === 'five' ? [4, 5] : [5],
+                  })
+                }
+              >
+                <option value="five">5 days · Saturday–Wednesday</option>
+                <option value="six">6 days · Saturday–Thursday</option>
+              </Select>
+              <p className="mt-3 text-xs leading-relaxed text-graphite">
+                Thursday is optional. Lesson count and times are configured in each class timetable; the system does not
+                limit a school to six subjects.
+              </p>
             </div>
             <Input
               label="School address on the web"

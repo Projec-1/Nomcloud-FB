@@ -113,23 +113,25 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title={`Welcome, ${profile?.full_name.split(' ')[0] ?? ''}`}
-        description={`Today at ${school?.name ?? 'your school'}.`}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Link to="/app/admin/students" className="btn-outline px-4 py-2 text-sm">
-              <Plus className="h-4 w-4" /> Student
-            </Link>
-            <Link to="/app/admin/announcements" className="btn-accent px-4 py-2 text-sm">
-              <Megaphone className="h-4 w-4" /> Announce
-            </Link>
-          </div>
-        }
-      />
+    <div className="admin-dashboard">
+      <div className="admin-dashboard__hero">
+        <PageHeader
+          title={`Welcome, ${profile?.full_name.split(' ')[0] ?? ''}`}
+          description={`Today at ${school?.name ?? 'your school'}.`}
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Link to="/app/admin/students" className="btn-outline px-4 py-2 text-sm">
+                <Plus className="h-4 w-4" /> Student
+              </Link>
+              <Link to="/app/admin/announcements" className="btn-accent px-4 py-2 text-sm">
+                <Megaphone className="h-4 w-4" /> Announce
+              </Link>
+            </div>
+          }
+        />
+      </div>
 
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="admin-dashboard__stats grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Students" value={counts.students} icon={Users} tint="#0071E3" />
         <StatCard label="Teachers" value={counts.teachers} icon={GraduationCap} tint="#A855F7" />
         <StatCard
@@ -152,8 +154,8 @@ export default function AdminDashboard() {
         </p>
       )}
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-3">
-        <div className="card p-6 lg:col-span-2">
+      <div className="mt-8 grid gap-5 lg:grid-cols-3">
+        <div className="admin-dashboard__panel card p-6 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="font-semibold text-ink dark:text-white">Classes</h3>
             <Link to="/app/admin/classes" className="link-underline flex items-center gap-1 text-xs font-medium text-accent">
@@ -187,7 +189,7 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div className="card p-6">
+        <div className="admin-dashboard__panel card p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="font-semibold text-ink dark:text-white">Announcements</h3>
             <Link

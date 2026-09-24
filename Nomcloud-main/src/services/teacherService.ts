@@ -137,6 +137,7 @@ export interface TimetableSlotView {
   startTime: string
   endTime: string
   subject: string
+  teacherName?: string
   room: string
 }
 
@@ -215,7 +216,7 @@ export async function fetchTeacherWorkspace(
     return { teacher, classes: [], timetable: [] }
   }
 
-  const [classRows, enrolments, classSubjects, slots] = await Promise.all([
+  const [classRows, enrolments, classSubjects, slots, teacherRows] = await Promise.all([
     supabase.from('classes').select('*').eq('school_id', schoolId).in('id', classIds).order('name'),
     // left_on IS NULL is the available "still enrolled" signal. Plan section A.2
     // notes it is not a complete definition of "current", because rows can
@@ -233,12 +234,21 @@ export async function fetchTeacherWorkspace(
       .eq('school_id', schoolId)
       .in('class_id', classIds),
     supabase.from('timetable_slots').select('*').eq('school_id', schoolId).in('class_id', classIds),
+    supabase.from('teachers').select('id, full_name').eq('school_id', schoolId),
   ])
 
   if (classRows.error) throw classRows.error
   if (enrolments.error) throw enrolments.error
   if (classSubjects.error) throw classSubjects.error
   if (slots.error) throw slots.error
+  if (teacherRows.error) throw teacherRows.error
+
+  const teacherNames = new Map(
+    (teacherRows.data ?? []).map((row) => {
+      const teacher = row as { id: string; full_name: string }
+      return [teacher.id, teacher.full_name] as const
+    }),
+  )
 
   // Resolve subject ids to names in one further scoped query.
   const subjectIds = Array.from(
@@ -325,6 +335,7 @@ export async function fetchTeacherWorkspace(
       startTime: s.start_time.slice(0, 5),
       endTime: s.end_time.slice(0, 5),
       subject: s.subject_id ? (subjectNames.get(s.subject_id) ?? '') : '',
+      teacherName: s.teacher_id ? teacherNames.get(s.teacher_id) : undefined,
       room: s.room ?? '',
     }
   })

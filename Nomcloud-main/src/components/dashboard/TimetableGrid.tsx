@@ -17,10 +17,11 @@ interface TimetableGridProps {
   slots: TimetableSlot[]
   editable?: boolean
   onAddSlot?: (day: IsoWeekday, period: number) => void
+  onEditSlot?: (slot: TimetableSlot) => void
   onRemoveSlot?: (id: string) => void
 }
 
-export default function TimetableGrid({ slots, editable = false, onAddSlot, onRemoveSlot }: TimetableGridProps) {
+export default function TimetableGrid({ slots, editable = false, onAddSlot, onEditSlot, onRemoveSlot }: TimetableGridProps) {
   // Columns come from the signed-in school's configured weekend. The Somali
   // default renders Saturday through Wednesday, with Thursday optional.
   const { school } = useAuth()
@@ -59,9 +60,23 @@ export default function TimetableGrid({ slots, editable = false, onAddSlot, onRe
                 return (
                   <td key={day} className="align-top">
                     {slot ? (
-                      <div className="group relative rounded-xl bg-accent/10 p-2.5 text-accent">
-                        <p className="font-semibold">{slot.subject}</p>
-                        <p className="text-[10px] text-accent/70">{slot.room}</p>
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => editable && onEditSlot?.(slot)}
+                          className={cn(
+                            'w-full rounded-xl p-2.5 text-left',
+                          slot.subject ? 'bg-accent/10 text-accent' : 'bg-amber-400/20 text-amber-700 dark:text-amber-300',
+                          editable && 'transition-transform hover:-translate-y-0.5',
+                          )}
+                        >
+                          <p className="font-semibold">{slot.subject || 'Break'}</p>
+                          {slot.teacherName && <p className="text-[10px] text-accent/70">Teacher: {slot.teacherName}</p>}
+                          <p className="mt-1 text-[10px] text-accent/70">
+                            {slot.startTime}–{slot.endTime}
+                          </p>
+                          {slot.room && <p className="text-[10px] text-accent/70">{slot.room}</p>}
+                        </button>
                         {editable && onRemoveSlot && (
                           <button
                             onClick={() => onRemoveSlot(slot.id)}

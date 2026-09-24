@@ -6,8 +6,11 @@ import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Textarea from '@/components/ui/Textarea'
 import Button from '@/components/ui/Button'
+import RequestProcessing from '@/components/ui/RequestProcessing'
 import { supabase } from '@/lib/supabase'
 import { isValidEmail, isValidPhone, minLength, type FieldErrors } from '@/utils/validators'
+import { queueEmail } from '@/services/emailOutbox'
+import { buildClientRequestEmail } from '@/services/emailTemplate'
 
 type Position = 'Administrator' | 'Principal' | 'Director' | 'Owner' | 'Other'
 
@@ -151,8 +154,30 @@ export default function Signup() {
       return
     }
 
+    try {
+      queueEmail(buildClientRequestEmail({
+        schoolName: form.schoolName.trim(),
+        contactName: form.fullName.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim(),
+        studentCount: form.studentRange,
+        message: `Application for ${form.position}. Curriculum: ${form.curriculum.trim()}. Current system: ${form.currentSystem.trim()}.`,
+        submittedAt: new Date().toISOString(),
+      }))
+    } catch (queueError) {
+      console.error('[NomCloud] School application saved but notification queue failed.', queueError)
+    }
+
     setLoading(false)
     setSubmitted(true)
+  }
+
+  if (loading) {
+    return (
+      <AuthLayout title="Application in progress" subtitle="Please keep this window open while we submit your school details.">
+        <RequestProcessing title="Submitting your school application" description="Your information is being securely sent for review." />
+      </AuthLayout>
+    )
   }
 
   if (submitted) {
@@ -166,6 +191,14 @@ export default function Signup() {
           <p className="mt-3 text-sm leading-relaxed text-graphite">
             When your school is approved, you will receive an email to activate your account.
           </p>
+          <div className="mt-6 w-full rounded-2xl bg-mist p-5 text-left text-sm dark:bg-white/5">
+            <p className="mb-3 font-medium text-ink dark:text-white">Application summary</p>
+            <dl className="space-y-1.5 text-graphite">
+              <div className="flex justify-between gap-4"><dt>School</dt><dd className="text-right font-medium text-ink dark:text-white">{form.schoolName}</dd></div>
+              <div className="flex justify-between gap-4"><dt>Contact</dt><dd className="text-right font-medium text-ink dark:text-white">{form.fullName}</dd></div>
+              <div className="flex justify-between gap-4"><dt>Email</dt><dd className="text-right font-medium text-ink dark:text-white">{form.email}</dd></div>
+            </dl>
+          </div>
           <div className="mt-7 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
             <Link to="/login" className="sm:w-auto">
               <Button variant="accent" className="w-full sm:w-auto">

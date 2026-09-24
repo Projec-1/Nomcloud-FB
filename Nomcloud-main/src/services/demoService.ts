@@ -8,6 +8,8 @@
 // POST /api/demo-requests) and keep the same signature — no caller changes
 // required.
 // ---------------------------------------------------------------------------
+import { queueEmail } from './emailOutbox'
+import { buildClientRequestEmail } from './emailTemplate'
 
 export interface DemoRequestPayload {
   schoolName: string
@@ -46,6 +48,15 @@ export async function submitDemoRequest(payload: DemoRequestPayload): Promise<De
 
   const all = readAll()
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify([record, ...all]))
+  queueEmail(buildClientRequestEmail({
+    schoolName: payload.schoolName,
+    contactName: payload.administratorName,
+    email: payload.email,
+    phone: payload.phone,
+    studentCount: payload.schoolSize,
+    message: payload.message,
+    submittedAt: record.submittedAt,
+  }))
 
   // eslint-disable-next-line no-console
   console.info('[NomCloud] Demo request captured (mock). Wire this up to a real backend/email service:', record)

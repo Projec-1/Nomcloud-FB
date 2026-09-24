@@ -85,7 +85,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 items-center justify-between border-b border-ink/5 bg-white/80 px-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#0B0B0D]/80 sm:px-6">
+    <header className="dashboard-topbar sticky top-0 z-30 flex h-16 flex-shrink-0 items-center justify-between border-b border-ink/5 bg-white/80 px-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#0B0B0D]/80 sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <button onClick={onMenuClick} className="rounded-full p-2 text-ink hover:bg-ink/5 dark:text-white dark:hover:bg-white/10 lg:hidden" aria-label="Open menu">
           <Menu className="h-5 w-5" />

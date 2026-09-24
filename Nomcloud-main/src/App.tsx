@@ -31,6 +31,7 @@ import AdminStudents from '@/pages/app/admin/Students'
 import AdminTeachers from '@/pages/app/admin/Teachers'
 import AdminGuardians from '@/pages/app/admin/Guardians'
 import AdminClasses from '@/pages/app/admin/Classes'
+import AdminTimetables from '@/pages/app/admin/Timetables'
 import AdminAttendance from '@/pages/app/admin/Attendance'
 import AdminGrades from '@/pages/app/admin/Grades'
 import AdminHomework from '@/pages/app/admin/Homework'
@@ -39,12 +40,14 @@ import AdminFees from '@/pages/app/admin/Fees'
 import AdminAnnouncements from '@/pages/app/admin/Announcements'
 import AdminMessages from '@/pages/app/admin/Messages'
 import AdminReports from '@/pages/app/admin/Reports'
+import AdminTeacherActivity from '@/pages/app/admin/TeacherActivity'
 import AdminAcademicYears from '@/pages/app/admin/AcademicYears'
 import AdminTutorials from '@/pages/app/admin/Tutorials'
 import AdminSettings from '@/pages/app/admin/Settings'
 
 import TeacherDashboard from '@/pages/app/teacher/Dashboard'
 import TeacherClasses from '@/pages/app/teacher/Classes'
+import TeacherTimetable from '@/pages/app/teacher/Timetable'
 import TeacherAttendance from '@/pages/app/teacher/Attendance'
 import TeacherGrades from '@/pages/app/teacher/Grades'
 import TeacherHomework from '@/pages/app/teacher/Homework'
@@ -128,6 +131,7 @@ export default function App() {
           <Route path="teachers" element={<AdminTeachers />} />
           <Route path="guardians" element={<AdminGuardians />} />
           <Route path="classes" element={<AdminClasses />} />
+          <Route path="timetables" element={<AdminTimetables />} />
           <Route path="attendance" element={<AdminAttendance />} />
           <Route path="grades" element={<AdminGrades />} />
           <Route path="homework" element={<AdminHomework />} />
@@ -136,6 +140,7 @@ export default function App() {
           <Route path="announcements" element={<AdminAnnouncements />} />
           <Route path="messages" element={<AdminMessages />} />
           <Route path="reports" element={<AdminReports />} />
+          <Route path="teacher-activity" element={<AdminTeacherActivity />} />
           <Route path="academic-years" element={<AdminAcademicYears />} />
           <Route path="tutorials" element={<AdminTutorials />} />
           <Route path="settings" element={<AdminSettings />} />
@@ -153,6 +158,7 @@ export default function App() {
         >
           <Route index element={<TeacherDashboard />} />
           <Route path="classes" element={<TeacherClasses />} />
+          <Route path="timetable" element={<TeacherTimetable />} />
           <Route path="attendance" element={<TeacherAttendance />} />
           <Route path="grades" element={<TeacherGrades />} />
           <Route path="homework" element={<TeacherHomework />} />

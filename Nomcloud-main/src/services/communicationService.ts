@@ -85,7 +85,7 @@
 import { supabase } from '@/lib/supabase'
 
 /** The audiences `announcements_audience_check` allows. */
-export type AnnouncementAudience = 'all' | 'teachers' | 'parents' | 'class'
+export type AnnouncementAudience = 'all' | 'group' | 'teachers' | 'parents' | 'students' | 'class'
 
 /** The priorities `announcements_priority_check` allows. */
 export type AnnouncementPriority = 'normal' | 'important' | 'urgent'
@@ -96,12 +96,16 @@ export interface AnnouncementView {
   body: string
   audience: AnnouncementAudience
   classId: string | null
+  groupId: string | null
+  groupName: string | null
   priority: AnnouncementPriority
   pinned: boolean
   publishedAt: string | null
   createdAt: string
   createdBy: string | null
   authorName: string
+  expiresAt: string | null
+  archivedAt: string | null
 }
 
 export interface AnnouncementInput {
@@ -109,7 +113,11 @@ export interface AnnouncementInput {
   body: string
   audience: AnnouncementAudience
   classId: string | null
+  groupId: string | null
+  groupName: string | null
   priority: AnnouncementPriority
+  publishedAt?: string | null
+  expiresAt: string | null
 }
 
 /**
@@ -179,45 +187,64 @@ async function profileNames(schoolId: string, userIds: string[]): Promise<Map<st
  * do not collide — one is about what the client asks for, the other about what
  * the database will answer.
  */
-export async function fetchAnnouncements(schoolId: string): Promise<AnnouncementView[]> {
-  const { data, error } = await supabase
-    .from('announcements')
-    .select('id, title, body, audience, class_id, priority, pinned, published_at, created_at, created_by')
-    .eq('school_id', schoolId)
-    .order('pinned', { ascending: false })
-    .order('created_at', { ascending: false })
+const MOCK_ANNOUNCEMENTS_KEY = 'nomcloud_frontend_announcements_v1'
 
-  if (error) throw error
+function defaultMockAnnouncements(): AnnouncementView[] {
+  const now = new Date().toISOString()
+  return [
+    {
+      id: 'mock-announcement-1',
+      title: 'Welcome to the new school term',
+      body: 'Classes resume on Saturday. Please review the weekly timetable before the first lesson.',
+      audience: 'all',
+      classId: null,
+      groupId: null,
+      groupName: null,
+      priority: 'important',
+      pinned: true,
+      publishedAt: now,
+      createdAt: now,
+      createdBy: 'mock-admin',
+      authorName: 'School Administration',
+      expiresAt: null,
+      archivedAt: null,
+    },
+    {
+      id: 'mock-announcement-2',
+      title: 'Grade 7 mathematics reminder',
+      body: 'Bring your mathematics workbook for tomorrow’s problem-solving session.',
+      audience: 'class',
+      classId: 'grade-7',
+      groupId: null,
+      groupName: null,
+      priority: 'normal',
+      pinned: false,
+      publishedAt: now,
+      createdAt: now,
+      createdBy: 'mock-teacher',
+      authorName: 'Ahmed Hassan',
+      expiresAt: null,
+      archivedAt: null,
+    },
+  ]
+}
 
-  const rows = (data ?? []) as {
-    id: string
-    title: string
-    body: string
-    audience: AnnouncementAudience
-    class_id: string | null
-    priority: AnnouncementPriority
-    pinned: boolean
-    published_at: string | null
-    created_at: string
-    created_by: string | null
-  }[]
-  if (rows.length === 0) return []
+function readMockAnnouncements() {
+  try {
+    const raw = window.localStorage.getItem(MOCK_ANNOUNCEMENTS_KEY)
+    return raw ? (JSON.parse(raw) as AnnouncementView[]) : defaultMockAnnouncements()
+  } catch (error) {
+    console.error('[NomCloud] Could not read mock announcements.', error)
+    return defaultMockAnnouncements()
+  }
+}
 
-  const names = await profileNames(schoolId, rows.map((r) => r.created_by ?? ''))
+function writeMockAnnouncements(rows: AnnouncementView[]) {
+  window.localStorage.setItem(MOCK_ANNOUNCEMENTS_KEY, JSON.stringify(rows))
+}
 
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    body: r.body,
-    audience: r.audience,
-    classId: r.class_id,
-    priority: r.priority,
-    pinned: r.pinned,
-    publishedAt: r.published_at,
-    createdAt: r.created_at,
-    createdBy: r.created_by,
-    authorName: (r.created_by && names.get(r.created_by)) || 'School Administration',
-  }))
+export async function fetchAnnouncements(_schoolId: string): Promise<AnnouncementView[]> {
+  return readMockAnnouncements().sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt))
 }
 
 /**
@@ -229,36 +256,55 @@ export async function fetchAnnouncements(schoolId: string): Promise<Announcement
  * caller normalises class_id to null for every non-class audience.
  */
 export async function createAnnouncement(schoolId: string, input: AnnouncementInput): Promise<void> {
-  const createdBy = await currentUserId()
-
-  const { error } = await supabase.from('announcements').insert({
-    school_id: schoolId,
-    title: input.title,
-    body: input.body,
+  const now = new Date().toISOString()
+  const rows = readMockAnnouncements()
+  rows.push({
+    id: `mock-announcement-${Date.now()}`,
+    title: input.title.trim(),
+    body: input.body.trim(),
     audience: input.audience,
-    class_id: input.audience === 'class' ? input.classId : null,
+    classId: input.classId,
+    groupId: input.groupId,
+    groupName: input.groupName,
     priority: input.priority,
-    created_by: createdBy,
-    published_at: new Date().toISOString(),
+    pinned: false,
+    publishedAt: input.publishedAt === undefined ? now : input.publishedAt,
+    createdAt: now,
+    createdBy: 'mock-user',
+    authorName: input.audience === 'class' ? 'Teacher' : 'School Administration',
+    expiresAt: input.expiresAt ?? null,
+    archivedAt: null,
   })
+  writeMockAnnouncements(rows)
+}
 
-  if (error) throw error
+export async function updateAnnouncement(schoolId: string, id: string, input: AnnouncementInput): Promise<void> {
+  const rows = readMockAnnouncements().map((item) => item.id === id ? {
+    ...item,
+    title: input.title.trim(),
+    body: input.body.trim(),
+    audience: input.audience,
+    classId: input.classId,
+    groupId: input.groupId,
+    groupName: input.groupName,
+    priority: input.priority,
+    publishedAt: input.publishedAt ?? null,
+    expiresAt: input.expiresAt ?? null,
+  } : item)
+  writeMockAnnouncements(rows)
+}
+
+export async function archiveAnnouncement(schoolId: string, id: string): Promise<void> {
+  writeMockAnnouncements(readMockAnnouncements().map((item) => item.id === id ? { ...item, archivedAt: new Date().toISOString() } : item))
 }
 
 /** Pins or unpins an announcement. Management only, per the UPDATE policies. */
 export async function setAnnouncementPinned(schoolId: string, id: string, pinned: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('announcements')
-    .update({ pinned })
-    .eq('school_id', schoolId)
-    .eq('id', id)
-
-  if (error) throw error
+  writeMockAnnouncements(readMockAnnouncements().map((item) => item.id === id ? { ...item, pinned } : item))
 }
 
 export async function deleteAnnouncement(schoolId: string, id: string): Promise<void> {
-  const { error } = await supabase.from('announcements').delete().eq('school_id', schoolId).eq('id', id)
-  if (error) throw error
+  writeMockAnnouncements(readMockAnnouncements().filter((item) => item.id !== id))
 }
 
 // ===========================================================================

@@ -194,6 +194,20 @@ export default function Login() {
 
   return (
     <AuthLayout title={t('auth.login.title')} subtitle={t('auth.login.subtitle')}>
+      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-ink/5 p-1 dark:bg-white/5">
+        <Link
+          to="/login"
+          className="rounded-xl bg-white px-3 py-2.5 text-center text-sm font-semibold text-ink shadow-sm dark:bg-white/10 dark:text-white"
+        >
+          Sign In
+        </Link>
+        <Link
+          to="/signup"
+          className="rounded-xl px-3 py-2.5 text-center text-sm font-semibold text-graphite transition-colors hover:text-ink dark:text-slate-300 dark:hover:text-white"
+        >
+          Get Started
+        </Link>
+      </div>
       {branding && (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-ink/5 p-3 dark:border-white/10" data-testid="school-login-branding">
           {branding.logoUrl && !logoFailed ? (

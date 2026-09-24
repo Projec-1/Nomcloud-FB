@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { Users, Plus, Pencil, Trash2, Upload } from 'lucide-react'
+import { Users, Plus, Pencil, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -13,6 +13,7 @@ import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
 import Avatar from '@/components/ui/Avatar'
 import ResourceGate from '@/components/ui/ResourceGate'
+import RequestProcessing from '@/components/ui/RequestProcessing'
 import { deriveResourceState } from '@/lib/resourceState'
 import { useRecordableClasses } from '@/hooks/useRecordableClasses'
 import { useAcademicStructure } from '@/hooks/useAcademicStructure'
@@ -124,6 +125,10 @@ export default function AdminStudents() {
   const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map())
   const [photoBusy, setPhotoBusy] = useState(false)
   const photoInput = useRef<HTMLInputElement>(null)
+  const bulkInput = useRef<HTMLInputElement>(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkRows, setBulkRows] = useState<{ name: string; admissionNo: string; valid: boolean; error?: string }[]>([])
+  const [bulkError, setBulkError] = useState('')
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -399,6 +404,44 @@ export default function AdminStudents() {
     } finally {
       setDeleteTarget(null)
     }
+
+  }
+
+  const handleBulkFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setBulkError('')
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setBulkError('CSV preview is available now. Excel files can be connected to the import endpoint next.')
+      setBulkRows([])
+      return
+    }
+    const text = await file.text()
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    if (lines.length < 2) {
+      setBulkError('Add a header row and at least one student.')
+      setBulkRows([])
+      return
+    }
+    const headers = lines[0].split(',').map((value) => value.trim().toLowerCase())
+    const nameIndex = headers.findIndex((value) => ['name', 'full name', 'full_name'].includes(value))
+    const admissionIndex = headers.findIndex((value) => ['admission number', 'admission_no', 'admissionno'].includes(value))
+    if (nameIndex < 0 || admissionIndex < 0) {
+      setBulkError('Required columns are name and admission number.')
+      setBulkRows([])
+      return
+    }
+    const seen = new Set<string>()
+    setBulkRows(lines.slice(1).map((line) => {
+      const values = line.split(',').map((value) => value.trim())
+      const name = values[nameIndex] ?? ''
+      const admissionNo = values[admissionIndex] ?? ''
+      const duplicate = seen.has(admissionNo.toLowerCase())
+      if (admissionNo) seen.add(admissionNo.toLowerCase())
+      const error = !name || !admissionNo ? 'Missing required field' : duplicate ? 'Duplicate admission number' : undefined
+      return { name, admissionNo, valid: !error, error }
+    }))
   }
 
   return (
@@ -407,9 +450,12 @@ export default function AdminStudents() {
         title="Students"
         description="Every student enrolled at your school."
         actions={
-          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
-            Add Student
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setBulkOpen(true)} icon={<FileSpreadsheet className="h-4 w-4" />}>
+              Bulk Import
+            </Button>
+            <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>Add Student</Button>
+          </div>
         }
       />
 
@@ -500,6 +546,53 @@ export default function AdminStudents() {
       </ResourceGate>
 
       <Modal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title="Bulk import students"
+        description="Upload a CSV, preview the detected students, and validate before sending them to the import service."
+        size="lg"
+        footer={
+          isSaving ? <RequestProcessing compact title={editing ? 'Updating student' : 'Creating student'} description="Saving your changes securely…" /> :
+          <>
+            <Button variant="ghost" onClick={() => setBulkOpen(false)}>Close</Button>
+            <Button disabled={bulkRows.length === 0 || bulkRows.some((row) => !row.valid)} onClick={() => showToast({ type: 'info', title: 'Import preview ready', description: 'The validated rows are ready for the backend import endpoint.' })}>
+              Confirm import
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <input ref={bulkInput} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleBulkFile} />
+          <button
+            type="button"
+            onClick={() => bulkInput.current?.click()}
+            className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 px-6 py-10 text-center hover:border-accent dark:border-white/10"
+          >
+            <Upload className="h-7 w-7 text-accent" />
+            <span className="mt-3 text-sm font-semibold text-ink dark:text-white">Choose CSV or Excel file</span>
+            <span className="mt-1 text-xs text-graphite">Expected columns: name, admission number</span>
+          </button>
+          {bulkError && <p className="flex items-center gap-2 rounded-xl bg-red-500/10 px-3 py-2.5 text-xs text-red-500"><AlertTriangle className="h-4 w-4" />{bulkError}</p>}
+          {bulkRows.length > 0 && (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold text-ink dark:text-white">Preview ({bulkRows.length})</p>
+                <span className="text-xs text-emerald-600">{bulkRows.filter((row) => row.valid).length} valid</span>
+              </div>
+              <div className="max-h-64 overflow-y-auto rounded-xl border border-ink/5 dark:border-white/10">
+                {bulkRows.map((row, index) => (
+                  <div key={`${row.admissionNo}-${index}`} className="flex items-center justify-between border-b border-ink/5 px-4 py-3 text-sm last:border-0 dark:border-white/5">
+                    <div><p className="font-medium text-ink dark:text-white">{row.name || 'Unnamed student'}</p><p className="text-xs text-graphite">{row.admissionNo || 'No admission number'}</p></div>
+                    {row.valid ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <span className="text-xs text-red-500">{row.error}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editing ? 'Edit Student' : 'Add Student'}
@@ -514,7 +607,7 @@ export default function AdminStudents() {
           </>
         }
       >
-        <div className="space-y-4">
+        {isSaving ? <RequestProcessing title={editing ? 'Updating student' : 'Creating student'} description="Your student details are being saved securely." /> : <div className="space-y-4">
           {editing && (
             <div className="flex flex-wrap items-center gap-3">
               <Avatar
@@ -740,7 +833,7 @@ export default function AdminStudents() {
               Creating a guardian does not give them an account. Invite them separately so they can sign in.
             </p>
           </div>
-        </div>
+        </div>}
       </Modal>
 
       <ConfirmDialog

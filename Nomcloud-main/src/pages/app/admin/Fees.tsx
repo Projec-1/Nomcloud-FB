@@ -715,7 +715,7 @@ export default function AdminFees() {
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl bg-mist p-4 dark:bg-white/5">
                 <p className="text-base font-semibold text-ink dark:text-white">
                   {formatMoney(statementTarget.amount, statementTarget.currency, true)}

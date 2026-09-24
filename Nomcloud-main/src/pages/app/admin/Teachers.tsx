@@ -28,6 +28,7 @@ import { minLength, type FieldErrors } from '@/utils/validators'
 import { fetchTeacherAccess, revokeAccess, restoreAccess, type PersonAccess } from '@/services/accessService'
 import { listLiveInvitations, sendInvitation, type InvitationRow } from '@/services/invitationService'
 import BulkInviteBar from '@/components/ui/BulkInviteBar'
+import RequestProcessing from '@/components/ui/RequestProcessing'
 import { runBulkInvite, type BulkInviteProgress, type BulkInviteResult } from '@/services/bulkInvite'
 import { formatDate } from '@/utils/format'
 import { errorMessage, toError } from '@/utils/errorMessage'
@@ -520,6 +521,7 @@ export default function AdminTeachers() {
         onClose={() => setModalOpen(false)}
         title={editing ? 'Edit Teacher' : 'Add Teacher'}
         footer={
+          isSaving ? <RequestProcessing compact title={editing ? 'Updating teacher' : 'Creating teacher'} description="Saving your changes securely…" /> :
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
@@ -530,7 +532,7 @@ export default function AdminTeachers() {
           </>
         }
       >
-        <div className="space-y-4">
+        {isSaving ? <RequestProcessing title={editing ? 'Updating teacher' : 'Creating teacher'} description="Your teacher details are being saved securely." /> : <div className="space-y-4">
           <Input label="Full name" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={errors.fullName} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -591,7 +593,7 @@ export default function AdminTeachers() {
             This records a member of staff. It does not create a login. Send them an invitation so they can sign in and
             see their classes.
           </p>
-        </div>
+        </div>}
       </Modal>
 
       <ConfirmDialog

@@ -5,19 +5,7 @@ import AnnouncementBoard from '@/components/dashboard/AnnouncementBoard'
 import { useAnnouncements } from '@/hooks/useCommunications'
 import { useTeacherClasses } from '@/hooks/useTeacherClasses'
 
-// Phase 8 batch 7. Real announcements, READ ONLY for a teacher.
-//
-// THIS CLOSES HALF OF OPEN DECISION 6. A teacher cannot publish an announcement
-// of any audience: announcements has exactly two INSERT policies, one keyed on
-// has_school_admin_role and one on can_manage_class, and a teacher satisfies
-// neither, because can_manage_class covers management rather than teaching
-// staff.
-//
-// The prototype's page was titled "Post updates to your class" and offered a
-// compose control the database would have refused. The control is gone and the
-// description now matches what the screen can do. Widening this later is one
-// INSERT policy keyed on teaches_class, which is a product decision rather than
-// a gap.
+// Teachers can publish announcements for classes they actually teach.
 //
 // What a teacher DOES see is decided server-side: 'all', 'teachers', and class
 // notices for classes they teach. This page applies no audience filter of its
@@ -45,7 +33,8 @@ export default function TeacherAnnouncements() {
             classes={myClasses}
             schoolId={schoolId as string}
             canManage={false}
-            audienceOptions={[]}
+            canPublish={myClasses.length > 0}
+            audienceOptions={[{ value: 'class', label: 'Specific Class' }]}
             onChanged={reload}
           />
         )}

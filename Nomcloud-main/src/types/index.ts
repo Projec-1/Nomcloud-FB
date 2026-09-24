@@ -67,6 +67,7 @@ export interface TimetableSlot {
   startTime: string
   endTime: string
   subject: string
+  teacherName?: string
   room: string
 }
 

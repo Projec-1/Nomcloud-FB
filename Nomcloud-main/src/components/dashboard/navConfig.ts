@@ -12,10 +12,12 @@ import {
   Bell,
   MessageSquare,
   CalendarRange,
+  Table2,
   Settings,
   BellRing,
   UserCircle,
   PlayCircle,
+  Activity,
 } from 'lucide-react'
 import type { Role } from '@/types'
 
@@ -33,6 +35,7 @@ export const navByRole: Record<Role, NavItem[]> = {
     { to: '/app/admin/teachers', labelKey: 'dash.nav.teachers', icon: GraduationCap },
     { to: '/app/admin/guardians', labelKey: 'dash.nav.guardians', icon: UserCircle },
     { to: '/app/admin/classes', labelKey: 'dash.nav.classes', icon: BookOpen },
+    { to: '/app/admin/timetables', labelKey: 'dash.nav.timetables', icon: Table2 },
     { to: '/app/admin/attendance', labelKey: 'dash.nav.attendance', icon: CalendarCheck },
     { to: '/app/admin/grades', labelKey: 'dash.nav.grades', icon: ClipboardList },
     { to: '/app/admin/homework', labelKey: 'dash.nav.homework', icon: ClipboardCheck },
@@ -41,6 +44,7 @@ export const navByRole: Record<Role, NavItem[]> = {
     { to: '/app/admin/announcements', labelKey: 'dash.nav.announcements', icon: Bell },
     { to: '/app/admin/messages', labelKey: 'dash.nav.messages', icon: MessageSquare },
     { to: '/app/admin/reports', labelKey: 'dash.nav.reports', icon: BarChart3 },
+    { to: '/app/admin/teacher-activity', labelKey: 'dash.nav.teacherActivity', icon: Activity },
     { to: '/app/admin/academic-years', labelKey: 'dash.nav.academicYears', icon: CalendarRange },
     { to: '/app/admin/tutorials', labelKey: 'dash.nav.tutorials', icon: PlayCircle },
     { to: '/app/admin/settings', labelKey: 'dash.nav.settings', icon: Settings },
@@ -48,6 +52,7 @@ export const navByRole: Record<Role, NavItem[]> = {
   teacher: [
     { to: '/app/teacher', labelKey: 'dash.nav.dashboard', icon: LayoutDashboard, end: true },
     { to: '/app/teacher/classes', labelKey: 'dash.nav.myClasses', icon: BookOpen },
+    { to: '/app/teacher/timetable', labelKey: 'dash.nav.timetable', icon: Table2 },
     { to: '/app/teacher/attendance', labelKey: 'dash.nav.attendance', icon: CalendarCheck },
     { to: '/app/teacher/grades', labelKey: 'dash.nav.grades', icon: ClipboardList },
     { to: '/app/teacher/homework', labelKey: 'dash.nav.homework', icon: ClipboardCheck },
