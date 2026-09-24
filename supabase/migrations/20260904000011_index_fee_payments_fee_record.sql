@@ -1,0 +1,74 @@
+-- =============================================================================
+-- CORRECTIVE — index_fee_payments_fee_record
+-- Corrects: Migration 10 (finance) — the access path required by
+--           sync_fee_record_amount_paid()
+-- Nom Cloud · Phase 3 (production schema)
+--
+-- This migration carries NO design number. Design numbers 01-11 are reserved for
+-- the §I plan, and 11 means communication_and_audit. See docs/MIGRATIONS.md.
+--
+-- WHY
+-- Migration 10 created sync_fee_record_amount_paid(), which runs this query on
+-- EVERY INSERT, UPDATE and DELETE of fee_payments — twice on UPDATE, once for
+-- the OLD fee record and once for the NEW:
+--
+--     select coalesce(sum(fp.amount), 0)
+--       from public.fee_payments fp
+--      where fp.school_id = $1
+--        and fp.fee_record_id = $2;
+--
+-- There was no index able to serve that predicate.
+--
+-- POSTGRES DOES NOT AUTO-INDEX THE REFERENCING SIDE OF A FOREIGN KEY.
+-- It creates a backing index for PRIMARY KEY and UNIQUE constraints — always on
+-- the REFERENCED side. fee_payments_school_id_fee_record_id_fkey therefore gives
+-- fee_records its lookup and fee_payments nothing at all. This is a standard and
+-- easily missed gap, not a Supabase peculiarity.
+--
+-- STEP 0 FINDING — the two indexes that existed, and why neither covers it:
+--
+--   fee_payments_pkey
+--       CREATE UNIQUE INDEX ... USING btree (id)
+--       Leading column is id. Useless for a school_id/fee_record_id lookup.
+--
+--   fee_payments_school_id_reference_key
+--       CREATE UNIQUE INDEX ... USING btree (school_id, reference)
+--       Leading column school_id is right, but the SECOND key column is
+--       reference, not fee_record_id. Postgres can use it for the school_id = $1
+--       half and must then filter fee_record_id from the result — which inside a
+--       single tenant is close to reading every payment that school has ever
+--       made. Not an equivalent access path.
+--
+-- Neither is partial; both are valid. No third index existed.
+--
+-- COST WITHOUT IT
+-- Every payment write plans a sequential scan of fee_payments. The cost grows
+-- with the total number of payments in the DATABASE, not per school, so one
+-- busy school's volume slows every other school's writes. The scan also runs
+-- while the enclosing statement holds row locks, so it degrades write
+-- concurrency as well as latency.
+--
+-- THE SAME PREDICATE SERVES A READ
+-- "All payments against this fee record" is the fee detail screen — the natural
+-- companion to the amount_paid figure the trigger maintains. That read filters
+-- on exactly (school_id, fee_record_id), so this index pays for itself on the
+-- read path too, not only on the write path.
+--
+-- WHY THIS IS A CORRECTION, NOT A DESIGN CHANGE
+-- The design specified the trigger (§F: amount_paid is trigger-maintained), and
+-- a trigger is not implementable in a usable form without the access path its
+-- own query requires. This adds no column, no constraint, no behaviour and no
+-- new concept — the schema means exactly what it meant before. It supplies the
+-- index that Migration 10's approved logic depends on. No query result changes.
+--
+-- MIGRATION 10's FILE IS LEFT UNTOUCHED.
+-- 20260904000010_finance.sql is an applied historical record and is never
+-- rewritten. Everything in it remains accurate; this migration adds to it rather
+-- than correcting anything it states.
+--
+-- Creates NO row-level security policies (Phase 7). No table, column,
+-- constraint, trigger or function is modified.
+-- =============================================================================
+
+create index fee_payments_school_id_fee_record_id_idx
+  on public.fee_payments (school_id, fee_record_id);

@@ -1,0 +1,81 @@
+import { NavLink } from 'react-router-dom'
+import { X, LogOut } from 'lucide-react'
+import SchoolBrandLogo from '@/components/dashboard/SchoolBrandLogo'
+import { navByRole, roleLabelKey } from '@/components/dashboard/navConfig'
+import type { Role } from '@/types'
+import { cn } from '@/utils/cn'
+import { useAuth } from '@/context/AuthContext'
+import { useLanguage } from '@/context/LanguageContext'
+
+interface SidebarProps {
+  role: Role
+  mobileOpen: boolean
+  onClose: () => void
+}
+
+export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
+  const items = navByRole[role]
+  const { logout } = useAuth()
+  const { t } = useLanguage()
+
+  const content = (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between px-5 py-5">
+        <SchoolBrandLogo to={`/app/${role}`} />
+        <button onClick={onClose} className="rounded-full p-1.5 text-graphite hover:bg-ink/5 dark:hover:bg-white/10 lg:hidden" aria-label="Close menu">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <p className="px-5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-graphite/70">{t(roleLabelKey[role])} Workspace</p>
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
+        {items.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            onClick={onClose}
+            className={({ isActive }: { isActive: boolean }) =>
+              cn(
+                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
+                isActive
+                  ? 'bg-brand/10 text-brand'
+                  : 'text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white',
+              )
+            }
+          >
+            <item.icon className="h-4 w-4 flex-shrink-0" />
+            {t(item.labelKey)}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="space-y-1 border-t border-ink/5 px-3 py-4 dark:border-white/10">
+        {/* Phase 8 batch 8. "Reset Demo Data" is removed. It restored the
+            client-side prototype store (removed in Phase 8 batch 8), which no longer
+            exists. It was never connected to the demo SCHOOL (schools.is_demo,
+            batch 0), which is real data in the real database and is untouched:
+            resetting that tenant would be a server-side operation, recorded as
+            open question H.11. */}
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-red-500/10"
+        >
+          <LogOut className="h-4 w-4" /> {t('dash.topbar.signOut')}
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      <aside className="hidden w-64 flex-shrink-0 border-r border-ink/5 bg-white dark:border-white/10 dark:bg-[#0F0F11] lg:block">
+        {content}
+      </aside>
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+          <aside className="absolute inset-y-0 left-0 w-72 bg-white shadow-floaty animate-fade-up dark:bg-[#0F0F11]">{content}</aside>
+        </div>
+      )}
+    </>
+  )
+}
