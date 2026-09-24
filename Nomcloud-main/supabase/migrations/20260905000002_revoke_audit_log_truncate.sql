@@ -1,0 +1,78 @@
+-- =============================================================================
+-- CORRECTIVE — revoke_audit_log_truncate
+-- Extends: 20260905000001_revoke_audit_log_mutation
+-- Relates to: Migration 11 (communication_and_audit) — public.audit_logs
+-- Nom Cloud · Phase 3 (production schema)
+--
+-- This migration carries NO design number. Design numbers 01-11 are reserved for
+-- the §I plan and are all applied. See docs/MIGRATIONS.md.
+--
+-- WHY — A GAP IN THE DESIGN, NOT IN THE IMPLEMENTATION
+-- §H requires audit_logs to be append-only: "UPDATE and DELETE revoked from all
+-- application roles, including service_role. An audit log that can be edited is
+-- not an audit log."
+--
+-- 20260905000001 implemented that EXACTLY as written, and correctly: UPDATE and
+-- DELETE are revoked from anon, authenticated and service_role, with SELECT and
+-- INSERT retained. That migration is not at fault and is not being corrected.
+--
+-- But §H's text never named TRUNCATE, and TRUNCATE is a separate privilege.
+-- `TRUNCATE public.audit_logs` erases every row in one statement, bypassing the
+-- DELETE revoke entirely. It is DDL-like: it does not fire row-level triggers,
+-- so no trigger could ever intercept it. An audit log that can be truncated is
+-- no more an audit log than one that can be edited — so §H's stated INTENT
+-- requires this revoke even though §H's LETTER did not ask for it.
+--
+-- WHAT THIS CHANGES
+-- Revokes TRUNCATE on public.audit_logs from anon, authenticated and
+-- service_role. Nothing else. Specifically preserved:
+--   - SELECT and INSERT for all three roles — the log must still be written and
+--     read by the application
+--   - postgres keeps every privilege, TRUNCATE included. It is the migration and
+--     superuser role, not an application role; §H scopes its requirement to
+--     application roles. Partition-dropping retention (§H) runs as postgres.
+--
+-- =============================================================================
+-- FINDING 1 — ALTER DEFAULT PRIVILEGES WILL RE-GRANT TRUNCATE ON FUTURE TABLES
+-- =============================================================================
+-- Supabase sets platform-level default privileges on the public schema:
+--
+--   postgres       => anon=arwdDxtm, authenticated=arwdDxtm, service_role=arwdDxtm
+--   supabase_admin => anon=arwdDxtm, authenticated=arwdDxtm, service_role=arwdDxtm
+--
+-- In that privilege string **D is TRUNCATE** (a=INSERT, r=SELECT, w=UPDATE,
+-- d=DELETE, D=TRUNCATE, x=REFERENCES, t=TRIGGER, m=MAINTAIN).
+--
+-- So YES: any table created in public from now on automatically grants TRUNCATE
+-- — along with UPDATE and DELETE — to all three application roles. This revoke
+-- protects public.audit_logs ONLY. It does not protect a future table, and it
+-- cannot: default privileges apply at creation time.
+--
+-- CONSEQUENCE FOR PHASE 11: payment_events (deferred, §11) is event-log shaped
+-- and carries an idempotency guard. If it is intended to be append-only, its
+-- migration must issue its own REVOKE UPDATE, DELETE, TRUNCATE. Nothing in this
+-- migration does that for it.
+--
+-- =============================================================================
+-- FINDING 2 — NO OTHER TABLE HAS THIS GAP
+-- =============================================================================
+-- audit_logs is the ONLY append-only table in the design, confirmed two ways
+-- against the live catalog:
+--   - tables with no updated_at column:            audit_logs  (only)
+--   - tables where anon cannot UPDATE:             audit_logs  (only)
+-- Both sets have exactly one member, and it is the same table. No other table is
+-- append-only by design, so no other table needs this revoke.
+--
+-- SEPARATE AND WIDER, reported not acted on: all 34 tables in public currently
+-- allow anon, authenticated and service_role to TRUNCATE, because none has had
+-- privileges narrowed. For the other 33 that is not an append-only defect — it
+-- is the general pre-RLS exposure, which Phase 7 addresses as a whole. Narrowing
+-- privileges across the schema is NOT in scope here and is not done.
+--
+-- Creates NO row-level security policies (Phase 7). No table, column,
+-- constraint, index, trigger or function is created, altered or dropped.
+-- =============================================================================
+
+revoke truncate on public.audit_logs from anon;
+revoke truncate on public.audit_logs from authenticated;
+revoke truncate on public.audit_logs from service_role;
