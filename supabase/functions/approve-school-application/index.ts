@@ -41,6 +41,19 @@ const json = (body: unknown, status = 200) =>
  * somewhere unexpected.
  */
 const activationRedirect = (request: Request): string | undefined => {
+  // CONFIGURED, NOT OBSERVED — see the long explanation in send-invitation.
+  // Taking this from the caller's Origin meant the link pointed wherever the
+  // approver happened to be; anything that is not the one allow-listed host
+  // makes Supabase fall back to the Site URL, landing the new administrator on
+  // the marketing homepage with no activation screen.
+  const configured = Deno.env.get('APP_ORIGIN')?.trim()
+  if (configured) {
+    try {
+      return `${new URL(configured).origin}/activate`
+    } catch {
+      console.error(`APP_ORIGIN is not a valid URL: ${configured}`)
+    }
+  }
   const origin = request.headers.get('Origin') ?? ''
   try {
     const url = new URL(origin)

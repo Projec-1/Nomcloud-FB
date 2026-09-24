@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { recoveryLanding } from '@/lib/recoveryLanding'
 import { useAuth } from '@/context/AuthContext'
 import { claimPendingInvitation } from '@/services/invitationService'
+import { fetchActiveMemberships } from '@/services/identityService'
 import { workspacesForMembershipRoles } from '@/lib/roles'
 import { errorMessage } from '@/utils/errorMessage'
 import { MIN_PASSWORD_LENGTH, isValidPassword } from '@/utils/validators'
@@ -158,7 +159,25 @@ export default function ActivateAccount() {
       return
     }
 
-    const workspace = workspacesForMembershipRoles(memberships.map((membership) => membership.role))[0]
+    // Where to send them is decided from a FRESH read, not from `memberships`
+    // in this component's state. The claim above populates that list through an
+    // async identity refresh, and somebody who types a password quickly can
+    // submit before it lands — which sent newly activated people to /login
+    // instead of their workspace, making activation look like it had failed.
+    // The session is already valid here, so one authoritative read settles it.
+    let roles = memberships.map((membership) => membership.role)
+    try {
+      const { data } = await supabase.auth.getUser()
+      if (data.user) {
+        const fresh = await fetchActiveMemberships(data.user.id)
+        if (fresh.length > 0) roles = fresh.map((membership) => membership.role)
+      }
+    } catch {
+      // Fall back to whatever state already holds; the worst case is the
+      // sign-in screen, which is where the old code always ended up.
+    }
+
+    const workspace = workspacesForMembershipRoles(roles)[0]
     navigate(workspace ? `/app/${workspace}` : '/login', { replace: true })
   }
 

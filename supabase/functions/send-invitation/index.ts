@@ -57,7 +57,38 @@ async function tokenHash(): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/**
+ * Where the activation link must land.
+ *
+ * THIS IS NOT TAKEN FROM THE CALLER. It used to be built from the request's
+ * Origin header, which meant the link pointed wherever the ADMINISTRATOR
+ * happened to be. That silently broke invitations twice on 2026-09-24: an
+ * administrator working against a local dev server sent invitations whose
+ * Origin was http://localhost:5173, the https check rejected it, no redirectTo
+ * was sent at all, and Supabase fell back to the project's Site URL — so the
+ * invited teacher opened their email and arrived on the marketing homepage with
+ * no activation screen and no password form.
+ *
+ * The same silent fallback happens for any https origin that is not on
+ * Supabase's redirect allow-list: a Vercel preview or deployment-specific URL,
+ * a www. host, a school subdomain, a future custom domain. Supabase reports no
+ * error for any of them.
+ *
+ * So the origin is CONFIGURED, not observed. APP_ORIGIN is the one host whose
+ * /activate is on the allow-list. The request's own origin is used only if
+ * APP_ORIGIN is unset, and only when it is https — the old behaviour, kept so a
+ * local stack without the secret still functions.
+ */
 const activationRedirect = (request: Request): string | undefined => {
+  const configured = Deno.env.get('APP_ORIGIN')?.trim()
+  if (configured) {
+    try {
+      return `${new URL(configured).origin}/activate`
+    } catch {
+      // A malformed secret must not silently become "no redirect at all".
+      console.error(`APP_ORIGIN is not a valid URL: ${configured}`)
+    }
+  }
   const origin = request.headers.get('Origin') ?? ''
   try {
     const url = new URL(origin)
