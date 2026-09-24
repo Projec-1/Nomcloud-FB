@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { Users, Plus, Pencil, Trash2, Upload } from 'lucide-react'
+import { FileSpreadsheet, Pencil, Plus, Trash2, Upload, Users } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
+import ImportDialog from '@/components/import/ImportDialog'
+import { studentsImport } from '@/services/import/kinds'
 import SearchInput from '@/components/ui/SearchInput'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
@@ -106,6 +108,7 @@ export default function AdminStudents() {
   const timeZone = school?.timezone ?? DEFAULT_TIME_ZONE
   const activeYearId = academicState.status === 'ready' ? (academicState.data.activeYear?.id ?? '') : ''
 
+  const [importOpen, setImportOpen] = useState(false)
   const [students, setStudents] = useState<DirectoryStudent[]>([])
   const [guardians, setGuardians] = useState<GuardianRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -407,9 +410,14 @@ export default function AdminStudents() {
         title="Students"
         description="Every student enrolled at your school."
         actions={
-          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
-            Add Student
-          </Button>
+          <div className="flex flex-wrap gap-2.5">
+            <Button variant="outline" onClick={() => setImportOpen(true)} icon={<FileSpreadsheet className="h-4 w-4" />}>
+              Import from Excel
+            </Button>
+            <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
+              Add Student
+            </Button>
+          </div>
         }
       />
 
@@ -751,6 +759,13 @@ export default function AdminStudents() {
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ImportDialog
+        kind={studentsImport}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={reload}
       />
     </div>
   )

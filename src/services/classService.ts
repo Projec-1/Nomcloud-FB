@@ -149,6 +149,18 @@ export interface ClassInput {
   capacity: number | null
   academicYearId: string
   classTeacherId: string | null
+  /**
+   * Optional, and omitted entirely when absent.
+   *
+   * The header records that the frontend does not become campus-aware, and the
+   * class FORM still sends nothing here, so creating a class by hand behaves
+   * exactly as it did. Bulk import is the one caller that names a campus,
+   * because a spreadsheet covering a multi-campus school has no other way to
+   * say which "Grade 5A" it means. RLS is unchanged either way:
+   * classes_management_insert checks has_campus_scoped_management(school_id,
+   * campus_id), so naming a campus can only ever narrow what is permitted.
+   */
+  campusId?: string | null
 }
 
 export async function createClass(schoolId: string, input: ClassInput): Promise<string> {
@@ -163,7 +175,9 @@ export async function createClass(schoolId: string, input: ClassInput): Promise<
       room: input.room,
       capacity: input.capacity,
       class_teacher_id: input.classTeacherId,
-      // campus_id deliberately omitted. See the header.
+      // Sent only when the caller named one; otherwise the column is left out
+      // entirely, exactly as before. See ClassInput.campusId.
+      ...(input.campusId ? { campus_id: input.campusId } : {}),
     })
     .select('id')
     .single()

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { GraduationCap, Plus, Pencil, Trash2, ShieldOff, ShieldCheck, Mail } from 'lucide-react'
+import { FileSpreadsheet, GraduationCap, Mail, Pencil, Plus, ShieldCheck, ShieldOff, Trash2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
+import ImportDialog from '@/components/import/ImportDialog'
+import { teachersImport } from '@/services/import/kinds'
 import SearchInput from '@/components/ui/SearchInput'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
@@ -63,6 +65,7 @@ export default function AdminTeachers() {
 
   const schoolId = school?.id ?? null
 
+  const [importOpen, setImportOpen] = useState(false)
   const [teachers, setTeachers] = useState<TeacherRow[]>([])
   const [subjects, setSubjects] = useState<SubjectRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -349,9 +352,14 @@ export default function AdminTeachers() {
         title="Teachers"
         description="Teaching staff at your school."
         actions={
-          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
-            Add Teacher
-          </Button>
+          <div className="flex flex-wrap gap-2.5">
+            <Button variant="outline" onClick={() => setImportOpen(true)} icon={<FileSpreadsheet className="h-4 w-4" />}>
+              Import from Excel
+            </Button>
+            <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
+              Add Teacher
+            </Button>
+          </div>
         }
       />
 
@@ -620,6 +628,13 @@ export default function AdminTeachers() {
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ImportDialog
+        kind={teachersImport}
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={reload}
       />
     </div>
   )
