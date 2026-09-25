@@ -332,17 +332,17 @@ export default function Login() {
         )}
         {confirmationSent && <p className="text-sm font-medium text-green-600">Confirmation email sent. Check your inbox.</p>}
         <Button type="submit" size="lg" loading={loading} className="w-full">
-          {t('auth.login.submit')} <ArrowRight className="h-4 w-4" />
+          Sign in <ArrowRight className="h-4 w-4" />
         </Button>
       </form>
       )}
 
-      <p className="mt-8 text-center text-sm text-graphite">
-        {t('auth.login.noAccount')}{' '}
-        <Link to="/signup" className="link-underline font-medium text-accent">
-          {t('auth.login.signup')}
+      <div className="mt-8 rounded-2xl border border-brand/15 bg-brand/[0.06] px-4 py-4 text-center">
+        <p className="text-sm text-graphite">{t('auth.login.noAccount')}</p>
+        <Link to="/signup" className="mt-1 inline-flex items-center gap-1 text-base font-semibold text-brand hover:text-brand-600">
+          {t('auth.login.signup')} <ArrowRight className="h-4 w-4" />
         </Link>
-      </p>
+      </div>
     </AuthLayout>
   )
 }

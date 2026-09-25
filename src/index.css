@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,12 +10,13 @@
   }
 
   body {
-    font-feature-settings: 'ss01', 'ss02', 'cv01', 'cv02';
+    font-family: 'DM Sans', 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv02', 'cv03';
     -webkit-font-smoothing: antialiased;
   }
 
   ::selection {
-    background-color: rgba(255, 90, 31, 0.25);
+    background-color: rgba(240, 90, 40, 0.2);
   }
 
   ::-webkit-scrollbar {
@@ -36,6 +39,61 @@
 }
 
 @layer components {
+  .platform-main {
+    background: #f7f7f5;
+    min-height: 100vh;
+  }
+
+  .platform-main h1,
+  .platform-main h2,
+  .platform-main h3 {
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  }
+
+  .platform-main [class*='rounded-3xl'],
+  .platform-main [class*='rounded-2xl'],
+  .platform-main [class*='rounded-xl'] {
+    border-radius: 12px;
+  }
+
+  .platform-main [class*='shadow-'] {
+    box-shadow: none !important;
+  }
+
+  .platform-main .bg-white,
+  .platform-main .dark\:bg-white\/\[0\.04\],
+  .platform-main .dark\:bg-white\/\[0\.06\] {
+    border-color: #e6e4df;
+  }
+
+  .platform-main .bg-brand\/10,
+  .platform-main .bg-brand\/\[0\.05\],
+  .platform-main .bg-brand\/\[0\.06\] {
+    background-color: #fff0e9;
+  }
+
+  .platform-main .bg-ink {
+    background-color: #222321;
+  }
+
+  .platform-main .text-brand {
+    color: #f05a28;
+  }
+
+  .platform-main .border-brand\/15,
+  .platform-main .border-brand\/\[0\.15\] {
+    border-color: #f7b49d;
+  }
+
+  .platform-main .platform-main-card {
+    border: 1px solid #e6e4df;
+    background: #fff;
+  }
+
+  .platform-main > header:first-of-type {
+    display: none;
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-300 ease-apple whitespace-nowrap select-none disabled:opacity-50 disabled:pointer-events-none;
   }

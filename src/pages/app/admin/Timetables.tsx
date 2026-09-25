@@ -24,7 +24,6 @@ export default function AdminTimetables() {
   const { showToast } = useToast()
   const [lessons, setLessons] = useState<MockLesson[]>(loadMockLessons)
   const [classId, setClassId] = useState(MOCK_CLASSES[0].id)
-  const [teacherFilter, setTeacherFilter] = useState('all')
   const [weekMode, setWeekMode] = useState<'five' | 'six'>('five')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<MockLesson | null>(null)
@@ -32,7 +31,7 @@ export default function AdminTimetables() {
 
   const activeClass = MOCK_CLASSES.find((item) => item.id === classId) ?? MOCK_CLASSES[0]
   const visibleDays = WEEKDAYS.slice(0, weekMode === 'five' ? 5 : 6)
-  const classLessons = lessons.filter((lesson) => lesson.classId === classId && (teacherFilter === 'all' || lesson.teacher === teacherFilter))
+  const classLessons = lessons.filter((lesson) => lesson.classId === classId)
   const rows = timeRows(classLessons)
 
   const openNew = (day?: number, startTime?: string, endTime?: string) => {
@@ -135,16 +134,10 @@ export default function AdminTimetables() {
               <p className="mt-3 text-sm text-graphite">Foremaster / Homeroom Teacher: <span className="font-medium text-ink dark:text-white">{activeClass.homeroomTeacher}</span></p>
               <p className="mt-1 text-xs text-graphite">Six lesson periods are ready each day. Add a seventh or extra period whenever your school needs one.</p>
             </div>
-            <div className="grid w-full gap-3 sm:w-80 sm:grid-cols-2">
-              <Select label="School week" value={weekMode} onChange={(event) => setWeekMode(event.target.value as 'five' | 'six')}>
-                <option value="five">5 days · Saturday–Wednesday</option>
-                <option value="six">6 days · Saturday–Thursday</option>
-              </Select>
-              <Select label="Teacher" value={teacherFilter} onChange={(event) => setTeacherFilter(event.target.value)}>
-                <option value="all">All teachers</option>
-                {MOCK_TEACHERS.map((teacher) => <option key={teacher.id} value={teacher.name}>{teacher.name}</option>)}
-              </Select>
-            </div>
+            <Select label="School week" value={weekMode} onChange={(event) => setWeekMode(event.target.value as 'five' | 'six')} className="w-full sm:w-64">
+              <option value="five">5 days · Saturday–Wednesday</option>
+              <option value="six">6 days · Saturday–Thursday</option>
+            </Select>
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-ink/5 bg-white shadow-[0_12px_35px_rgba(20,20,20,0.04)] dark:border-white/10 dark:bg-[#161618]">

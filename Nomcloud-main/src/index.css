@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,12 +10,13 @@
   }
 
   body {
-    font-feature-settings: 'ss01', 'ss02', 'cv01', 'cv02';
+    font-family: 'DM Sans', 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv02', 'cv03';
     -webkit-font-smoothing: antialiased;
   }
 
   ::selection {
-    background-color: rgba(255, 90, 31, 0.25);
+    background-color: rgba(240, 90, 40, 0.2);
   }
 
   ::-webkit-scrollbar {
@@ -36,6 +39,61 @@
 }
 
 @layer components {
+  .platform-main {
+    background: #f7f7f5;
+    min-height: 100vh;
+  }
+
+  .platform-main h1,
+  .platform-main h2,
+  .platform-main h3 {
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  }
+
+  .platform-main [class*='rounded-3xl'],
+  .platform-main [class*='rounded-2xl'],
+  .platform-main [class*='rounded-xl'] {
+    border-radius: 12px;
+  }
+
+  .platform-main [class*='shadow-'] {
+    box-shadow: none !important;
+  }
+
+  .platform-main .bg-white,
+  .platform-main .dark\:bg-white\/\[0\.04\],
+  .platform-main .dark\:bg-white\/\[0\.06\] {
+    border-color: #e6e4df;
+  }
+
+  .platform-main .bg-brand\/10,
+  .platform-main .bg-brand\/\[0\.05\],
+  .platform-main .bg-brand\/\[0\.06\] {
+    background-color: #fff0e9;
+  }
+
+  .platform-main .bg-ink {
+    background-color: #222321;
+  }
+
+  .platform-main .text-brand {
+    color: #f05a28;
+  }
+
+  .platform-main .border-brand\/15,
+  .platform-main .border-brand\/\[0\.15\] {
+    border-color: #f7b49d;
+  }
+
+  .platform-main .platform-main-card {
+    border: 1px solid #e6e4df;
+    background: #fff;
+  }
+
+  .platform-main > header:first-of-type {
+    display: none;
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-300 ease-apple whitespace-nowrap select-none disabled:opacity-50 disabled:pointer-events-none;
   }
@@ -72,211 +130,4 @@
   .label {
     @apply mb-1.5 block text-sm font-medium text-ink dark:text-white/90;
   }
-
-  .admin-dashboard {
-    position: relative;
-  }
-
-  .admin-dashboard__hero {
-    position: relative;
-    overflow: hidden;
-    margin: -0.5rem -0.5rem 2rem;
-    padding: 1.5rem 1.5rem 0.25rem;
-    border: 1px solid rgba(255, 90, 31, 0.16);
-    border-radius: 1.75rem;
-    background:
-      radial-gradient(circle at 88% 15%, rgba(255, 90, 31, 0.1), transparent 20rem),
-      linear-gradient(115deg, rgba(255, 255, 255, 0.98), rgba(255, 249, 246, 0.94));
-  }
-
-  .admin-dashboard__hero::after {
-    content: '';
-    position: absolute;
-    right: -7rem;
-    bottom: -8rem;
-    width: 28rem;
-    height: 16rem;
-    border: 1px solid rgba(255, 90, 31, 0.14);
-    border-radius: 50%;
-    transform: rotate(-18deg);
-    pointer-events: none;
-  }
-
-  .admin-dashboard__hero > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  .admin-dashboard__hero h1 {
-    font-size: clamp(1.8rem, 3vw, 2.6rem);
-    letter-spacing: -0.045em;
-  }
-
-  .admin-dashboard__stats .card,
-  .admin-dashboard__panel {
-    border-color: rgba(24, 24, 27, 0.07);
-    box-shadow: 0 12px 35px rgba(38, 31, 27, 0.055);
-  }
-
-  .admin-dashboard__stats .card {
-    min-height: 9.5rem;
-    border-radius: 1.35rem;
-  }
-
-  .admin-dashboard__panel {
-    border-radius: 1.5rem;
-  }
-
-  .dashboard-shell > .mx-auto > .card,
-  .dashboard-shell > .mx-auto > div > .card,
-  .dashboard-shell .grid > .card {
-    border-color: rgba(24, 24, 27, 0.07);
-    border-radius: 1.35rem;
-
-    box-shadow: 0 12px 35px rgba(38, 31, 27, 0.045);
-  }
-
-  .admin-workspace {
-    position: relative;
-    isolation: isolate;
-    background:
-      radial-gradient(circle at 12% 8%, rgba(151, 177, 214, 0.17), transparent 22rem),
-      radial-gradient(circle at 78% 86%, rgba(211, 184, 229, 0.14), transparent 25rem),
-      #edf0f4;
-  }
-
-  .admin-workspace::before,
-  .admin-workspace::after {
-    position: fixed;
-    z-index: -1;
-    width: 24rem;
-    height: 24rem;
-    border-radius: 999px;
-    filter: blur(75px);
-    pointer-events: none;
-    content: '';
-  }
-
-  .admin-workspace::before {
-    top: -10rem;
-    left: 18rem;
-    background: rgba(178, 201, 231, 0.22);
-  }
-
-  .admin-workspace::after {
-    right: -9rem;
-    bottom: -9rem;
-    background: rgba(222, 197, 225, 0.2);
-  }
-
-  .admin-workspace .dashboard-sidebar {
-    background: rgba(248, 249, 251, 0.76);
-    border-color: rgba(255, 255, 255, 0.75);
-    box-shadow: 12px 0 35px rgba(49, 56, 69, 0.05);
-    backdrop-filter: blur(24px) saturate(125%);
-  }
-
-  .admin-workspace .dashboard-topbar {
-    background: rgba(248, 249, 251, 0.7);
-    border-color: rgba(255, 255, 255, 0.75);
-    box-shadow: 0 8px 28px rgba(49, 56, 69, 0.045);
-    backdrop-filter: blur(24px) saturate(130%);
-  }
-
-  .admin-workspace .dashboard-shell {
-    background:
-      radial-gradient(ellipse 70% 45% at 8% 8%, rgba(151, 177, 214, 0.13), transparent 68%),
-      radial-gradient(ellipse 60% 45% at 92% 20%, rgba(211, 184, 229, 0.12), transparent 68%),
-      radial-gradient(ellipse 55% 42% at 52% 100%, rgba(236, 204, 181, 0.12), transparent 70%),
-      transparent;
-  }
-
-  .admin-workspace .dashboard-shell .card {
-    border-color: rgba(255, 255, 255, 0.72);
-    background: rgba(255, 255, 255, 0.68);
-    box-shadow: 0 14px 38px rgba(49, 56, 69, 0.06);
-    backdrop-filter: blur(18px) saturate(120%);
-  }
-
-  .admin-workspace .dashboard-shell .input {
-    border-color: rgba(91, 102, 119, 0.14);
-    background: rgba(255, 255, 255, 0.64);
-    backdrop-filter: blur(12px);
-  }
-
-  .dark .admin-workspace {
-    background:
-      radial-gradient(circle at 12% 8%, rgba(70, 98, 137, 0.18), transparent 22rem),
-      radial-gradient(circle at 78% 86%, rgba(111, 78, 133, 0.15), transparent 25rem),
-      #0d1014;
-  }
-
-  .dark .admin-workspace .dashboard-sidebar,
-  .dark .admin-workspace .dashboard-topbar {
-    background: rgba(20, 23, 29, 0.76);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .dark .admin-workspace .dashboard-shell .card {
-    border-color: rgba(255, 255, 255, 0.11);
-    background: rgba(24, 27, 33, 0.68);
-    box-shadow: 0 14px 38px rgba(0, 0, 0, 0.18);
-  }
-
-  .dark .admin-workspace .dashboard-shell .input {
-    border-color: rgba(255, 255, 255, 0.14);
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .dashboard-shell .card h2,
-  .dashboard-shell .card h3 {
-    letter-spacing: -0.025em;
-  }
-
-  .dashboard-shell .input {
-    border-color: rgba(24, 24, 27, 0.1);
-    border-radius: 0.85rem;
-    background-color: rgba(255, 255, 255, 0.82);
-  }
-
-  .dashboard-shell .btn-outline {
-    border-color: rgba(24, 24, 27, 0.14);
-    background: rgba(255, 255, 255, 0.7);
-  }
-
-  .dashboard-shell .btn-outline:hover {
-    border-color: rgba(255, 90, 31, 0.45);
-    color: #e94f1b;
-  }
-
-  .dashboard-shell table thead {
-    background: rgba(255, 90, 31, 0.035);
-  }
-
-  .dashboard-shell table th {
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .dark .dashboard-shell > .mx-auto > .card,
-  .dark .dashboard-shell > .mx-auto > div > .card,
-  .dark .dashboard-shell .grid > .card {
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.16);
-  }
-
-  .dark .dashboard-shell .input {
-    border-color: rgba(255, 255, 255, 0.15);
-    background-color: rgba(255, 255, 255, 0.05);
-  }
-
-  @media (max-width: 640px) {
-    .admin-dashboard__hero {
-      margin: -0.25rem -0.25rem 1.5rem;
-      padding: 1.25rem 1.1rem 0;
-      border-radius: 1.35rem;
-    }
-  }
-
 }

@@ -31,6 +31,7 @@ import AdminStudents from '@/pages/app/admin/Students'
 import AdminTeachers from '@/pages/app/admin/Teachers'
 import AdminGuardians from '@/pages/app/admin/Guardians'
 import AdminClasses from '@/pages/app/admin/Classes'
+import AdminTimetables from '@/pages/app/admin/Timetables'
 import AdminAttendance from '@/pages/app/admin/Attendance'
 import AdminGrades from '@/pages/app/admin/Grades'
 import AdminHomework from '@/pages/app/admin/Homework'
@@ -39,6 +40,7 @@ import AdminFees from '@/pages/app/admin/Fees'
 import AdminAnnouncements from '@/pages/app/admin/Announcements'
 import AdminMessages from '@/pages/app/admin/Messages'
 import AdminReports from '@/pages/app/admin/Reports'
+import AdminTeacherActivity from '@/pages/app/admin/TeacherActivity'
 import AdminAcademicYears from '@/pages/app/admin/AcademicYears'
 import AdminTutorials from '@/pages/app/admin/Tutorials'
 import AdminSettings from '@/pages/app/admin/Settings'
@@ -64,6 +66,7 @@ import ParentMessages from '@/pages/app/parent/Messages'
 import ParentTutorials from '@/pages/app/parent/Tutorials'
 import PlatformPlaceholder from '@/pages/platform/Placeholder'
 import PlatformApprovalPanel from '@/pages/platform/ApprovalPanel'
+import PlatformWorkspace from '@/pages/platform/Workspace'
 
 export default function App() {
   return (
@@ -109,7 +112,25 @@ export default function App() {
             </PlatformRoute>
           }
         >
-          <Route index element={<PlatformPlaceholder />} />
+          <Route index element={<PlatformWorkspace />} />
+          <Route path="actions" element={<PlatformWorkspace />} />
+          <Route path="schools" element={<PlatformWorkspace />} />
+          <Route path="people" element={<PlatformWorkspace />} />
+          <Route path="requests" element={<PlatformWorkspace />} />
+          <Route path="communications" element={<PlatformWorkspace />} />
+          <Route path="operators" element={<PlatformWorkspace />} />
+          <Route path="permissions" element={<PlatformWorkspace />} />
+          <Route path="features" element={<PlatformWorkspace />} />
+          <Route path="integrations" element={<PlatformWorkspace />} />
+          <Route path="billing" element={<PlatformWorkspace />} />
+          <Route path="data" element={<PlatformWorkspace />} />
+          <Route path="activity" element={<PlatformWorkspace />} />
+          <Route path="audit" element={<PlatformWorkspace />} />
+          <Route path="security" element={<PlatformWorkspace />} />
+          <Route path="health" element={<PlatformWorkspace />} />
+          <Route path="maintenance" element={<PlatformWorkspace />} />
+          <Route path="analytics" element={<PlatformWorkspace />} />
+          <Route path="settings" element={<PlatformWorkspace />} />
           <Route path="applications" element={<PlatformApprovalPanel />} />
         </Route>
 
@@ -128,6 +149,7 @@ export default function App() {
           <Route path="teachers" element={<AdminTeachers />} />
           <Route path="guardians" element={<AdminGuardians />} />
           <Route path="classes" element={<AdminClasses />} />
+          <Route path="timetables" element={<AdminTimetables />} />
           <Route path="attendance" element={<AdminAttendance />} />
           <Route path="grades" element={<AdminGrades />} />
           <Route path="homework" element={<AdminHomework />} />
@@ -136,6 +158,7 @@ export default function App() {
           <Route path="announcements" element={<AdminAnnouncements />} />
           <Route path="messages" element={<AdminMessages />} />
           <Route path="reports" element={<AdminReports />} />
+          <Route path="teacher-activity" element={<AdminTeacherActivity />} />
           <Route path="academic-years" element={<AdminAcademicYears />} />
           <Route path="tutorials" element={<AdminTutorials />} />
           <Route path="settings" element={<AdminSettings />} />

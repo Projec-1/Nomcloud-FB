@@ -1,10 +1,15 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function PlatformLayout() {
   const { profile, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  if (!location.pathname.startsWith('/platform/applications')) {
+    return <Outlet />
+  }
 
   return (
     <div className="min-h-screen bg-[#111827] text-white">

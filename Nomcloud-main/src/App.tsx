@@ -47,7 +47,6 @@ import AdminSettings from '@/pages/app/admin/Settings'
 
 import TeacherDashboard from '@/pages/app/teacher/Dashboard'
 import TeacherClasses from '@/pages/app/teacher/Classes'
-import TeacherTimetable from '@/pages/app/teacher/Timetable'
 import TeacherAttendance from '@/pages/app/teacher/Attendance'
 import TeacherGrades from '@/pages/app/teacher/Grades'
 import TeacherHomework from '@/pages/app/teacher/Homework'
@@ -67,6 +66,7 @@ import ParentMessages from '@/pages/app/parent/Messages'
 import ParentTutorials from '@/pages/app/parent/Tutorials'
 import PlatformPlaceholder from '@/pages/platform/Placeholder'
 import PlatformApprovalPanel from '@/pages/platform/ApprovalPanel'
+import PlatformWorkspace from '@/pages/platform/Workspace'
 
 export default function App() {
   return (
@@ -112,7 +112,25 @@ export default function App() {
             </PlatformRoute>
           }
         >
-          <Route index element={<PlatformPlaceholder />} />
+          <Route index element={<PlatformWorkspace />} />
+          <Route path="actions" element={<PlatformWorkspace />} />
+          <Route path="schools" element={<PlatformWorkspace />} />
+          <Route path="people" element={<PlatformWorkspace />} />
+          <Route path="requests" element={<PlatformWorkspace />} />
+          <Route path="communications" element={<PlatformWorkspace />} />
+          <Route path="operators" element={<PlatformWorkspace />} />
+          <Route path="permissions" element={<PlatformWorkspace />} />
+          <Route path="features" element={<PlatformWorkspace />} />
+          <Route path="integrations" element={<PlatformWorkspace />} />
+          <Route path="billing" element={<PlatformWorkspace />} />
+          <Route path="data" element={<PlatformWorkspace />} />
+          <Route path="activity" element={<PlatformWorkspace />} />
+          <Route path="audit" element={<PlatformWorkspace />} />
+          <Route path="security" element={<PlatformWorkspace />} />
+          <Route path="health" element={<PlatformWorkspace />} />
+          <Route path="maintenance" element={<PlatformWorkspace />} />
+          <Route path="analytics" element={<PlatformWorkspace />} />
+          <Route path="settings" element={<PlatformWorkspace />} />
           <Route path="applications" element={<PlatformApprovalPanel />} />
         </Route>
 
@@ -158,7 +176,6 @@ export default function App() {
         >
           <Route index element={<TeacherDashboard />} />
           <Route path="classes" element={<TeacherClasses />} />
-          <Route path="timetable" element={<TeacherTimetable />} />
           <Route path="attendance" element={<TeacherAttendance />} />
           <Route path="grades" element={<TeacherGrades />} />
           <Route path="homework" element={<TeacherHomework />} />
