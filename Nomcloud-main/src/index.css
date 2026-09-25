@@ -156,7 +156,7 @@
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-300 ease-apple whitespace-nowrap select-none disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-300 ease-apple whitespace-nowrap select-none disabled:opacity-50 disabled:pointer-events-none;
   }
   .btn-primary {
     @apply btn bg-ink text-white hover:bg-[#30343A] dark:bg-white dark:text-ink dark:hover:bg-mist shadow-soft hover:shadow-card hover:-translate-y-0.5;
@@ -177,7 +177,7 @@
     @apply bg-white/70 dark:bg-[#17191C]/85 backdrop-blur-xl backdrop-saturate-150;
   }
   .card {
-    @apply rounded-3xl border border-ink/5 dark:border-[#343A41] bg-white dark:bg-[#202328] shadow-soft;
+    @apply rounded-xl border border-ink/5 dark:border-[#343A41] bg-white dark:bg-[#202328] shadow-soft;
   }
   .section {
     @apply py-24 md:py-32;
@@ -190,6 +190,49 @@
   }
   .label {
     @apply mb-1.5 block text-sm font-medium text-ink dark:text-white/90;
+  }
+
+  /* The Operator Control Center is the shared product language for every
+     workspace and the public shell. */
+  .dashboard-shell,
+  .public-site {
+    font-family: 'DM Sans', 'Segoe UI', sans-serif;
+  }
+
+  .dashboard-shell h1,
+  .dashboard-shell h2,
+  .dashboard-shell h3,
+  .public-site h1,
+  .public-site h2,
+  .public-site h3 {
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  }
+
+  .dashboard-shell .card,
+  .dashboard-shell .platform-main-card,
+  .public-site .card {
+    border-color: #e6e4df;
+    border-radius: 12px;
+    box-shadow: none;
+  }
+
+  .dashboard-shell .rounded-3xl,
+  .dashboard-shell .rounded-2xl {
+    border-radius: 12px;
+  }
+
+  .dashboard-shell table {
+    border-color: #e6e4df;
+  }
+
+  .dashboard-shell [class*='shadow-'] {
+    box-shadow: none;
+  }
+
+  .dark .dashboard-shell .card,
+  .dark .dashboard-shell .platform-main-card {
+    border-color: #343a41;
+    background-color: #202328;
   }
 
   .dark .dashboard-shell {
