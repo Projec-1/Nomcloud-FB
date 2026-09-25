@@ -248,8 +248,13 @@ export default function AnnouncementBoard({
           {visibleAnnouncements.map((a) => (
             <div
               key={a.id}
-              className={cn('card p-5', a.pinned && 'border-brand/30 ring-1 ring-brand/20', a.archivedAt && 'opacity-60')}
+              className={cn('card overflow-hidden border-t-4 border-t-[#e6252a]', a.pinned && 'ring-1 ring-brand/20', a.archivedAt && 'opacity-60')}
             >
+              <div className="border-b border-[#dbe2eb] px-5 pb-4 pt-5 text-center">
+                <img src="/logo-512.png" alt="Nom Cloud School" className="mx-auto h-14 w-14 object-contain" />
+                <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-[#e6252a]">Nom Cloud School</p>
+              </div>
+              <div className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="mb-1.5 flex flex-wrap items-center gap-2">
@@ -313,6 +318,7 @@ export default function AnnouncementBoard({
                     )}
                   </div>
                 )}
+              </div>
               </div>
             </div>
           ))}

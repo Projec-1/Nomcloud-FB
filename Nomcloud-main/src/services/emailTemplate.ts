@@ -11,9 +11,10 @@ export type BrandedEmail = {
   template: string
 }
 
-const BRAND_ORANGE = '#FF5A1F'
-const INK = '#101114'
-const MUTED = '#667085'
+const BRAND_RED = '#e6252a'
+const HEADING_BLUE = '#073b82'
+const INK = '#536273'
+const MUTED = '#536273'
 const LOGO_URL = '/logo-512.png'
 
 function escapeHtml(value: string) {
@@ -46,25 +47,23 @@ function layout({ preheader, eyebrow, title, intro, fields, actionLabel, actionU
 <html lang="en">
   <body style="margin:0;background:#f7f8fa;color:${INK};font-family:Inter,Arial,sans-serif">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(preheader)}</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f8fa;padding:32px 12px">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;padding:0">
       <tr><td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#fff;border:1px solid #e9ecef;border-radius:20px;overflow:hidden">
-          <tr><td style="padding:28px 32px;border-bottom:1px solid #f0f1f3">
-            <table role="presentation" width="100%"><tr>
-              <td><img src="${LOGO_URL}" width="34" height="34" alt="Nom Cloud" style="vertical-align:middle;border-radius:9px;margin-right:9px"><span style="vertical-align:middle;font-size:18px;font-weight:700;letter-spacing:-.4px">${'Nom Cloud'}</span></td>
-              <td align="right" style="font-size:12px;color:${MUTED}">School operations, simplified.</td>
-            </tr></table>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#fff;border:1px solid #dbe2eb;border-top:8px solid ${BRAND_RED};overflow:hidden">
+          <tr><td style="padding:32px 36px 12px;text-align:center">
+            <img src="${LOGO_URL}" width="92" height="92" alt="Nom Cloud School" style="display:block;margin:0 auto;object-fit:contain">
+            <div style="margin-top:12px;color:${BRAND_RED};font-size:20px;font-weight:700;letter-spacing:2px;text-transform:uppercase">Nom Cloud School</div>
           </td></tr>
-          <tr><td style="padding:40px 32px 28px">
-            <div style="color:${BRAND_ORANGE};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">${escapeHtml(eyebrow)}</div>
-            <h1 style="margin:12px 0 12px;font-size:30px;line-height:1.15;letter-spacing:-1px">${escapeHtml(title)}</h1>
+          <tr><td style="padding:28px 36px 36px;text-align:left">
+            <div style="color:${HEADING_BLUE};font-size:22px;font-weight:700;line-height:1.25;text-transform:uppercase">${escapeHtml(eyebrow)}</div>
+            <h1 style="margin:14px 0 14px;color:${HEADING_BLUE};font-size:25px;line-height:1.2">${escapeHtml(title)}</h1>
             <p style="margin:0;color:${MUTED};font-size:15px;line-height:1.7">${escapeHtml(intro)}</p>
             ${fields?.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:26px">${detailRows}</table>` : ''}
-            ${actionLabel && actionUrl ? `<a href="${escapeHtml(actionUrl)}" style="display:inline-block;margin-top:28px;padding:13px 20px;border-radius:999px;background:${BRAND_ORANGE};color:#fff;text-decoration:none;font-size:14px;font-weight:700">${escapeHtml(actionLabel)} &rarr;</a>` : ''}
+            ${actionLabel && actionUrl ? `<a href="${escapeHtml(actionUrl)}" style="display:inline-block;margin-top:28px;padding:13px 20px;background:${BRAND_RED};color:#fff;text-decoration:none;font-size:14px;font-weight:700">${escapeHtml(actionLabel)} &rarr;</a>` : ''}
           </td></tr>
-          <tr><td style="padding:22px 32px;background:#fafafa;color:${MUTED};font-size:12px;line-height:1.6">
+          <tr><td style="padding:22px 36px;background:#fff;color:${MUTED};font-size:12px;line-height:1.6">
             ${escapeHtml(footer ?? 'Nom Cloud · Via Liberia, Mogadishu, Somalia')}<br>
-            <a href="mailto:Sul.abdulsaq@gmail.com" style="color:${BRAND_ORANGE};text-decoration:none">Sul.abdulsaq@gmail.com</a>
+            <a href="mailto:Sul.abdulsaq@gmail.com" style="color:${BRAND_RED};text-decoration:none">Sul.abdulsaq@gmail.com</a>
           </td></tr>
         </table>
         <p style="margin:16px 0 0;color:#98a2b3;font-size:11px">© ${new Date().getFullYear()} Nom Cloud. Built for schools.</p>
@@ -121,4 +120,3 @@ export function buildWelcomeEmail(payload: { name: string; email: string; action
     template: 'welcome',
   }
 }
-

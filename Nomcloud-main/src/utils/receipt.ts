@@ -36,40 +36,31 @@ export function downloadReceiptImage(details: ReceiptDetails) {
   ctx.fillStyle = '#FFFFFF'
   ctx.fillRect(0, 0, width, height)
 
-  // Top brand band
-  const gradient = ctx.createLinearGradient(0, 0, width, 0)
-  gradient.addColorStop(0, '#FF5A1F')
-  gradient.addColorStop(1, '#0071E3')
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, width, 120)
-
-  ctx.fillStyle = '#FFFFFF'
-  ctx.font = '600 26px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
-  ctx.fillText('Nom Cloud', 40, 60)
-  ctx.font = '400 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
-  ctx.fillText('Payment Receipt', 40, 86)
-
-  ctx.fillStyle = 'rgba(255,255,255,0.85)'
-  ctx.font = '600 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
-  ctx.textAlign = 'right'
-  ctx.fillText('PAID', width - 40, 70)
+  ctx.fillStyle = '#e6252a'
+  ctx.fillRect(0, 0, width, 10)
+  ctx.fillStyle = '#e6252a'
+  ctx.font = '700 22px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('NOM CLOUD SCHOOL', width / 2, 126)
   ctx.textAlign = 'left'
 
   // Success badge
-  ctx.fillStyle = '#F5F5F7'
+  ctx.fillStyle = '#FFFFFF'
   ctx.beginPath()
-  ctx.roundRect(40, 150, width - 80, 90, 20)
+  ctx.roundRect(40, 170, width - 80, 90, 4)
   ctx.fill()
-  ctx.fillStyle = '#1D1D1F'
+  ctx.strokeStyle = '#dbe2eb'
+  ctx.stroke()
+  ctx.fillStyle = '#073b82'
   ctx.font = '600 30px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
   ctx.fillText(
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(details.amount),
     62,
-    205,
+    225,
   )
-  ctx.fillStyle = '#6E6E73'
+  ctx.fillStyle = '#536273'
   ctx.font = '400 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
-  ctx.fillText('Amount Paid', 62, 227)
+  ctx.fillText('Amount Paid', 62, 247)
 
   // Detail rows
   const rows: [string, string][] = [
@@ -82,7 +73,7 @@ export function downloadReceiptImage(details: ReceiptDetails) {
     ['Date', new Date(details.date).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })],
   ]
 
-  let y = 290
+  let y = 320
   rows.forEach(([label, value], i) => {
     if (i > 0) {
       ctx.strokeStyle = '#E5E5E7'
@@ -91,7 +82,7 @@ export function downloadReceiptImage(details: ReceiptDetails) {
       ctx.lineTo(width - 40, y - 22)
       ctx.stroke()
     }
-    ctx.fillStyle = '#6E6E73'
+    ctx.fillStyle = '#536273'
     ctx.font = '400 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
     ctx.fillText(label, 40, y)
     ctx.fillStyle = '#1D1D1F'

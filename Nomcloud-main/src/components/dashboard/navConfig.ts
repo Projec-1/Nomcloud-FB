@@ -21,6 +21,7 @@ import {
   Clock3,
   FolderOpen,
   TrendingUp,
+  FileText,
 } from 'lucide-react'
 import type { Role } from '@/types'
 

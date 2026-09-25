@@ -134,6 +134,10 @@ const navGroups = [
       { label: 'Integrations', path: '/platform/integrations', icon: PlugsConnected },
       { label: 'Billing', path: '/platform/billing', icon: CreditCard },
       { label: 'Data', path: '/platform/data', icon: Database },
+      { label: 'Email Templates', path: '/platform/templates/email', icon: FileText },
+      { label: 'Announcement Templates', path: '/platform/templates/announcements', icon: Megaphone },
+      { label: 'Money Receipt Templates', path: '/platform/templates/receipts', icon: FileText },
+      { label: 'Record Templates', path: '/platform/templates/records', icon: FileText },
     ],
   },
   {
