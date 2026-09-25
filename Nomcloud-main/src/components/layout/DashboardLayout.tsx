@@ -9,7 +9,7 @@ export default function DashboardLayout({ role }: { role: Role }) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <div className={`${role === 'admin' ? 'admin-workspace' : ''} flex min-h-screen bg-mist dark:bg-[#0B0B0D]`}>
+    <div className={`${role === 'admin' ? 'admin-workspace' : ''} flex min-h-screen bg-mist dark:bg-[#17191C]`}>
       <Sidebar role={role} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <DemoModeBanner />

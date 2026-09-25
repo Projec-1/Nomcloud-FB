@@ -13,8 +13,8 @@ export default function PlatformLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-[#111827] text-white">
-      <header className="border-b border-white/10 bg-[#0B1220]">
+    <div className="min-h-screen bg-[#202328] text-white">
+      <header className="border-b border-[#343A41] bg-[#17191C]">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-8">
           <button onClick={() => navigate('/platform')} className="flex items-center gap-3 text-left">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-white"><ShieldCheck className="h-5 w-5" /></span>

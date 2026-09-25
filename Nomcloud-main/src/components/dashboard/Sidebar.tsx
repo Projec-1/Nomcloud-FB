@@ -70,13 +70,13 @@ export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-64 flex-shrink-0 overflow-hidden border-r border-ink/5 bg-white dark:border-white/10 dark:bg-[#0F0F11] lg:block">
+      <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-64 flex-shrink-0 overflow-hidden border-r border-ink/5 bg-white dark:border-[#343A41] dark:bg-[#202328] lg:block">
         {content}
       </aside>
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-          <aside className="dashboard-sidebar absolute inset-y-0 left-0 h-screen w-72 overflow-hidden bg-white shadow-floaty animate-fade-up dark:bg-[#0F0F11]">{content}</aside>
+          <aside className="dashboard-sidebar absolute inset-y-0 left-0 h-screen w-72 overflow-hidden bg-white shadow-floaty animate-fade-up dark:bg-[#202328]">{content}</aside>
         </div>
       )}
     </>

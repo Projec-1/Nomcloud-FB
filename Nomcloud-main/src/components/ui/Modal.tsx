@@ -41,7 +41,7 @@ export default function Modal({ open, onClose, title, description, children, siz
       <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <div
         className={cn(
-          'relative w-full overflow-hidden rounded-3xl bg-white dark:bg-[#161618] shadow-floaty animate-fade-up max-h-[90vh] flex flex-col',
+          'modal-content relative w-full overflow-hidden rounded-3xl bg-white dark:bg-[#202328] shadow-floaty animate-fade-up max-h-[90vh] flex flex-col',
           sizeClass[size],
         )}
       >
