@@ -133,7 +133,7 @@ export default function TeacherDashboard() {
   }
 
   return (
-    <div>
+    <div className="teacher-dashboard">
       <div className="teacher-dashboard__header">
         <p className="teacher-dashboard__eyebrow">Teacher workspace</p>
         <PageHeader
