@@ -189,6 +189,10 @@ export default function App() {
           <Route path="attendance" element={<TeacherAttendance />} />
           <Route path="grades" element={<TeacherGrades />} />
           <Route path="homework" element={<TeacherHomework />} />
+          <Route path="assignments" element={<TeacherWorkspace />} />
+          <Route path="lessons" element={<TeacherWorkspace />} />
+          <Route path="exams" element={<TeacherWorkspace />} />
+          <Route path="class-performance" element={<TeacherWorkspace />} />
           <Route path="announcements" element={<TeacherAnnouncements />} />
           <Route path="messages" element={<TeacherMessages />} />
           <Route path="tutorials" element={<TeacherTutorials />} />

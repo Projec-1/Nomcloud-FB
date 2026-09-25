@@ -36,7 +36,7 @@ export default function TeacherWorkspace() {
   const lessons = loadMockLessons().filter((lesson) => lesson.type === 'lesson' && lesson.teacher === MOCK_TEACHERS[0].name)
   const filteredStudents = students.filter((student) => (classFilter === 'all' || student.classId === classFilter) && `${student.name} ${student.id}`.toLowerCase().includes(query.toLowerCase()))
 
-  const title: Record<string, string> = { 'my-day': 'My Day', students: 'My Students', resources: 'Teaching Resources', progress: 'Student Progress', profile: 'Teacher Profile', notifications: 'Notifications' }
+  const title: Record<string, string> = { 'my-day': 'My Day', students: 'My Students', resources: 'Teaching Resources', progress: 'Student Progress', profile: 'Teacher Profile', notifications: 'Notifications', assignments: 'Assignments', lessons: 'Lessons', exams: 'Exams', 'class-performance': 'Class Performance' }
   let content: React.ReactNode
   if (section === 'timetable') content = <TimetableView lessons={lessons} onSelect={setSelectedLesson} navigate={navigate} />
   else if (section === 'my-day') content = <MyDay lessons={lessons} onSelect={setSelectedLesson} navigate={navigate} />
@@ -44,6 +44,10 @@ export default function TeacherWorkspace() {
   else if (section === 'resources') content = <ResourceView onNotify={() => setModal('lesson')} />
   else if (section === 'profile') content = <ProfileView onNotify={() => setModal('profile')} />
   else if (section === 'notifications') content = <NotificationView navigate={navigate} />
+  else if (section === 'assignments') content = <AssignmentView assignments={assignments} onCreate={() => setModal('assignment')} />
+  else if (section === 'lessons') content = <LessonView lessons={lessons} onSelect={setSelectedLesson} />
+  else if (section === 'exams') content = <ExamView />
+  else if (section === 'class-performance') content = <PerformanceView />
   else content = <TeacherOverview lessons={lessons} assignments={assignments} onCreate={() => setModal('assignment')} navigate={navigate} />
 
   return <>
@@ -107,4 +111,20 @@ function ProfileView({ onNotify }: { onNotify: () => void }) {
 
 function NotificationView({ navigate }: { navigate: (path: string) => void }) {
   return <Shell title="Notifications" description="Updates from administration and activity in your assigned classes."><div className="card divide-y divide-ink/5">{[['New timetable published', '/app/teacher/timetable'], ['Grade 7A assignment is due tomorrow', '/app/teacher/homework'], ['Administration published a new announcement', '/app/teacher/announcements'], ['Parent replied to your message', '/app/teacher/messages']].map(([title, path]) => <button key={title} onClick={() => navigate(path)} className="flex w-full items-center gap-3 p-5 text-left hover:bg-brand/5"><Activity className="h-5 w-5 text-brand" /><span className="flex-1 text-sm font-semibold">{title}</span><Check className="h-4 w-4 text-emerald-500" /></button>)}</div></Shell>
+}
+
+function AssignmentView({ assignments, onCreate }: { assignments: typeof initialAssignments; onCreate: () => void }) {
+  return <Shell title="Assignments" description="Create and track work for your assigned classes." action={<Button variant="accent" onClick={onCreate}><Plus className="h-4 w-4" /> New assignment</Button>}><div className="card divide-y divide-ink/5">{assignments.map((item) => <div key={item.id} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center"><ClipboardText className="h-5 w-5 text-brand" /><div className="flex-1"><p className="font-semibold">{item.title}</p><p className="text-xs text-graphite">{item.subject} · Grade 7 · Managed by you</p></div><Badge tone={item.status === 'Published' ? 'success' : 'warning'}>{item.status}</Badge></div>)}</div></Shell>
+}
+
+function LessonView({ lessons, onSelect }: { lessons: MockLesson[]; onSelect: (lesson: MockLesson) => void }) {
+  return <Shell title="Lessons" description="Your upcoming lessons, connected to the administrator timetable."><div className="grid gap-4 md:grid-cols-2">{lessons.map((lesson) => <button key={lesson.id} onClick={() => onSelect(lesson)} className="card flex items-center gap-4 p-5 text-left hover:border-brand/40"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand/10 text-brand"><BookOpen className="h-5 w-5" /></div><div className="flex-1"><p className="font-semibold">{lesson.subject}</p><p className="mt-1 text-xs text-graphite">{lesson.startTime}–{lesson.endTime} · Grade 7 · {lesson.teacher}</p></div><span className="text-xs font-semibold text-brand">Open</span></button>)}</div></Shell>
+}
+
+function ExamView() {
+  return <Shell title="Exams" description="Prepare, review, and track upcoming assessments."><div className="grid gap-4 md:grid-cols-2"><div className="card p-5"><p className="text-xs font-bold uppercase tracking-wider text-brand">Upcoming</p><h2 className="mt-3 text-lg font-semibold">Term 1 Mathematics Assessment</h2><p className="mt-2 text-sm text-graphite">Grade 7 · October 8 · 09:00</p><Badge className="mt-5" tone="warning">Draft schedule</Badge></div><div className="card p-5"><p className="text-xs font-bold uppercase tracking-wider text-brand">Published</p><h2 className="mt-3 text-lg font-semibold">English Reading Assessment</h2><p className="mt-2 text-sm text-graphite">Grade 7 · September 20 · 81% class average</p><Badge className="mt-5" tone="success">Results available</Badge></div></div></Shell>
+}
+
+function PerformanceView() {
+  return <Shell title="Class Performance" description="A quick view of progress across your assigned classes."><div className="grid gap-4 sm:grid-cols-3">{[['Grade 7', '86%', 'On track'], ['Grade 6', '79%', 'Needs review'], ['Grade 5', '91%', 'Excellent']].map(([name, score, status]) => <div key={name} className="card p-5"><p className="text-sm font-semibold">{name}</p><p className="mt-5 text-3xl font-semibold text-brand">{score}</p><p className="mt-2 text-xs text-graphite">{status}</p><div className="mt-4 h-2 rounded-full bg-ink/10"><div className="h-2 rounded-full bg-brand" style={{ width: score }} /></div></div>)}</div></Shell>
 }
