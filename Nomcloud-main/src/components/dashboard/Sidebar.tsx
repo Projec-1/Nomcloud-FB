@@ -28,24 +28,28 @@ export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
       </div>
       <p className="px-5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-graphite/70">{t(roleLabelKey[role])} Workspace</p>
       <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4 [scrollbar-gutter:stable]">
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={onClose}
-            className={({ isActive }: { isActive: boolean }) =>
-              cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
-                isActive
-                  ? 'bg-brand/10 text-brand'
-                  : 'text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white',
-              )
-            }
-          >
-            <item.icon className="h-4 w-4 flex-shrink-0" />
-            {t(item.labelKey)}
-          </NavLink>
+        {items.map((item, index) => (
+          <div key={item.to}>
+            {item.group && (index === 0 || items[index - 1].group !== item.group) && (
+              <p className="px-3 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-graphite/60">{item.group}</p>
+            )}
+            <NavLink
+              to={item.to}
+              end={item.end}
+              onClick={onClose}
+              className={({ isActive }: { isActive: boolean }) =>
+                cn(
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
+                  isActive
+                    ? 'bg-brand/10 text-brand'
+                    : 'text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white',
+                )
+              }
+            >
+              <item.icon className="h-4 w-4 flex-shrink-0" />
+              {t(item.labelKey)}
+            </NavLink>
+          </div>
         ))}
       </nav>
       <div className="space-y-1 border-t border-ink/5 px-3 py-4 dark:border-white/10">

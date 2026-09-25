@@ -453,6 +453,7 @@ export const translations: Record<Lang, Dict> = {
 
     // Dashboard shell
     'dash.nav.dashboard': 'Dashboard',
+    'dash.nav.overview': 'Overview',
     'dash.nav.students': 'Students',
     'dash.nav.teachers': 'Teachers',
     'dash.nav.guardians': 'Guardians',
@@ -463,6 +464,7 @@ export const translations: Record<Lang, Dict> = {
     'dash.nav.myChildren': 'My Children',
     'dash.nav.attendance': 'Attendance',
     'dash.nav.grades': 'Grades',
+    'dash.nav.results': 'Results',
     'dash.nav.homework': 'Homework',
     'dash.nav.exams': 'Exams',
     'dash.nav.fees': 'Fees & Payments',
@@ -475,6 +477,11 @@ export const translations: Record<Lang, Dict> = {
     'dash.nav.settings': 'Settings',
     'dash.nav.messages': 'Messages',
     'dash.nav.notifications': 'Notifications',
+    'dash.nav.myDay': 'My Day',
+    'dash.nav.myStudents': 'My Students',
+    'dash.nav.resources': 'Resources',
+    'dash.nav.progress': 'Student Progress',
+    'dash.nav.profile': 'Profile',
     'dash.role.admin': 'Administrator',
     'dash.role.teacher': 'Teacher',
     'dash.role.parent': 'Parent',
