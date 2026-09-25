@@ -122,7 +122,7 @@ function importedStudentsForSchool(schoolId: string): DirectoryStudent[] {
 }
 
 function normalizeHeader(value: unknown) {
-  return String(value ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '')
+  return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '')
 }
 
 function cell(row: Record<string, unknown>, aliases: string[]) {
