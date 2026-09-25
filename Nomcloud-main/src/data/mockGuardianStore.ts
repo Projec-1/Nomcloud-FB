@@ -5,16 +5,18 @@ export type MockGuardian = {
   phone: string
   email: string | null
   relationship: string | null
-  studentName: string
-  studentId: string
+  children: { studentName: string; studentId: string }[]
 }
 
 const STORAGE_KEY = 'nomcloud_mock_guardians'
 
 export function loadMockGuardians(schoolId: string): MockGuardian[] {
   try {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as MockGuardian[]
-    return all.filter((guardian) => guardian.schoolId === schoolId)
+    const all = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as (MockGuardian & { studentName?: string; studentId?: string })[]
+    return all.filter((guardian) => guardian.schoolId === schoolId).map((guardian) => ({
+      ...guardian,
+      children: guardian.children ?? (guardian.studentId ? [{ studentId: guardian.studentId, studentName: guardian.studentName ?? 'Student' }] : []),
+    }))
   } catch {
     return []
   }
@@ -28,9 +30,16 @@ export function saveMockGuardian(guardian: MockGuardian) {
       return []
     }
   })()
-  const key = `${guardian.schoolId}:${guardian.studentId}:${guardian.phone.toLowerCase()}`
-  const next = all.filter((item) => `${item.schoolId}:${item.studentId}:${item.phone.toLowerCase()}` !== key)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...next, guardian]))
+  const identity = (guardian.phone || guardian.email || guardian.name).trim().toLowerCase()
+  const existingIndex = all.findIndex((item) => item.schoolId === guardian.schoolId && (item.phone || item.email || item.name).trim().toLowerCase() === identity)
+  if (existingIndex < 0) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...all, guardian]))
+    return
+  }
+  const existing = all[existingIndex]
+  const children = [...(existing.children ?? []), ...guardian.children].filter((child, index, list) => list.findIndex((item) => item.studentId === child.studentId) === index)
+  all[existingIndex] = { ...existing, ...guardian, children }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all))
 }
 
 export function saveMockGuardians(guardians: MockGuardian[]) {

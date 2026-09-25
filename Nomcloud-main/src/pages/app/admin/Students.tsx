@@ -422,8 +422,7 @@ export default function AdminStudents() {
           phone: form.newGuardianPhone,
           email: form.newGuardianEmail || null,
           relationship: form.guardianRelationship || null,
-          studentName: form.name,
-          studentId,
+          children: [{ studentName: form.name, studentId }],
         }])
       }
 
@@ -572,7 +571,7 @@ export default function AdminStudents() {
         className: classMatch?.name ?? row.className,
         guardians: row.guardian ? [{ id: `mock-guardian-${Date.now()}-${index}`, name: row.guardian, isPrimary: true, relationship: row.relationship || null }] : [],
       }
-      if (row.guardian && row.parentPhone) importedGuardians.push({ id: `mock-guardian-${Date.now()}-${index}`, schoolId, name: row.guardian, phone: row.parentPhone, email: null, relationship: row.relationship || null, studentName: row.name, studentId: student.id })
+      if (row.guardian && row.parentPhone) importedGuardians.push({ id: `mock-guardian-${Date.now()}-${index}`, schoolId, name: row.guardian, phone: row.parentPhone, email: null, relationship: row.relationship || null, children: [{ studentName: row.name, studentId: student.id }] })
       return student
     })
     saveMockGuardians(importedGuardians)

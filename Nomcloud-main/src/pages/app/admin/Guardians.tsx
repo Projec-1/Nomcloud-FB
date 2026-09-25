@@ -9,6 +9,7 @@ import Avatar from '@/components/ui/Avatar'
 import EmptyState from '@/components/ui/EmptyState'
 import ResourceGate from '@/components/ui/ResourceGate'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import Modal from '@/components/ui/Modal'
 import { deriveResourceState } from '@/lib/resourceState'
 import { fetchGuardianDirectory, type GuardianDirectoryRow } from '@/services/guardianService'
 import { avatarColorForId } from '@/services/studentService'
@@ -53,6 +54,8 @@ export default function AdminGuardians() {
   const [bulkRunning, setBulkRunning] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<BulkInviteProgress | null>(null)
   const [bulkResults, setBulkResults] = useState<BulkInviteResult[] | null>(null)
+  const [selectedGuardian, setSelectedGuardian] = useState<GuardianDirectoryRow | null>(null)
+  const [page, setPage] = useState(1)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -76,7 +79,7 @@ export default function AdminGuardians() {
           status: 'active',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          studentNames: [guardian.studentName],
+          studentNames: guardian.children.map((child) => child.studentName),
         }))
         const merged = [...rows]
         mockRows.forEach((mockGuardian) => {
@@ -121,6 +124,9 @@ export default function AdminGuardians() {
         g.studentNames.some((name) => name.toLowerCase().includes(q)),
     )
   }, [guardians, search])
+  const pageSize = 25
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const visibleGuardians = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   const invite = async (guardian: GuardianDirectoryRow) => {
     if (!schoolId) return
@@ -228,7 +234,7 @@ export default function AdminGuardians() {
         {() => (
           <>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <SearchInput value={search} onChange={setSearch} placeholder="Search by name, email, phone or child…" className="sm:w-96" />
+              <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1) }} placeholder="Search by name, email, phone or child…" className="sm:w-96" />
             </div>
 
             <BulkInviteBar
@@ -267,7 +273,7 @@ export default function AdminGuardians() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((g) => {
+                    {visibleGuardians.map((g) => {
                       const a = access.get(g.id)
                       const pending = g.email ? invitations.get(g.email.toLowerCase()) : undefined
                       return (
@@ -285,7 +291,7 @@ export default function AdminGuardians() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <Avatar name={g.full_name} color={avatarColorForId(g.id)} size="sm" />
-                              <p className="font-medium text-ink dark:text-white">{g.full_name}</p>
+                              <button type="button" onClick={() => setSelectedGuardian(g)} className="font-medium text-ink hover:text-brand dark:text-white">{g.full_name}</button>
                             </div>
                           </td>
                           <td className="px-5 py-3.5 text-graphite">{g.email ?? <span className="text-xs">No email</span>}</td>
@@ -336,9 +342,25 @@ export default function AdminGuardians() {
                 </table>
               </div>
             )}
+            {filtered.length > 0 && (
+              <div className="mt-4 flex items-center justify-between text-xs text-graphite">
+                <span>{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}</span>
+                <div className="flex gap-2">
+                  <button className="rounded-lg border border-ink/10 px-3 py-1.5 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</button>
+                  <button className="rounded-lg border border-ink/10 px-3 py-1.5 disabled:opacity-40" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </ResourceGate>
+      <Modal open={Boolean(selectedGuardian)} onClose={() => setSelectedGuardian(null)} title={selectedGuardian?.full_name} description="Parent profile">
+        {selectedGuardian && <div className="space-y-4 text-sm">
+          <div><p className="text-xs text-graphite">Phone</p><p className="font-medium">{selectedGuardian.phone}</p></div>
+          <div><p className="text-xs text-graphite">Email</p><p className="font-medium">{selectedGuardian.email ?? 'No email'}</p></div>
+          <div><p className="text-xs text-graphite">Linked children</p><div className="mt-2 space-y-2">{selectedGuardian.studentNames.map((name) => <p key={name} className="rounded-lg bg-mist/60 px-3 py-2 font-medium">{name}</p>)}</div></div>
+        </div>}
+      </Modal>
 
       <ConfirmDialog
         open={!!accessTarget}
