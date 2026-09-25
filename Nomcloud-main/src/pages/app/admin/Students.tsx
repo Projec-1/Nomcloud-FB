@@ -43,6 +43,7 @@ import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
 import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
 import { errorMessage, toError } from '@/utils/errorMessage'
 import * as XLSX from 'xlsx'
+import { saveMockGuardians, type MockGuardian } from '@/data/mockGuardianStore'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Real students, enrolments and guardian links.
@@ -414,6 +415,16 @@ export default function AdminStudents() {
         guardianNote = form.guardianIsPrimary
           ? `${form.newGuardianName} was added as the primary contact.`
           : `${form.newGuardianName} was added as a guardian.`
+        saveMockGuardians([{
+          id: guardianId,
+          schoolId,
+          name: form.newGuardianName,
+          phone: form.newGuardianPhone,
+          email: form.newGuardianEmail || null,
+          relationship: form.guardianRelationship || null,
+          studentName: form.name,
+          studentId,
+        }])
       }
 
       // The invitation goes through send-invitation, exactly as the Guardians
@@ -544,9 +555,10 @@ export default function AdminStudents() {
     const validRows = bulkRows.filter((row) => row.valid)
     setBulkImporting(true)
     await new Promise((resolve) => window.setTimeout(resolve, 700))
+    const importedGuardians: MockGuardian[] = []
     const imported = validRows.map((row, index): DirectoryStudent => {
       const classMatch = classes.find((item) => item.name.toLowerCase() === row.className.toLowerCase() || item.id.toLowerCase() === row.className.toLowerCase())
-      return {
+      const student = {
         id: `mock-import-${Date.now()}-${index}`,
         name: row.name,
         admissionNo: row.admissionNo || `IMPORT-${Date.now()}-${index + 1}`,
@@ -560,7 +572,10 @@ export default function AdminStudents() {
         className: classMatch?.name ?? row.className,
         guardians: row.guardian ? [{ id: `mock-guardian-${Date.now()}-${index}`, name: row.guardian, isPrimary: true, relationship: row.relationship || null }] : [],
       }
+      if (row.guardian && row.parentPhone) importedGuardians.push({ id: `mock-guardian-${Date.now()}-${index}`, schoolId, name: row.guardian, phone: row.parentPhone, email: null, relationship: row.relationship || null, studentName: row.name, studentId: student.id })
+      return student
     })
+    saveMockGuardians(importedGuardians)
     const existingImported = importedStudentsForSchool(schoolId)
     const importedByKey = new Map(existingImported.map((student) => [student.admissionNo.toLowerCase() || student.name.toLowerCase(), student]))
     imported.forEach((student) => importedByKey.set(student.admissionNo.toLowerCase() || student.name.toLowerCase(), student))
