@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { ArrowRight, KeyRound, Lock } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, KeyRound, Lock } from 'lucide-react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
@@ -18,10 +18,7 @@ import { MIN_PASSWORD_LENGTH, isValidPassword } from '@/utils/validators'
 // PlatformRoute send them here; this page sends them away again once the
 // requirement is gone, so the two cannot loop.
 //
-// Both fields are ordinary password inputs with no reveal control: unlike the
-// reset screen, the person is typing in a session opened by a password someone
-// else generated and may have sent to them, so nothing here puts a password on
-// screen in clear text.
+// The invited operator can reveal either field while choosing a new password.
 // ---------------------------------------------------------------------------
 
 export default function FirstLoginPassword() {
@@ -29,6 +26,8 @@ export default function FirstLoginPassword() {
   const { authState, authUser, displayName } = useAuth()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -77,7 +76,7 @@ export default function FirstLoginPassword() {
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         <Input
           label="New password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           required
           icon={<Lock className="h-4 w-4" />}
           value={password}
@@ -85,15 +84,21 @@ export default function FirstLoginPassword() {
           placeholder="••••••••"
           hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
         />
+        <button type="button" onClick={() => setShowPassword((value) => !value)} className="-mt-3 flex items-center gap-1.5 text-xs font-medium text-graphite hover:text-ink dark:hover:text-white">
+          {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />} {showPassword ? 'Hide password' : 'Show password'}
+        </button>
         <Input
           label="Confirm new password"
-          type="password"
+          type={showConfirmPassword ? 'text' : 'password'}
           required
           icon={<Lock className="h-4 w-4" />}
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
           placeholder="••••••••"
         />
+        <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} className="-mt-3 flex items-center gap-1.5 text-xs font-medium text-graphite hover:text-ink dark:hover:text-white">
+          {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />} {showConfirmPassword ? 'Hide password' : 'Show password'}
+        </button>
         {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">{error}</p>}
         <Button type="submit" size="lg" loading={saving} className="w-full">
           Save password <ArrowRight className="h-4 w-4" />

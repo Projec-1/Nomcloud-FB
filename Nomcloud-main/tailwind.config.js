@@ -13,9 +13,9 @@ export default {
         mist: '#F5F5F7',
         graphite: '#6E6E73',
         accent: {
-          DEFAULT: '#0071E3',
-          dark: '#0059B3',
-          light: '#2B9EFF',
+          DEFAULT: '#F05A28',
+          dark: '#C9471B',
+          light: '#FF7847',
         },
         surface: {
           DEFAULT: '#FFFFFF',
@@ -31,31 +31,22 @@ export default {
       },
       fontFamily: {
         sans: [
-          '-apple-system',
-          'BlinkMacSystemFont',
-          '"SF Pro Display"',
-          '"SF Pro Text"',
-          'Inter',
+          '"DM Sans"',
           'Segoe UI',
           'Roboto',
           'Helvetica Neue',
           'Arial',
           'sans-serif',
         ],
+        display: ['"Space Grotesk"', '"DM Sans"', 'sans-serif'],
       },
       fontSize: {
         'display-xl': ['clamp(3rem, 6vw, 6.5rem)', { lineHeight: '1.02', letterSpacing: '-0.03em', fontWeight: '600' }],
         'display-lg': ['clamp(2.5rem, 5vw, 4.5rem)', { lineHeight: '1.04', letterSpacing: '-0.03em', fontWeight: '600' }],
         'display-md': ['clamp(2rem, 3.4vw, 3rem)', { lineHeight: '1.08', letterSpacing: '-0.02em', fontWeight: '600' }],
       },
-      boxShadow: {
-        soft: '0 1px 2px rgba(0,0,0,0.04), 0 8px 24px -6px rgba(0,0,0,0.08)',
-        card: '0 2px 8px rgba(0,0,0,0.04), 0 20px 40px -12px rgba(0,0,0,0.12)',
-        floaty: '0 30px 60px -20px rgba(0,0,0,0.25)',
-      },
-      backgroundImage: {
-        'mesh-orange': 'radial-gradient(60% 60% at 20% 20%, rgba(255,90,31,0.16) 0%, rgba(255,90,31,0) 60%), radial-gradient(50% 50% at 85% 30%, rgba(0,113,227,0.14) 0%, rgba(0,113,227,0) 60%)',
-      },
+      boxShadow: { soft: 'none', card: 'none', floaty: 'none' },
+      backgroundImage: {},
       animation: {
         'fade-up': 'fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) both',
         'fade-in': 'fadeIn 0.6s ease both',

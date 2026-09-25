@@ -27,25 +27,29 @@ export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
         </button>
       </div>
       <p className="px-5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-graphite/70">{t(roleLabelKey[role])} Workspace</p>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={onClose}
-            className={({ isActive }: { isActive: boolean }) =>
-              cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
-                isActive
-                  ? 'bg-brand/10 text-brand'
-                  : 'text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white',
-              )
-            }
-          >
-            <item.icon className="h-4 w-4 flex-shrink-0" />
-            {t(item.labelKey)}
-          </NavLink>
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4 [scrollbar-gutter:stable]">
+        {items.map((item, index) => (
+          <div key={item.to}>
+            {item.group && (index === 0 || items[index - 1].group !== item.group) && (
+              <p className="px-3 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-graphite/60">{item.group}</p>
+            )}
+            <NavLink
+              to={item.to}
+              end={item.end}
+              onClick={onClose}
+              className={({ isActive }: { isActive: boolean }) =>
+                cn(
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
+                  isActive
+                    ? 'bg-brand/10 text-brand'
+                    : 'text-graphite hover:bg-ink/5 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white',
+                )
+              }
+            >
+              <item.icon className="h-4 w-4 flex-shrink-0" />
+              {t(item.labelKey)}
+            </NavLink>
+          </div>
         ))}
       </nav>
       <div className="space-y-1 border-t border-ink/5 px-3 py-4 dark:border-white/10">
@@ -67,13 +71,13 @@ export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      <aside className="dashboard-sidebar hidden w-64 flex-shrink-0 border-r border-ink/5 bg-white dark:border-white/10 dark:bg-[#0F0F11] lg:block">
+      <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-64 flex-shrink-0 overflow-hidden border-r border-ink/5 bg-white dark:border-white/10 dark:bg-[#0F0F11] lg:block">
         {content}
       </aside>
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-          <aside className="dashboard-sidebar absolute inset-y-0 left-0 w-72 bg-white shadow-floaty animate-fade-up dark:bg-[#0F0F11]">{content}</aside>
+          <aside className="dashboard-sidebar absolute inset-y-0 left-0 h-screen w-72 overflow-hidden bg-white shadow-floaty animate-fade-up dark:bg-[#0F0F11]">{content}</aside>
         </div>
       )}
     </>

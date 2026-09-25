@@ -5,7 +5,6 @@ import Select from '@/components/ui/Select'
 import Badge from '@/components/ui/Badge'
 import Avatar from '@/components/ui/Avatar'
 import AccessDenied from '@/components/ui/AccessDenied'
-import Modal from '@/components/ui/Modal'
 import { useAuth } from '@/context/AuthContext'
 import { ACTIVITY_TYPE_LABELS, MOCK_TEACHER_ACTIVITY, type ActivityType } from '@/data/mockTeacherActivity'
 import { MOCK_CLASSES, MOCK_TEACHERS } from '@/data/mockTimetable'
@@ -31,19 +30,14 @@ export default function AdminTeacherActivity() {
   const [teacherId, setTeacherId] = useState('all')
   const [classId, setClassId] = useState('all')
   const [type, setType] = useState<'all' | ActivityType>('all')
-  const [search, setSearch] = useState('')
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday'>('all')
-  const [selectedActivity, setSelectedActivity] = useState<(typeof MOCK_TEACHER_ACTIVITY)[number] | null>(null)
 
   const filtered = useMemo(
     () => MOCK_TEACHER_ACTIVITY.filter((item) =>
       (teacherId === 'all' || item.teacherId === teacherId) &&
       (classId === 'all' || item.classId === classId) &&
-      (type === 'all' || item.type === type) &&
-      (dateFilter === 'all' || (dateFilter === 'today' ? item.occurredAt.startsWith('Today') : item.occurredAt.startsWith('Yesterday'))) &&
-      `${item.teacherName} ${item.action} ${item.detail} ${item.className} ${item.subject}`.toLowerCase().includes(search.trim().toLowerCase()),
+      (type === 'all' || item.type === type),
     ),
-    [teacherId, classId, type, dateFilter, search],
+    [teacherId, classId, type],
   )
 
   const selectedClass = MOCK_CLASSES.find((item) => item.id === classId)
@@ -71,8 +65,7 @@ export default function AdminTeacherActivity() {
 
       <div className="mb-6 rounded-2xl border border-ink/5 bg-white p-4 shadow-[0_12px_35px_rgba(20,20,20,0.04)] dark:border-white/10 dark:bg-[#161618]">
         <div className="mb-4 flex items-center gap-2"><Activity className="h-4 w-4 text-[#FF5A1F]" /><h2 className="font-semibold text-ink dark:text-white">Filter activity</h2></div>
-        <div className="mb-4"><input className="input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search teacher, action, class, or subject" /></div>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <Select label="Teacher" value={teacherId} onChange={(event) => setTeacherId(event.target.value)}>
             <option value="all">All teachers</option>
             {MOCK_TEACHERS.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name} · {teacher.subject}</option>)}
@@ -84,11 +77,6 @@ export default function AdminTeacherActivity() {
           <Select label="Activity type" value={type} onChange={(event) => setType(event.target.value as 'all' | ActivityType)}>
             <option value="all">All activity</option>
             {Object.entries(ACTIVITY_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </Select>
-          <Select label="Date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value as typeof dateFilter)}>
-            <option value="all">All dates</option>
-            <option value="today">Today</option>
-            <option value="yesterday">Yesterday</option>
           </Select>
         </div>
       </div>
@@ -108,18 +96,15 @@ export default function AdminTeacherActivity() {
           <div className="divide-y divide-ink/5 dark:divide-white/10">
             {filtered.map((item) => {
               const Icon = icons[item.type]
-              return <button type="button" key={item.id} onClick={() => setSelectedActivity(item)} className="flex w-full flex-col gap-3 px-5 py-5 text-left transition-colors hover:bg-ink/[0.015] dark:hover:bg-white/[0.02] sm:flex-row sm:gap-4">
+              return <div key={item.id} className="flex flex-col gap-3 px-5 py-5 transition-colors hover:bg-ink/[0.015] dark:hover:bg-white/[0.02] sm:flex-row sm:gap-4">
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tones[item.type]}`}><Icon className="h-4 w-4" /></div>
                 <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-ink dark:text-white">{item.action}</p><Badge tone="neutral">{ACTIVITY_TYPE_LABELS[item.type]}</Badge></div><p className="mt-1 text-sm text-graphite">{item.teacherName} · {item.className} · {item.subject}</p><p className="mt-1 text-sm text-ink/75 dark:text-white/70">{item.detail}</p></div>
                 <div className="flex shrink-0 items-center gap-1 text-xs text-graphite sm:items-start"><Clock3 className="h-3.5 w-3.5" />{item.occurredAt}</div>
-              </button>
+              </div>
             })}
           </div>
         ) : <div className="px-5 py-14 text-center text-sm text-graphite">No activity matches these filters.</div>}
       </section>
-      <Modal open={Boolean(selectedActivity)} onClose={() => setSelectedActivity(null)} title={selectedActivity?.action ?? 'Activity details'} description={selectedActivity ? `${selectedActivity.teacherName} · ${selectedActivity.occurredAt}` : ''}>
-        {selectedActivity && <div className="space-y-3 text-sm"><p><span className="text-graphite">Class:</span> {selectedActivity.className}</p><p><span className="text-graphite">Subject:</span> {selectedActivity.subject}</p><p><span className="text-graphite">Activity type:</span> {ACTIVITY_TYPE_LABELS[selectedActivity.type]}</p><p><span className="text-graphite">Details:</span> {selectedActivity.detail}</p></div>}
-      </Modal>
     </div>
   )
 }

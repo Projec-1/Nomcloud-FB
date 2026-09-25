@@ -18,6 +18,9 @@ import {
   UserCircle,
   PlayCircle,
   Activity,
+  Clock3,
+  FolderOpen,
+  TrendingUp,
 } from 'lucide-react'
 import type { Role } from '@/types'
 
@@ -26,6 +29,7 @@ export interface NavItem {
   labelKey: string
   icon: LucideIcon
   end?: boolean
+  group?: string
 }
 
 export const navByRole: Record<Role, NavItem[]> = {
@@ -51,26 +55,36 @@ export const navByRole: Record<Role, NavItem[]> = {
   ],
   teacher: [
     { to: '/app/teacher', labelKey: 'dash.nav.dashboard', icon: LayoutDashboard, end: true },
+    { to: '/app/teacher/my-day', labelKey: 'dash.nav.myDay', icon: Clock3 },
     { to: '/app/teacher/classes', labelKey: 'dash.nav.myClasses', icon: BookOpen },
     { to: '/app/teacher/timetable', labelKey: 'dash.nav.timetable', icon: Table2 },
     { to: '/app/teacher/attendance', labelKey: 'dash.nav.attendance', icon: CalendarCheck },
     { to: '/app/teacher/grades', labelKey: 'dash.nav.grades', icon: ClipboardList },
     { to: '/app/teacher/homework', labelKey: 'dash.nav.homework', icon: ClipboardCheck },
+    { to: '/app/teacher/assignments', labelKey: 'dash.nav.assignments', icon: ClipboardCheck },
+    { to: '/app/teacher/lessons', labelKey: 'dash.nav.lessons', icon: BookOpen },
+    { to: '/app/teacher/exams', labelKey: 'dash.nav.exams', icon: BarChart3 },
+    { to: '/app/teacher/class-performance', labelKey: 'dash.nav.classPerformance', icon: TrendingUp },
     { to: '/app/teacher/announcements', labelKey: 'dash.nav.announcements', icon: Bell },
     { to: '/app/teacher/messages', labelKey: 'dash.nav.messages', icon: MessageSquare },
+    { to: '/app/teacher/students', labelKey: 'dash.nav.myStudents', icon: Users },
+    { to: '/app/teacher/resources', labelKey: 'dash.nav.resources', icon: FolderOpen },
+    { to: '/app/teacher/progress', labelKey: 'dash.nav.progress', icon: TrendingUp },
+    { to: '/app/teacher/notifications', labelKey: 'dash.nav.notifications', icon: BellRing },
+    { to: '/app/teacher/profile', labelKey: 'dash.nav.profile', icon: UserCircle },
     { to: '/app/teacher/tutorials', labelKey: 'dash.nav.tutorials', icon: PlayCircle },
   ],
   parent: [
-    { to: '/app/parent', labelKey: 'dash.nav.dashboard', icon: LayoutDashboard, end: true },
-    { to: '/app/parent/children', labelKey: 'dash.nav.myChildren', icon: UserCircle },
+    { to: '/app/parent', labelKey: 'dash.nav.overview', icon: LayoutDashboard, end: true },
+    { to: '/app/parent/timetable', labelKey: 'dash.nav.timetable', icon: Table2 },
     { to: '/app/parent/attendance', labelKey: 'dash.nav.attendance', icon: CalendarCheck },
-    { to: '/app/parent/grades', labelKey: 'dash.nav.grades', icon: ClipboardList },
     { to: '/app/parent/homework', labelKey: 'dash.nav.homework', icon: ClipboardCheck },
-    { to: '/app/parent/fees', labelKey: 'dash.nav.feesShort', icon: Wallet },
+    { to: '/app/parent/grades', labelKey: 'dash.nav.results', icon: ClipboardList },
     { to: '/app/parent/announcements', labelKey: 'dash.nav.announcements', icon: Bell },
-    { to: '/app/parent/notifications', labelKey: 'dash.nav.notifications', icon: BellRing },
     { to: '/app/parent/messages', labelKey: 'dash.nav.messages', icon: MessageSquare },
-    { to: '/app/parent/tutorials', labelKey: 'dash.nav.tutorials', icon: PlayCircle },
+    { to: '/app/parent/children', labelKey: 'dash.nav.myChildren', icon: UserCircle, group: 'Account' },
+    { to: '/app/parent/notifications', labelKey: 'dash.nav.notifications', icon: BellRing, group: 'Account' },
+    { to: '/app/parent/settings', labelKey: 'dash.nav.settings', icon: Settings, group: 'Account' },
   ],
 }
 
