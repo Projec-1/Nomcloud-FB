@@ -480,8 +480,8 @@ export default function AdminStudents() {
         const name = cell(source, ['name', 'fullname', 'studentname'])
         const admissionNo = cell(source, ['studentid', 'admissionnumber', 'admissionno', 'admissionid', 'id'])
         const className = cell(source, ['class', 'classname', 'section', 'classsection'])
-        const guardian = cell(source, ['parentguardian', 'guardian', 'parentname'])
-        const parentPhone = cell(source, ['parentphone', 'guardianphone', 'phone'])
+        const guardian = cell(source, ['parent', 'parentguardian', 'guardian', 'parentname', 'guardianname'])
+        const parentPhone = cell(source, ['phone', 'phonenumber', 'parentphone', 'parentphonenumber', 'guardianphone', 'guardianphonenumber'])
         const duplicate = Boolean(admissionNo) && (seen.has(admissionNo.toLowerCase()) || existingIds.has(admissionNo.toLowerCase()))
         if (admissionNo) seen.add(admissionNo.toLowerCase())
         const errors = [
