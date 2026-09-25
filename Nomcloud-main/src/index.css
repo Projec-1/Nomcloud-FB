@@ -106,34 +106,53 @@
     display: none;
   }
 
-  /* Public-site dark mode: softer SaaS surfaces without changing light mode. */
+  /* Public-site dark mode uses restrained charcoal/brown accents over light space. */
   .dark .public-site {
-    background: #1b2026;
-    color: #f5f7fa;
+    background: #f5f5f7;
+    color: #4e4e59;
   }
 
   .dark .public-site .glass {
-    background-color: rgba(27, 32, 38, 0.88);
+    background-color: rgba(255, 255, 255, 0.9);
   }
 
   .dark .public-site [class*='dark:bg-'] {
-    background-color: #252b33;
+    background-color: #ffffff;
   }
 
   .dark .public-site [class*='dark:bg-white/'] {
-    background-color: #252b33;
+    background-color: #ffffff;
   }
 
   .dark .public-site [class*='dark:border-white'] {
-    border-color: #3b444f;
+    border-color: rgba(78, 78, 89, 0.28);
   }
 
   .dark .public-site [class*='dark:text-white'] {
-    color: #f5f7fa;
+    color: #4e4e59;
   }
 
   .dark .public-site [class*='dark:text-ink'] {
-    color: #e5e9ee;
+    color: #4e4e59;
+  }
+
+  .dark .public-site .btn-primary {
+    background-color: #4e4e59;
+    color: #ffffff;
+  }
+
+  .dark .public-site .btn-outline {
+    border-color: #4e4e59;
+    color: #4e4e59;
+  }
+
+  .dark .public-site .btn-ghost:hover {
+    background-color: rgba(122, 101, 94, 0.12);
+    color: #7a655e;
+  }
+
+  .dark .public-site .link-underline::after {
+    background-color: #7a655e;
   }
 
   .btn {
