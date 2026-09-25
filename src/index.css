@@ -390,6 +390,138 @@
     color: currentColor;
   }
 
+  .teacher-insights {
+    align-items: stretch;
+  }
+
+  .teacher-insight-card {
+    position: relative;
+    min-height: 258px;
+    overflow: hidden;
+    border: 1px solid #ececef;
+    border-radius: 16px;
+    background: #fff;
+    padding: 20px;
+    box-shadow: 0 12px 32px rgba(35, 38, 45, 0.04);
+  }
+
+  .teacher-insight-card__period {
+    border-radius: 999px;
+    background: #f7f7f8;
+    padding: 6px 9px;
+    color: #7a7d84;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .teacher-insight-card__label {
+    margin-top: 22px;
+    color: #8b8e95;
+    font-size: 11px;
+  }
+
+  .teacher-insight-card__value {
+    margin-top: 2px;
+    color: #17191c;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.05em;
+    line-height: 1;
+  }
+
+  .teacher-insight-card__chart {
+    height: 66px;
+    margin-top: 16px;
+  }
+
+  .teacher-insight-card__chart svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .teacher-insight-card__chart path:not(.teacher-insight-card__area) {
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.5;
+  }
+
+  .teacher-insight-card__chart circle {
+    fill: currentColor;
+    stroke: #fff;
+    stroke-width: 2;
+  }
+
+  .teacher-insight-card__area {
+    fill: currentColor;
+    opacity: 0.1;
+    stroke: none;
+  }
+
+  .teacher-insight-card--orange {
+    color: #f05a28;
+  }
+
+  .teacher-insight-card--blue {
+    color: #69b4e8;
+  }
+
+  .teacher-insight-card--green {
+    color: #8dbec1;
+  }
+
+  .teacher-insight-card__ring {
+    display: block;
+    width: 62px;
+    height: 62px;
+    margin-left: auto;
+    margin-right: 16%;
+    border: 11px solid currentColor;
+    border-left-color: rgba(141, 190, 193, 0.14);
+    border-radius: 50%;
+    opacity: 0.72;
+    transform: rotate(-35deg);
+  }
+
+  .teacher-insight-card__caption {
+    max-width: 85%;
+    margin-top: 8px;
+    color: #8b8e95;
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .teacher-insight-card__arrow {
+    position: absolute;
+    right: 20px;
+    bottom: 19px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background: #f7f7f8;
+    color: currentColor;
+  }
+
+  .dark .teacher-insight-card {
+    border-color: #343a41;
+    background: #202328;
+  }
+
+  .dark .teacher-insight-card__period,
+  .dark .teacher-insight-card__arrow {
+    background: #2a3037;
+  }
+
+  .dark .teacher-insight-card__value {
+    color: #f5f7fa;
+  }
+
   .fee-analysis-card {
     overflow: hidden;
     border: 1px solid #ececef;
@@ -441,6 +573,15 @@
     }
 
     .admin-insight-card__value {
+      font-size: 30px;
+    }
+
+    .teacher-insight-card {
+      min-height: 220px;
+      padding: 17px;
+    }
+
+    .teacher-insight-card__value {
       font-size: 30px;
     }
   }
@@ -608,6 +749,15 @@
     }
 
     .admin-insight-card__value {
+      font-size: 28px;
+    }
+
+    .teacher-insight-card {
+      min-height: 205px;
+      padding: 14px;
+    }
+
+    .teacher-insight-card__value {
       font-size: 28px;
     }
 

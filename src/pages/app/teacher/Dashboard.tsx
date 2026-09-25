@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users, CalendarCheck, ClipboardCheck, MessageSquare, ArrowRight, Clock } from 'lucide-react'
+import { Users, ArrowRight, Clock, ArrowUpRight } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTeacherClasses } from '@/hooks/useTeacherClasses'
-import { useMessageThreads } from '@/hooks/useCommunications'
 import PageHeader from '@/components/ui/PageHeader'
-import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
 import ResourceGate from '@/components/ui/ResourceGate'
@@ -36,7 +34,6 @@ import { fetchAttendance, fetchHomework, type HomeworkView } from '@/services/te
 export default function TeacherDashboard() {
   const { profile, school } = useAuth()
   const { state, classes: myClasses, timetable: timetables } = useTeacherClasses()
-  const { threads } = useMessageThreads()
   const [studentsModalOpen, setStudentsModalOpen] = useState(false)
 
   const schoolId = school?.id ?? null
@@ -146,18 +143,33 @@ export default function TeacherDashboard() {
         }
       />
 
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="teacher-insights grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <button type="button" aria-label="View my students" onClick={() => setStudentsModalOpen(true)} className="w-full text-left">
-          <StatCard label="My Students" value={roster.length} icon={Users} tint="#0071E3" />
+          <TeacherInsightCard
+            label="My Students"
+            metricLabel="Students in your classes"
+            value={roster.length}
+            tone="orange"
+            caption="Students assigned across your active classes."
+            chart="line"
+          />
         </button>
-        <StatCard
-          label="Present Today"
+        <TeacherInsightCard
+          label="Attendance"
+          metricLabel="Present today"
           value={todayPresent && todayPresent.marked > 0 ? `${percentage(todayPresent.present, todayPresent.marked)}%` : '—'}
-          icon={CalendarCheck}
-          tint="#34A853"
+          tone="blue"
+          caption={todayPresent?.marked ? `${todayPresent.present} of ${todayPresent.marked} students marked present.` : 'Attendance has not been marked yet.'}
+          chart="curve"
         />
-        <StatCard label="Pending Homework" value={pendingTotal} icon={ClipboardCheck} tint="#FF5A1F" />
-        <StatCard label="Conversations" value={threads.length} icon={MessageSquare} tint="#A855F7" />
+        <TeacherInsightCard
+          label="Homework"
+          metricLabel="Pending submissions"
+          value={pendingTotal}
+          tone="green"
+          caption={pendingTotal ? 'Follow up with students who still have work to submit.' : 'All student submissions are up to date.'}
+          chart="ring"
+        />
       </div>
 
       {myClasses.length === 0 ? (
@@ -281,6 +293,52 @@ export default function TeacherDashboard() {
           })}
         </div>
       </Modal>
+    </div>
+  )
+}
+
+function TeacherInsightCard({
+  label,
+  metricLabel,
+  value,
+  tone,
+  caption,
+  chart,
+}: {
+  label: string
+  metricLabel: string
+  value: string | number
+  tone: 'orange' | 'blue' | 'green'
+  caption: string
+  chart: 'line' | 'curve' | 'ring'
+}) {
+  return (
+    <div className={`teacher-insight-card teacher-insight-card--${tone}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-ink dark:text-white">{label}</p>
+        <span className="teacher-insight-card__period">Weekly <span aria-hidden>⌄</span></span>
+      </div>
+      <p className="teacher-insight-card__label">{metricLabel}</p>
+      <p className="teacher-insight-card__value">{value}</p>
+      <div className="teacher-insight-card__chart" aria-hidden="true">
+        {chart === 'line' && (
+          <svg viewBox="0 0 220 72" preserveAspectRatio="none">
+            <path className="teacher-insight-card__area" d="M0 60 L42 42 L78 42 L112 25 L145 25 L180 25 L220 25 L220 72 L0 72 Z" />
+            <path d="M0 60 L42 42 L78 42 L112 25 L145 25 L180 25 L220 25" />
+            <circle cx="220" cy="25" r="3.5" />
+          </svg>
+        )}
+        {chart === 'curve' && (
+          <svg viewBox="0 0 220 72" preserveAspectRatio="none">
+            <path className="teacher-insight-card__area" d="M0 60 C30 50 42 68 70 52 S105 8 130 22 S170 64 220 28 L220 72 L0 72 Z" />
+            <path d="M0 60 C30 50 42 68 70 52 S105 8 130 22 S170 64 220 28" />
+            <circle cx="130" cy="22" r="7" />
+          </svg>
+        )}
+        {chart === 'ring' && <span className="teacher-insight-card__ring" />}
+      </div>
+      <p className="teacher-insight-card__caption">{caption}</p>
+      <span className="teacher-insight-card__arrow"><ArrowUpRight className="h-3.5 w-3.5" /></span>
     </div>
   )
 }
