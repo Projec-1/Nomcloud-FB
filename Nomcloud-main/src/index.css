@@ -106,6 +106,36 @@
     display: none;
   }
 
+  /* Public-site dark mode: softer SaaS surfaces without changing light mode. */
+  .dark .public-site {
+    background: #1b2026;
+    color: #f5f7fa;
+  }
+
+  .dark .public-site .glass {
+    background-color: rgba(27, 32, 38, 0.88);
+  }
+
+  .dark .public-site [class*='dark:bg-'] {
+    background-color: #252b33;
+  }
+
+  .dark .public-site [class*='dark:bg-white/'] {
+    background-color: #252b33;
+  }
+
+  .dark .public-site [class*='dark:border-white'] {
+    border-color: #3b444f;
+  }
+
+  .dark .public-site [class*='dark:text-white'] {
+    color: #f5f7fa;
+  }
+
+  .dark .public-site [class*='dark:text-ink'] {
+    color: #e5e9ee;
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-300 ease-apple whitespace-nowrap select-none disabled:opacity-50 disabled:pointer-events-none;
   }
