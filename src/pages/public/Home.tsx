@@ -148,7 +148,7 @@ function HeroVisual() {
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
             <CheckCircle2 className="h-4 w-4" />
           </div>
-          <div>
+          <div className="public-home">
             <p className="text-xs font-semibold text-ink dark:text-white">{t('hero.attendanceMarked')}</p>
             <p className="text-[11px] text-graphite">{t('hero.attendanceDetail')}</p>
           </div>
@@ -188,7 +188,7 @@ export default function Home() {
         path="/"
       />
       {/* Hero */}
-      <section className="relative overflow-hidden pt-20 pb-16 sm:pt-28">
+      <section className="home-hero relative overflow-hidden pt-20 pb-16 sm:pt-28">
         <div className="absolute inset-0 bg-mesh-orange" />
         <div className="container relative grid items-center gap-14 lg:grid-cols-2">
           <div>
@@ -207,8 +207,8 @@ export default function Home() {
             </Reveal>
             <Reveal delay={280}>
               <ul className="mt-8 grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
-                {heroPoints.map((point) => (
-                  <li key={point} className="flex items-center gap-2.5 text-sm text-ink dark:text-white">
+                {heroPoints.map((point, index) => (
+                  <li key={point} className={`flex items-center gap-2.5 text-sm text-ink dark:text-white ${index >= 4 ? 'home-hero-point-extra' : ''}`}>
                     <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
                       <ArrowRight className="h-3 w-3" />
                     </span>
@@ -232,14 +232,14 @@ export default function Home() {
         </div>
 
         <Reveal delay={450}>
-          <div className="container relative mx-auto mt-20 max-w-5xl">
+          <div className="home-hero-preview container relative mx-auto mt-20 max-w-5xl">
             <AdminDashboardHeroMock />
           </div>
         </Reveal>
       </section>
 
       {/* Stats */}
-      <section className="border-y border-ink/5 bg-white py-14 dark:border-white/10 dark:bg-white/[0.02]">
+      <section className="home-stats border-y border-ink/5 bg-white py-14 dark:border-white/10 dark:bg-white/[0.02]">
         <div className="container grid grid-cols-2 gap-8 sm:grid-cols-4">
           {stats.map((s, i) => (
             <Reveal key={s.key} delay={i * 80} className="text-center">
@@ -258,7 +258,7 @@ export default function Home() {
       </section>
 
       {/* Pillars — Why Nom Cloud */}
-      <section className="section overflow-hidden">
+      <section className="home-pillars section overflow-hidden">
         <div className="container">
           <Reveal className="mx-auto max-w-2xl text-center">
             <span className="eyebrow">{t('home.why.eyebrow')}</span>
@@ -309,7 +309,7 @@ export default function Home() {
       </section>
 
       {/* Teacher preview */}
-      <section className="section bg-white dark:bg-white/[0.02]">
+      <section className="home-teacher section bg-white dark:bg-white/[0.02]">
         <div className="container grid items-center gap-14 lg:grid-cols-2">
           <Reveal>
             <span className="eyebrow">{t('home.teacher.eyebrow')}</span>
@@ -336,7 +336,7 @@ export default function Home() {
       </section>
 
       {/* Parent preview */}
-      <section className="section overflow-hidden">
+      <section className="home-parent section overflow-hidden">
         <div className="container grid items-center gap-14 lg:grid-cols-2">
           <Reveal className="order-2 flex justify-center lg:order-1" delay={150}>
             <ParentAppMock />
@@ -360,7 +360,7 @@ export default function Home() {
       </section>
 
       {/* Capabilities marquee — Full Platform */}
-      <section className="section overflow-hidden bg-white dark:bg-white/[0.02]">
+      <section className="home-capabilities section overflow-hidden bg-white dark:bg-white/[0.02]">
         <div className="container">
           <Reveal className="mx-auto max-w-2xl text-center">
             <span className="eyebrow">{t('home.platform.eyebrow')}</span>
@@ -439,7 +439,7 @@ export default function Home() {
       </section>
 
       {/* CTA */}
-      <section className="section">
+      <section className="home-cta section">
         <div className="container">
           <Reveal>
             <div className="relative overflow-hidden rounded-[2.5rem] px-8 py-16 text-center sm:py-24">

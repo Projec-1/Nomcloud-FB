@@ -637,5 +637,129 @@
     [role='tablist']::-webkit-scrollbar {
       display: none;
     }
+
+    @media (max-width: 639px) {
+      .public-home .section {
+        padding-top: 3.5rem;
+        padding-bottom: 3.5rem;
+      }
+
+      .public-home .home-hero {
+        padding-top: 3.5rem;
+        padding-bottom: 2.5rem;
+      }
+
+      .public-home .home-hero h1 {
+        font-size: clamp(2.35rem, 11vw, 3.1rem);
+        line-height: 1.02;
+      }
+
+      .public-home .home-hero > .container {
+        gap: 2.5rem;
+      }
+
+      .public-home .home-hero p {
+        margin-top: 1rem;
+        font-size: 1rem;
+        line-height: 1.55;
+      }
+
+      .public-home .home-hero ul {
+        margin-top: 1.25rem;
+        gap: 0.5rem;
+      }
+
+      .public-home .home-hero-point-extra {
+        display: none;
+      }
+
+      .public-home .home-hero > .container > div:first-child > div:last-child {
+        margin-top: 1.5rem;
+      }
+
+      .public-home .home-hero-preview {
+        display: none;
+      }
+
+      .public-home .home-stats {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+      }
+
+      .public-home .home-stats .container {
+        gap: 1.25rem 0.75rem;
+      }
+
+      .public-home .home-stats p:first-child {
+        font-size: 1.75rem;
+      }
+
+      .public-home .home-pillars .container > .mt-16 {
+        margin-top: 2rem;
+        gap: 0.75rem;
+      }
+
+      .public-home .home-pillars .container > .mt-16 > div {
+        min-height: 0;
+      }
+
+      .public-home .home-pillars .container > .mt-16 > div > div {
+        min-height: 12rem;
+      }
+
+      .public-home .home-pillars .container > .mt-16 > div > div > div:last-child {
+        padding: 1.25rem;
+      }
+
+      .public-home .home-pillars .container > .mt-16 h3 {
+        margin-top: 0.75rem;
+      }
+
+      .public-home .home-teacher .container,
+      .public-home .home-parent .container {
+        gap: 2.25rem;
+      }
+
+      .public-home .home-teacher .container > div:first-child,
+      .public-home .home-parent .container > div:last-child {
+        display: contents;
+      }
+
+      .public-home .home-teacher h2,
+      .public-home .home-parent h2,
+      .public-home .home-capabilities h2 {
+        margin-top: 0.75rem;
+      }
+
+      .public-home .home-teacher p,
+      .public-home .home-parent p {
+        margin-top: 0.9rem;
+      }
+
+      .public-home .home-teacher ul,
+      .public-home .home-parent ul {
+        margin-top: 1.25rem;
+      }
+
+      .public-home .home-teacher .container > div:nth-child(2),
+      .public-home .home-parent .container > div:first-child {
+        transform: scale(0.92);
+        transform-origin: top center;
+        margin-bottom: -1.5rem;
+      }
+
+      .public-home .home-capabilities .relative.mt-14 {
+        margin-top: 2rem;
+      }
+
+      .public-home .home-capabilities .container:last-child .mt-10 {
+        margin-top: 1.5rem;
+      }
+
+      .public-home .home-cta .container > div {
+        border-radius: 1.5rem;
+        padding: 3rem 1.25rem;
+      }
+    }
   }
 }
