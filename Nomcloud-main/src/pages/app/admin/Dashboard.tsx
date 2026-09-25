@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users, GraduationCap, CalendarCheck, Wallet, ArrowRight, Plus, Megaphone, BookOpen } from 'lucide-react'
+import { Users, GraduationCap, CalendarCheck, Wallet, ArrowRight, Plus, Megaphone, BookOpen, ArrowUpRight } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import PageHeader from '@/components/ui/PageHeader'
-import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
 import EmptyState from '@/components/ui/EmptyState'
 import ResourceGate from '@/components/ui/ResourceGate'
@@ -132,19 +131,23 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-dashboard__stats grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Students" value={counts.students} icon={Users} tint="#0071E3" />
-        <StatCard label="Teachers" value={counts.teachers} icon={GraduationCap} tint="#A855F7" />
-        <StatCard
+        <AdminInsightCard label="Students" value={counts.students} icon={Users} tone="orange" caption="Registered learners" chart="line" />
+        <AdminInsightCard label="Teachers" value={counts.teachers} icon={GraduationCap} tone="blue" caption="Teaching staff" chart="curve" />
+        <AdminInsightCard
           label="Present Today"
           value={attendanceToday.marked > 0 ? `${percentage(attendanceToday.present, attendanceToday.marked)}%` : '—'}
           icon={CalendarCheck}
-          tint="#34A853"
+          tone="green"
+          caption={attendanceToday.marked > 0 ? `${attendanceToday.present} of ${attendanceToday.marked} marked present` : 'Attendance not marked yet'}
+          chart="ring"
         />
-        <StatCard
+        <AdminInsightCard
           label={canManageFinance ? 'Fees Outstanding' : 'Classes'}
           value={canManageFinance ? formatMoney(outstanding, currency) : classes.length}
           icon={canManageFinance ? Wallet : BookOpen}
-          tint="#F59E0B"
+          tone="brown"
+          caption={canManageFinance ? 'Current balance' : 'Active classes'}
+          chart="bars"
         />
       </div>
 
@@ -219,6 +222,44 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function AdminInsightCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  caption,
+  chart,
+}: {
+  label: string
+  value: string | number
+  icon: typeof Users
+  tone: 'orange' | 'blue' | 'green' | 'brown'
+  caption: string
+  chart: 'line' | 'curve' | 'ring' | 'bars'
+}) {
+  return (
+    <div className={`admin-insight-card admin-insight-card--${tone}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="admin-insight-card__icon"><Icon className="h-4 w-4" /></span>
+          <p className="text-sm font-semibold text-ink dark:text-white">{label}</p>
+        </div>
+        <span className="admin-insight-card__period">Today <span aria-hidden>⌄</span></span>
+      </div>
+      <p className="admin-insight-card__label">{label === 'Present Today' ? 'Attendance rate' : label === 'Fees Outstanding' ? 'Outstanding balance' : `Total ${label.toLowerCase()}`}</p>
+      <p className="admin-insight-card__value">{value}</p>
+      <div className="admin-insight-card__chart" aria-hidden="true">
+        {chart === 'line' && <svg viewBox="0 0 220 58" preserveAspectRatio="none"><path d="M0 48 L42 38 L78 40 L112 20 L146 28 L180 12 L220 20" /></svg>}
+        {chart === 'curve' && <svg viewBox="0 0 220 58" preserveAspectRatio="none"><path d="M0 45 C35 58, 42 52, 72 42 S108 4, 132 20 S172 52, 220 16" /></svg>}
+        {chart === 'ring' && <span className="admin-insight-card__ring" />}
+        {chart === 'bars' && <div className="admin-insight-card__bars"><i /><i /><i /><i /><i /><i /><i /></div>}
+      </div>
+      <p className="mt-3 text-xs text-graphite">{caption}</p>
+      <span className="admin-insight-card__arrow"><ArrowUpRight className="h-3.5 w-3.5" /></span>
     </div>
   )
 }
