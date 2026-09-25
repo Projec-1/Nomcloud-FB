@@ -98,7 +98,7 @@ export default function PublicHeader() {
       </div>
 
       {menuOpen && (
-        <div className="glass border-t border-ink/5 dark:border-white/10 px-6 pb-6 pt-2 lg:hidden animate-fade-in">
+        <div className="glass border-t border-ink/5 px-3 pb-5 pt-2 dark:border-white/10 sm:px-6 lg:hidden animate-fade-in">
           <nav className="flex flex-col gap-1">
             {NAV_LINKS.map((link) => (
               <NavLink
@@ -113,7 +113,7 @@ export default function PublicHeader() {
               </NavLink>
             ))}
           </nav>
-          <div className="mt-4 flex items-center gap-3 border-t border-ink/5 dark:border-white/10 pt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink/5 pt-4 dark:border-white/10 sm:gap-3">
             <button
               onClick={toggleTheme}
               className="flex items-center gap-2 rounded-full px-4 py-2.5 text-sm text-graphite hover:bg-ink/5 dark:hover:bg-white/10"

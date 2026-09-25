@@ -131,7 +131,7 @@ const accentColors = ['#FF5A1F', '#007AFF', '#34C759', '#FF9F0A']
 function HeroVisual() {
   const { t } = useLanguage()
   return (
-    <div className="relative mx-auto aspect-[4/5] w-full max-w-md">
+    <div className="hero-visual relative mx-auto aspect-[4/5] w-full max-w-md">
       <div className="absolute inset-0 overflow-hidden rounded-[2.5rem] shadow-floaty">
         <img
           src={img('teacherWithLearners', 900)}

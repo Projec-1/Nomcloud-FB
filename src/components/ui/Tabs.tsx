@@ -8,7 +8,7 @@ interface TabsProps {
 
 export default function Tabs({ tabs, active, onChange }: TabsProps) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-full bg-ink/5 dark:bg-white/5 p-1.5">
+    <div className="tabs flex flex-wrap items-center gap-1.5 rounded-full bg-ink/5 p-1.5 dark:bg-white/5">
       {tabs.map((tab) => (
         <button
           key={tab.id}

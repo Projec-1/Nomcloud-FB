@@ -466,17 +466,176 @@
   }
 
   @media (max-width: 639px) {
+    #root {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: clip;
+    }
+
+    .public-site > main {
+      width: 100%;
+      min-width: 0;
+      overflow-x: clip;
+    }
+
     .dashboard-shell {
       padding-top: 1rem;
       padding-bottom: 1.5rem;
     }
 
-    .card {
-      border-radius: 1.25rem;
+    .dashboard-shell .card,
+    .public-site .card {
+      max-width: 100%;
+      min-width: 0;
     }
 
     .modal-content {
       max-height: calc(100vh - 2rem);
+    }
+
+    .dashboard-shell .grid,
+    .public-site .grid {
+      min-width: 0;
+    }
+
+    .dashboard-shell .flex,
+    .public-site .flex {
+      min-width: 0;
+    }
+
+    .dashboard-shell table,
+    .public-site table {
+      font-size: 0.8125rem;
+    }
+
+    .dashboard-shell table th,
+    .dashboard-shell table td,
+    .public-site table th,
+    .public-site table td {
+      overflow-wrap: anywhere;
+    }
+
+    .dashboard-shell input,
+    .dashboard-shell select,
+    .dashboard-shell textarea,
+    .public-site input,
+    .public-site select,
+    .public-site textarea {
+      max-width: 100%;
+    }
+
+    .dashboard-shell .btn,
+    .public-site .btn {
+      min-height: 44px;
+      max-width: 100%;
+      white-space: normal;
+      text-align: center;
+    }
+
+    .dashboard-shell .admin-dashboard__hero,
+    .dashboard-shell .admin-dashboard__panel {
+      min-width: 0;
+    }
+
+    .admin-insight-card {
+      min-height: 220px;
+    }
+
+    .admin-insight-card__chart {
+      max-width: 100%;
+    }
+
+    .fee-analysis-card {
+      padding: 16px;
+    }
+
+    .fee-analysis-chart {
+      height: 132px;
+    }
+
+    .fee-analysis-chart svg {
+      height: 96px;
+    }
+
+    .dashboard-shell [class*='overflow-x-auto'],
+    .public-site [class*='overflow-x-auto'] {
+      max-width: 100%;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .dashboard-shell [class*='min-w-[' ],
+    .public-site [class*='min-w-[' ] {
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 479px) {
+    .dashboard-shell,
+    .public-site {
+      overflow-x: clip;
+    }
+
+    .dashboard-shell .dashboard-topbar {
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+
+    .dashboard-shell .dashboard-topbar > div:last-child {
+      gap: 0;
+    }
+
+    .public-site .hero-visual > div:nth-child(2) {
+      left: 0;
+    }
+
+    .public-site .hero-visual > div:nth-child(3) {
+      right: 0;
+    }
+
+    .public-site .hero-visual > div:nth-child(4) {
+      left: 0.5rem;
+      max-width: calc(100% - 1rem);
+    }
+
+    .dashboard-shell .dashboard-topbar .input {
+      min-width: 0;
+    }
+
+    .admin-insight-card {
+      min-height: 205px;
+      padding: 14px;
+    }
+
+    .admin-insight-card__value {
+      font-size: 28px;
+    }
+
+    .modal-content {
+      border-radius: 1.25rem;
+    }
+
+    .modal-content > div:last-child {
+      justify-content: stretch;
+    }
+
+    .modal-content > div:last-child > * {
+      flex: 1 1 120px;
+    }
+
+    .tabs,
+    [role='tablist'] {
+      max-width: 100%;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      border-radius: 1rem;
+      scrollbar-width: none;
+    }
+
+    .tabs::-webkit-scrollbar,
+    [role='tablist']::-webkit-scrollbar {
+      display: none;
     }
   }
 }
