@@ -45,6 +45,17 @@
     min-height: 100vh;
   }
 
+  .dark .platform-main {
+    background: #17191c;
+    color: #f5f7fa;
+  }
+
+  .dark .platform-main .platform-main-card,
+  .dark .platform-main .bg-white {
+    background-color: #202328;
+    border-color: #343a41;
+  }
+
   .platform-main h1,
   .platform-main h2,
   .platform-main h3 {
