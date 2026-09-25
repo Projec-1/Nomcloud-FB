@@ -397,6 +397,16 @@
 
   .teacher-dashboard {
     min-width: 0;
+    padding: 0.25rem 0 1rem;
+  }
+
+  .teacher-dashboard__header {
+    max-width: 980px;
+  }
+
+  .teacher-dashboard__header h1 {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    letter-spacing: -0.045em;
   }
 
   .teacher-dashboard > .teacher-insights {
@@ -417,6 +427,11 @@
     border-color: #ececef;
     background: rgba(255, 255, 255, 0.84);
     box-shadow: 0 12px 32px rgba(35, 38, 45, 0.025);
+  }
+
+  .teacher-dashboard .teacher-insights {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 980px;
   }
 
   .teacher-insight-card,
@@ -635,6 +650,15 @@
     .teacher-dashboard__status,
     .teacher-dashboard__panel {
       padding: 1rem;
+    }
+
+    .teacher-dashboard {
+      padding-top: 0;
+    }
+
+    .teacher-dashboard .teacher-insights {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
     }
 
     .teacher-insight-card__value,

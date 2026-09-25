@@ -134,14 +134,16 @@ export default function TeacherDashboard() {
 
   return (
     <div>
-      <PageHeader
-        title={`Welcome back, ${profile?.full_name.split(' ')[0] ?? ''}`}
-        description={
-          myClasses.length
-            ? `You're teaching ${myClasses.length} class${myClasses.length === 1 ? '' : 'es'} this term.`
-            : 'No classes assigned yet.'
-        }
-      />
+      <div className="teacher-dashboard__header">
+        <PageHeader
+          title={`Welcome back, ${profile?.full_name.split(' ')[0] ?? ''}`}
+          description={
+            myClasses.length
+              ? `You're teaching ${myClasses.length} class${myClasses.length === 1 ? '' : 'es'} this term.`
+              : 'No classes assigned yet.'
+          }
+        />
+      </div>
 
       <div className="teacher-insights grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <button type="button" aria-label="View my students" onClick={() => setStudentsModalOpen(true)} className="w-full text-left">
