@@ -402,6 +402,16 @@
 
   .teacher-dashboard__header {
     max-width: 980px;
+    padding-bottom: 0.25rem;
+  }
+
+  .teacher-dashboard__eyebrow {
+    margin-bottom: 0.6rem;
+    color: #f05a28;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
   }
 
   .teacher-dashboard__header h1 {
@@ -414,8 +424,15 @@
   }
 
   .teacher-dashboard__status {
+    display: flex;
+    min-height: 76px;
+    align-items: center;
+    max-width: 980px;
+    padding: 1rem 1.25rem;
     border-color: #ececef;
     background: rgba(255, 255, 255, 0.84);
+    border: 1px solid #ececef;
+    border-radius: 16px;
     box-shadow: 0 12px 32px rgba(35, 38, 45, 0.025);
   }
 
@@ -424,6 +441,10 @@
   }
 
   .teacher-dashboard__panel {
+    min-width: 0;
+    border: 1px solid #ececef;
+    border-radius: 16px;
+    padding: 1.25rem;
     border-color: #ececef;
     background: rgba(255, 255, 255, 0.84);
     box-shadow: 0 12px 32px rgba(35, 38, 45, 0.025);
@@ -575,6 +596,10 @@
     background: #202328;
   }
 
+  .dark .teacher-dashboard__eyebrow {
+    color: #ff855d;
+  }
+
   .dark .teacher-insight-card__period,
   .dark .teacher-insight-card__arrow,
   .dark .teacher-workspace-insight-card__period,
@@ -650,6 +675,10 @@
     .teacher-dashboard__status,
     .teacher-dashboard__panel {
       padding: 1rem;
+    }
+
+    .teacher-dashboard__status {
+      min-height: 68px;
     }
 
     .teacher-dashboard {

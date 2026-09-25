@@ -135,6 +135,7 @@ export default function TeacherDashboard() {
   return (
     <div>
       <div className="teacher-dashboard__header">
+        <p className="teacher-dashboard__eyebrow">Teacher workspace</p>
         <PageHeader
           title={`Welcome back, ${profile?.full_name.split(' ')[0] ?? ''}`}
           description={
@@ -184,7 +185,7 @@ export default function TeacherDashboard() {
         </div>
       ) : (
         <>
-          <div className="teacher-dashboard__status card mt-6 p-5">
+          <div className="teacher-dashboard__status mt-6">
             <div className="flex items-center gap-3">
               <span
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${
@@ -220,7 +221,7 @@ export default function TeacherDashboard() {
           </div>
 
           <div className="teacher-dashboard__panels mt-6 grid gap-6 lg:grid-cols-3">
-            <div className="teacher-dashboard__panel card p-6 lg:col-span-2">
+            <div className="teacher-dashboard__panel lg:col-span-2">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-semibold text-ink dark:text-white">My Classes</h3>
                 <Link
@@ -248,7 +249,7 @@ export default function TeacherDashboard() {
                 ))}
               </div>
             </div>
-            <div className="teacher-dashboard__panel card p-6">
+            <div className="teacher-dashboard__panel">
               <h3 className="mb-3 font-semibold text-ink dark:text-white">Upcoming Homework</h3>
               <div className="space-y-3">
                 {homework.slice(0, 5).map((h) => (
