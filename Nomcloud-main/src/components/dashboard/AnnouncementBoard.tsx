@@ -23,6 +23,8 @@ import {
   type AnnouncementView,
 } from '@/services/communicationService'
 import { errorMessage } from '@/utils/errorMessage'
+import { useAuth } from '@/context/AuthContext'
+import { schoolLogoUrl } from '@/services/storageService'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 7. Real announcements.
@@ -80,6 +82,8 @@ export default function AnnouncementBoard({
   onChanged,
 }: AnnouncementBoardProps) {
   const { showToast } = useToast()
+  const { school } = useAuth()
+  const schoolLogo = schoolLogoUrl(school?.logo_path ?? null)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({
@@ -251,8 +255,14 @@ export default function AnnouncementBoard({
               className={cn('card overflow-hidden border-t-4 border-t-[#e6252a]', a.pinned && 'ring-1 ring-brand/20', a.archivedAt && 'opacity-60')}
             >
               <div className="border-b border-[#dbe2eb] px-5 pb-4 pt-5 text-center">
-                <img src="/logo-512.png" alt="Nom Cloud School" className="mx-auto h-14 w-14 object-contain" />
-                <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-[#e6252a]">Nom Cloud School</p>
+                {schoolLogo ? (
+                  <img src={schoolLogo} alt={`${school?.name ?? 'School'} logo`} className="mx-auto h-14 w-14 object-contain" />
+                ) : (
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border border-[#dbe2eb] text-xs font-bold text-[#e6252a]">
+                    {school?.name?.slice(0, 2).toUpperCase() ?? 'SC'}
+                  </div>
+                )}
+                <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-[#e6252a]">{school?.name ?? 'School'}</p>
               </div>
               <div className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">

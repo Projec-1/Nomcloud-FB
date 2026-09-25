@@ -51,8 +51,8 @@ function layout({ preheader, eyebrow, title, intro, fields, actionLabel, actionU
       <tr><td align="center">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#fff;border:1px solid #dbe2eb;border-top:8px solid ${BRAND_RED};overflow:hidden">
           <tr><td style="padding:32px 36px 12px;text-align:center">
-            <img src="${LOGO_URL}" width="92" height="92" alt="Nom Cloud School" style="display:block;margin:0 auto;object-fit:contain">
-            <div style="margin-top:12px;color:${BRAND_RED};font-size:20px;font-weight:700;letter-spacing:2px;text-transform:uppercase">Nom Cloud School</div>
+            <img src="${LOGO_URL}" width="92" height="92" alt="NOM CLOUD" style="display:block;margin:0 auto;object-fit:contain">
+            <div style="margin-top:12px;color:${BRAND_RED};font-size:20px;font-weight:700;letter-spacing:2px;text-transform:uppercase">NOM CLOUD</div>
           </td></tr>
           <tr><td style="padding:28px 36px 36px;text-align:left">
             <div style="color:${HEADING_BLUE};font-size:22px;font-weight:700;line-height:1.25;text-transform:uppercase">${escapeHtml(eyebrow)}</div>

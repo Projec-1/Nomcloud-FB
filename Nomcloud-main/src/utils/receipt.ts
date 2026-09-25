@@ -1,6 +1,7 @@
 export interface ReceiptDetails {
   reference: string
   schoolName: string
+  schoolLogoUrl?: string | null
   studentName: string
   category: string
   amount: number
@@ -36,15 +37,16 @@ export function downloadReceiptImage(details: ReceiptDetails) {
   ctx.fillStyle = '#FFFFFF'
   ctx.fillRect(0, 0, width, height)
 
-  ctx.fillStyle = '#e6252a'
-  ctx.fillRect(0, 0, width, 10)
-  ctx.fillStyle = '#e6252a'
-  ctx.font = '700 22px Arial, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.fillText('NOM CLOUD SCHOOL', width / 2, 126)
-  ctx.textAlign = 'left'
+  const drawReceipt = (logo?: HTMLImageElement) => {
+    ctx.fillStyle = '#e6252a'
+    ctx.fillRect(0, 0, width, 10)
+    if (logo) ctx.drawImage(logo, width / 2 - 40, 28, 80, 80)
+    ctx.fillStyle = '#e6252a'
+    ctx.font = '700 22px Arial, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(details.schoolName.toUpperCase(), width / 2, 140)
+    ctx.textAlign = 'left'
 
-  // Success badge
   ctx.fillStyle = '#FFFFFF'
   ctx.beginPath()
   ctx.roundRect(40, 170, width - 80, 90, 4)
@@ -99,11 +101,22 @@ export function downloadReceiptImage(details: ReceiptDetails) {
   ctx.fillText('This receipt was generated automatically by Nom Cloud and serves as proof of payment.', 40, height - 50)
   ctx.fillText(`Generated ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, 40, height - 30)
 
-  const dataUrl = canvas.toDataURL('image/png')
-  const link = document.createElement('a')
-  link.href = dataUrl
-  link.download = `nomcloud-receipt-${details.reference}.png`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+    const dataUrl = canvas.toDataURL('image/png')
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = `receipt-${details.reference}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  if (!details.schoolLogoUrl) {
+    drawReceipt()
+    return
+  }
+  const logo = new Image()
+  logo.crossOrigin = 'anonymous'
+  logo.onload = () => drawReceipt(logo)
+  logo.onerror = () => drawReceipt()
+  logo.src = details.schoolLogoUrl
 }
