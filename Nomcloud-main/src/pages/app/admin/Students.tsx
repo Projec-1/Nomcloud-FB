@@ -480,12 +480,14 @@ export default function AdminStudents() {
         const name = cell(source, ['name', 'fullname', 'studentname'])
         const admissionNo = cell(source, ['studentid', 'admissionnumber', 'admissionno', 'admissionid', 'id'])
         const className = cell(source, ['class', 'classname', 'section', 'classsection'])
-        const duplicate = seen.has(admissionNo.toLowerCase()) || existingIds.has(admissionNo.toLowerCase())
+        const guardian = cell(source, ['parentguardian', 'guardian', 'parentname'])
+        const parentPhone = cell(source, ['parentphone', 'guardianphone', 'phone'])
+        const duplicate = Boolean(admissionNo) && (seen.has(admissionNo.toLowerCase()) || existingIds.has(admissionNo.toLowerCase()))
         if (admissionNo) seen.add(admissionNo.toLowerCase())
         const errors = [
           !name ? 'Missing student name' : '',
-          !admissionNo ? 'Missing student ID' : '',
-          !className ? 'Missing class' : '',
+          !guardian ? 'Missing parent/guardian' : '',
+          !parentPhone ? 'Missing parent phone number' : '',
           duplicate ? 'Duplicate student ID' : '',
         ].filter(Boolean)
         return {
@@ -494,9 +496,9 @@ export default function AdminStudents() {
           className,
           gender: cell(source, ['gender', 'sex']),
           dateOfBirth: cell(source, ['dateofbirth', 'dob', 'birthdate']),
-          guardian: cell(source, ['parentguardian', 'guardian', 'parentname']),
+          guardian,
           relationship: cell(source, ['relationship', 'guardianrelationship']),
-          parentPhone: cell(source, ['parentphone', 'guardianphone', 'phone']),
+          parentPhone,
           studentPhone: cell(source, ['studentphone', 'mobile']),
           attendance: cell(source, ['attendance', 'attendancerate']),
           averageGrade: cell(source, ['averagegrade', 'average', 'grade']),
@@ -532,7 +534,7 @@ export default function AdminStudents() {
       return {
         id: `mock-import-${Date.now()}-${index}`,
         name: row.name,
-        admissionNo: row.admissionNo,
+        admissionNo: row.admissionNo || `IMPORT-${Date.now()}-${index + 1}`,
         gender: row.gender.toLowerCase() || null,
         dateOfBirth: row.dateOfBirth || null,
         status: row.accountStatus.toLowerCase() || 'active',
