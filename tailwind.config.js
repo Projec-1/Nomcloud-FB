@@ -19,7 +19,14 @@ export default {
         },
         surface: {
           DEFAULT: '#FFFFFF',
-          dark: '#0B0B0D',
+          dark: '#17191C',
+          elevated: '#202328',
+        },
+        night: {
+          DEFAULT: '#17191C',
+          elevated: '#202328',
+          border: '#343A41',
+          muted: '#A7AFB8',
         },
         brand: {
           DEFAULT: '#FF5A1F',

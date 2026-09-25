@@ -29,7 +29,10 @@
 import type { IsoWeekday } from '@/types'
 
 /** Friday and Saturday, the schools.weekend_days default since Phase 3. */
-export const DEFAULT_WEEKEND_DAYS: IsoWeekday[] = [5, 6]
+/** Thursday and Friday: the default school week is Saturday through Wednesday. */
+export const DEFAULT_WEEKEND_DAYS: IsoWeekday[] = [4, 5]
+
+const SCHOOL_WEEK_ORDER: IsoWeekday[] = [6, 7, 1, 2, 3, 4]
 
 /** The schools.timezone default since Phase 3. */
 export const DEFAULT_TIME_ZONE = 'Africa/Mogadishu'
@@ -97,7 +100,7 @@ export function isWeekendDay(day: IsoWeekday, weekendDays: readonly number[] = D
  * decide their columns instead of assuming five Monday-to-Friday columns.
  */
 export function schoolWeekdays(weekendDays: readonly number[] = DEFAULT_WEEKEND_DAYS): IsoWeekday[] {
-  return ISO_WEEKDAYS.filter((day) => !weekendDays.includes(day))
+  return SCHOOL_WEEK_ORDER.filter((day) => !weekendDays.includes(day))
 }
 
 /**

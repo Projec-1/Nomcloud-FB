@@ -10,6 +10,7 @@ import Badge from '@/components/ui/Badge'
 import { paymentMethodLabel, type FeePaymentView, type FeeStatus } from '@/services/financeService'
 import { formatDate, formatMoney } from '@/utils/format'
 import { downloadReceiptImage } from '@/utils/receipt'
+import { schoolLogoUrl } from '@/services/storageService'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 6. Real fee_records and fee_payments for the selected child.
@@ -74,6 +75,7 @@ export default function ParentFees() {
     downloadReceiptImage({
       reference: payment.reference,
       schoolName: school?.name ?? '',
+      schoolLogoUrl: schoolLogoUrl(school?.logo_path ?? null),
       studentName: selectedChild.name,
       category,
       amount: payment.amount,

@@ -4,9 +4,10 @@ import AccessDenied from '@/components/ui/AccessDenied'
 import { useAuth } from '@/context/AuthContext'
 import { isDemoSessionBlocked } from '@/lib/demoSchool'
 import type { Role } from '@/types'
+import SignOutButton from '@/components/ui/SignOutButton'
 
 export default function RoleRoute({ role, children }: { role: Role; children: ReactNode }) {
-  const { authState, workspaces, activeRole, platformAdmin, logout, school } = useAuth()
+  const { authState, workspaces, activeRole, platformAdmin, school } = useAuth()
 
   if (authState !== 'ready') return null
 
@@ -24,9 +25,9 @@ export default function RoleRoute({ role, children }: { role: Role; children: Re
           <AccessDenied
             hint="This account belongs to the demonstration school, which is not available here."
             action={
-              <button type="button" onClick={logout} className="btn-accent px-5 py-2.5 text-sm">
+              <SignOutButton className="btn-accent px-5 py-2.5 text-sm">
                 Sign out
-              </button>
+              </SignOutButton>
             }
           />
         </div>
@@ -61,9 +62,9 @@ export default function RoleRoute({ role, children }: { role: Role; children: Re
         <AccessDenied
           hint="Your account is signed in, but no workspace is available for it yet."
           action={
-            <button type="button" onClick={logout} className="btn-accent px-5 py-2.5 text-sm">
+            <SignOutButton className="btn-accent px-5 py-2.5 text-sm">
               Sign out
-            </button>
+            </SignOutButton>
           }
         />
       </div>

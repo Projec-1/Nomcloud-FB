@@ -77,9 +77,14 @@ export default function PublicHeader() {
               {t('nav.dashboard')}
             </button>
           ) : (
-            <Link to="/login" className="btn-ghost px-4 py-2 text-sm">
-              {t('nav.login')}
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link to="/login" className="btn-ghost px-4 py-2 text-sm">
+                Sign In
+              </Link>
+              <Link to="/signup" className="btn-accent px-4 py-2 text-sm">
+                Get Started
+              </Link>
+            </div>
           )}
         </div>
 
@@ -120,9 +125,14 @@ export default function PublicHeader() {
                 {t('nav.dashboard')}
               </button>
             ) : (
-              <Link to="/login" className="btn-ghost flex-1 justify-center py-2.5 text-sm">
-                {t('nav.login')}
-              </Link>
+              <>
+                <Link to="/login" className="btn-ghost flex-1 justify-center py-2.5 text-sm">
+                  Sign In
+                </Link>
+                <Link to="/signup" className="btn-accent flex-1 justify-center py-2.5 text-sm">
+                  Get Started
+                </Link>
+              </>
             )}
           </div>
           <div className="mt-4 flex items-center justify-center border-t border-ink/5 pt-4 dark:border-white/10">

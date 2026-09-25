@@ -29,11 +29,7 @@ import type { SchoolRow } from '@/types/auth'
  *   status, suspended_at,
  *   suspension_reason            tenant lifecycle, owned by the platform
  *   is_demo                      set once by migration 20260913000002
- *   country, currency, locale,
- *   weekend_days                 real columns with no field in this form today.
- *                                weekend_days now drives the calendar (batch 0),
- *                                so giving it an editor is a deliberate UI
- *                                decision rather than a connection task.
+ *   country, currency, locale    tenant identity and billing fields.
  */
 export interface SchoolSettingsUpdate {
   name: string
@@ -44,6 +40,7 @@ export interface SchoolSettingsUpdate {
   primary_color: string
   grading_scale: SchoolRow['grading_scale']
   timezone: string
+  weekend_days: number[]
   attendance_cutoff_time: string
   email_notifications: boolean
   sms_notifications: boolean

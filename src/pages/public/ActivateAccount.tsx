@@ -7,8 +7,7 @@ import Button from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase'
 import { recoveryLanding } from '@/lib/recoveryLanding'
 import { useAuth } from '@/context/AuthContext'
-import { claimPendingInvitation, type InvitationAcceptanceOutcome } from '@/services/invitationService'
-import { fetchActiveMemberships } from '@/services/identityService'
+import { claimPendingInvitation } from '@/services/invitationService'
 import { workspacesForMembershipRoles } from '@/lib/roles'
 import { errorMessage } from '@/utils/errorMessage'
 import { MIN_PASSWORD_LENGTH, isValidPassword } from '@/utils/validators'
@@ -33,7 +32,7 @@ import { MIN_PASSWORD_LENGTH, isValidPassword } from '@/utils/validators'
 // asking them to type it again would be ceremony, not security.
 // ---------------------------------------------------------------------------
 
-type Status = 'checking' | 'ready' | 'saving' | 'invalid' | 'blocked'
+type Status = 'checking' | 'ready' | 'saving' | 'invalid' | 'no_school'
 
 /** How long to wait for supabase-js to turn the fragment into a session. */
 const SESSION_WAIT_MS = 8000
@@ -43,15 +42,6 @@ export default function ActivateAccount() {
   const { authState, school, memberships, displayName, refreshIdentity } = useAuth()
   const [status, setStatus] = useState<Status>('checking')
   const [invalidReason, setInvalidReason] = useState<string | null>(null)
-  // WHY the invitation could not be claimed. accept_pending_invitation now
-  // reports the real reason — cancelled, expired, already used — instead of
-  // lumping them all into "not found", so this screen can say something true.
-  const [claimOutcome, setClaimOutcome] = useState<InvitationAcceptanceOutcome | null>(null)
-  // The signed-in address, read from the session rather than from AuthContext.
-  // An account with no profile yet makes AuthContext report 'error' and clear
-  // authUser, which is exactly the case where naming the address matters most:
-  // seeing it is how somebody realises they are signed in as the wrong person.
-  const [sessionEmail, setSessionEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -113,18 +103,13 @@ export default function ActivateAccount() {
   useEffect(() => {
     if (status !== 'ready' || claimed) return
     let cancelled = false
-    void supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setSessionEmail(data.user?.email ?? null)
-    })
     void claimPendingInvitation()
       .then((outcome) => {
-        if (!cancelled) setClaimOutcome(outcome)
         if (outcome === 'accepted') refreshIdentity()
       })
       .catch(() => {
-        // The call itself failed, which is not the same as being refused; the
-        // screen falls back to its most general message rather than inventing
-        // a reason.
+        // Not fatal: the screen below says "wrong account" rather than
+        // pretending an invitation was found.
       })
       .finally(() => {
         if (!cancelled) setClaimed(true)
@@ -134,13 +119,13 @@ export default function ActivateAccount() {
     }
   }, [status, claimed, refreshIdentity])
 
-  // The link itself worked, but this account ended up connected to no school.
-  // 'error' counts too — that is what an account with no profile looks like
-  // once the claim has found nothing to claim.
+  // A valid link whose account belongs to no school: the link worked, but this
+  // is not the account the activation was for. 'error' counts too — it is what
+  // an account with no profile looks like once the claim has found nothing.
   useEffect(() => {
     if (status !== 'ready' || !claimed) return
-    if (authState === 'ready' && memberships.length === 0) setStatus('blocked')
-    if (authState === 'error') setStatus('blocked')
+    if (authState === 'ready' && memberships.length === 0) setStatus('no_school')
+    if (authState === 'error') setStatus('no_school')
   }, [status, authState, claimed, memberships.length])
 
   const roleLabel = (() => {
@@ -173,25 +158,7 @@ export default function ActivateAccount() {
       return
     }
 
-    // Where to send them is decided from a FRESH read, not from `memberships`
-    // in this component's state. The claim above populates that list through an
-    // async identity refresh, and somebody who types a password quickly can
-    // submit before it lands — which sent newly activated people to /login
-    // instead of their workspace, making activation look like it had failed.
-    // The session is already valid here, so one authoritative read settles it.
-    let roles = memberships.map((membership) => membership.role)
-    try {
-      const { data } = await supabase.auth.getUser()
-      if (data.user) {
-        const fresh = await fetchActiveMemberships(data.user.id)
-        if (fresh.length > 0) roles = fresh.map((membership) => membership.role)
-      }
-    } catch {
-      // Fall back to whatever state already holds; the worst case is the
-      // sign-in screen, which is where the old code always ended up.
-    }
-
-    const workspace = workspacesForMembershipRoles(roles)[0]
+    const workspace = workspacesForMembershipRoles(memberships.map((membership) => membership.role))[0]
     navigate(workspace ? `/app/${workspace}` : '/login', { replace: true })
   }
 
@@ -203,68 +170,29 @@ export default function ActivateAccount() {
     )
   }
 
-  if (status === 'invalid' || status === 'blocked') {
-    // One honest message per real cause. Nothing here blames the person for a
-    // decision the school made or for time passing, and none of it claims the
-    // link was "invalid" when the link was fine and the invitation was not.
-    const { title, headline, advice } = (() => {
-      if (status === 'invalid') {
-        return {
-          title: 'This link has expired',
-          headline: 'This activation link no longer works.',
-          advice:
-            'Activation links last 24 hours and can only be opened once. Ask your school to send you a new one, then open the newest email.',
-        }
-      }
-      switch (claimOutcome) {
-        case 'revoked':
-          return {
-            title: 'This invitation was cancelled',
-            headline: 'Your school cancelled this invitation, so it can no longer be used.',
-            advice: 'Ask them to invite you again and you will get a fresh email.',
-          }
-        case 'expired':
-          return {
-            title: 'This invitation has expired',
-            headline: 'This invitation is older than 24 hours, so it can no longer be used.',
-            advice: 'Ask your school to invite you again — it only takes them a moment.',
-          }
-        case 'already_accepted':
-        case 'role_already_held':
-          return {
-            title: 'Your account is already set up',
-            headline: 'This invitation has already been used.',
-            advice:
-              'Sign in with your email address and the password you chose. If you have forgotten it, use “Forgot password?” on the sign-in page.',
-          }
-        case 'email_mismatch':
-          return {
-            title: 'This link was sent to a different address',
-            headline: `This invitation was not sent to ${sessionEmail ?? 'this address'}.`,
-            advice: 'Sign out, then open the link from the email your school sent you.',
-          }
-        default:
-          return {
-            title: 'No invitation found',
-            headline: sessionEmail
-              ? `We could not find an invitation for ${sessionEmail}.`
-              : 'We could not find an invitation for this account.',
-            advice:
-              'If that is not the address your school invited, you may be signed in with another account — sign out, then open the link from your email again. Otherwise ask your school to send the invitation again.',
-          }
-      }
-    })()
-
+  if (status === 'invalid' || status === 'no_school') {
+    const isWrongAccount = status === 'no_school'
     return (
-      <AuthLayout title={title} subtitle="Nothing has been changed.">
-        <div className="flex gap-3 rounded-2xl bg-amber-500/10 px-4 py-3.5">
-          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" />
+      <AuthLayout
+        title={isWrongAccount ? 'Wrong account' : 'Activation link not valid'}
+        subtitle="Nothing has been changed."
+      >
+        <div className="flex gap-3 rounded-2xl bg-red-500/10 px-4 py-3.5">
+          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
           <div>
-            <p className="text-sm font-medium text-ink dark:text-white">{headline}</p>
-            {invalidReason && <p className="mt-1 text-xs text-graphite">{invalidReason}</p>}
+            <p className="text-sm font-medium text-red-500">
+              {isWrongAccount
+                ? 'This link opened an account that is not connected to a school.'
+                : 'This activation link is invalid or has expired.'}
+            </p>
+            {invalidReason && <p className="mt-1 text-xs text-red-500/80">{invalidReason}</p>}
           </div>
         </div>
-        <p className="mt-5 text-sm text-graphite">{advice}</p>
+        <p className="mt-5 text-sm text-graphite">
+          {isWrongAccount
+            ? 'Ask your school to send the activation email again, and open it while signed out of any other account.'
+            : 'Each activation link works once and expires. Ask for a new one to be sent, then open the newest email.'}
+        </p>
         <Link to="/login" className="mt-6 block">
           <Button size="lg" className="w-full">
             Back to sign in <ArrowRight className="h-4 w-4" />

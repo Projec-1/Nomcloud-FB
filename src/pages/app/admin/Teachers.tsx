@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FileSpreadsheet, GraduationCap, Mail, Pencil, Plus, ShieldCheck, ShieldOff, Trash2 } from 'lucide-react'
+import { GraduationCap, Plus, Pencil, Trash2, ShieldOff, ShieldCheck, Mail } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
-import ImportDialog from '@/components/import/ImportDialog'
-import { teachersImport } from '@/services/import/kinds'
 import SearchInput from '@/components/ui/SearchInput'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
@@ -30,6 +28,7 @@ import { minLength, type FieldErrors } from '@/utils/validators'
 import { fetchTeacherAccess, revokeAccess, restoreAccess, type PersonAccess } from '@/services/accessService'
 import { listLiveInvitations, sendInvitation, type InvitationRow } from '@/services/invitationService'
 import BulkInviteBar from '@/components/ui/BulkInviteBar'
+import RequestProcessing from '@/components/ui/RequestProcessing'
 import { runBulkInvite, type BulkInviteProgress, type BulkInviteResult } from '@/services/bulkInvite'
 import { formatDate } from '@/utils/format'
 import { errorMessage, toError } from '@/utils/errorMessage'
@@ -65,7 +64,6 @@ export default function AdminTeachers() {
 
   const schoolId = school?.id ?? null
 
-  const [importOpen, setImportOpen] = useState(false)
   const [teachers, setTeachers] = useState<TeacherRow[]>([])
   const [subjects, setSubjects] = useState<SubjectRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -352,14 +350,9 @@ export default function AdminTeachers() {
         title="Teachers"
         description="Teaching staff at your school."
         actions={
-          <div className="flex flex-wrap gap-2.5">
-            <Button variant="outline" onClick={() => setImportOpen(true)} icon={<FileSpreadsheet className="h-4 w-4" />}>
-              Import from Excel
-            </Button>
-            <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
-              Add Teacher
-            </Button>
-          </div>
+          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
+            Add Teacher
+          </Button>
         }
       />
 
@@ -528,6 +521,7 @@ export default function AdminTeachers() {
         onClose={() => setModalOpen(false)}
         title={editing ? 'Edit Teacher' : 'Add Teacher'}
         footer={
+          isSaving ? <RequestProcessing compact title={editing ? 'Updating teacher' : 'Creating teacher'} description="Saving your changes securely…" /> :
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
@@ -538,7 +532,7 @@ export default function AdminTeachers() {
           </>
         }
       >
-        <div className="space-y-4">
+        {isSaving ? <RequestProcessing title={editing ? 'Updating teacher' : 'Creating teacher'} description="Your teacher details are being saved securely." /> : <div className="space-y-4">
           <Input label="Full name" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={errors.fullName} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -599,7 +593,7 @@ export default function AdminTeachers() {
             This records a member of staff. It does not create a login. Send them an invitation so they can sign in and
             see their classes.
           </p>
-        </div>
+        </div>}
       </Modal>
 
       <ConfirmDialog
@@ -628,13 +622,6 @@ export default function AdminTeachers() {
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
-      />
-
-      <ImportDialog
-        kind={teachersImport}
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onImported={reload}
       />
     </div>
   )

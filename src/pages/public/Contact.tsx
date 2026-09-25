@@ -6,6 +6,7 @@ import Input from '@/components/ui/Input'
 import Textarea from '@/components/ui/Textarea'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
+import RequestProcessing from '@/components/ui/RequestProcessing'
 import { isValidEmail, minLength, type FieldErrors } from '@/utils/validators'
 import { submitContactMessage } from '@/services/contactService'
 import { useToast } from '@/context/ToastContext'
@@ -89,7 +90,9 @@ export default function Contact() {
 
           <Reveal delay={120} className="lg:col-span-3">
             <div className="card p-8 sm:p-10">
-              {submitted ? (
+              {loading ? (
+                <RequestProcessing title="Sending your message" description="Your message is being securely delivered to the Nom Cloud team." />
+              ) : submitted ? (
                 <div className="flex flex-col items-center py-10 text-center">
                   <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
                     <CheckCircle2 className="h-8 w-8" />

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookOpen, CalendarRange, FileSpreadsheet, MapPin, Pencil, Plus, Trash2, Users } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, Users, MapPin } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
-import ImportDialog from '@/components/import/ImportDialog'
-import { classesImport } from '@/services/import/kinds'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -12,21 +10,16 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Input from '@/components/ui/Input'
 import EmptyState from '@/components/ui/EmptyState'
 import ResourceGate from '@/components/ui/ResourceGate'
-import TimetableGrid, { PERIODS } from '@/components/dashboard/TimetableGrid'
+import RequestProcessing from '@/components/ui/RequestProcessing'
 import { useRecordableClasses } from '@/hooks/useRecordableClasses'
 import { useAcademicStructure } from '@/hooks/useAcademicStructure'
 import {
   createClass,
-  createTimetableSlot,
   deleteClass,
-  deleteTimetableSlot,
   updateClass,
 } from '@/services/classService'
-import { fetchSchoolTeachers, type ClassSummary, type TeacherRow, type TimetableSlotView } from '@/services/teacherService'
-import { fetchSubjects, type SubjectRow } from '@/services/academicService'
-import { supabase } from '@/lib/supabase'
+import { fetchSchoolTeachers, type ClassSummary, type TeacherRow } from '@/services/teacherService'
 import { minLength, type FieldErrors } from '@/utils/validators'
-import type { IsoWeekday } from '@/types'
 import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
@@ -58,7 +51,6 @@ export default function AdminClasses() {
   const { school } = useAuth()
   const { showToast } = useToast()
   // K6: the current year by default; any other year, or all of them, on request.
-  const [importOpen, setImportOpen] = useState(false)
   const [yearScope, setYearScope] = useState<string>('active')
   const { state, classes, schoolId, reload } = useRecordableClasses(yearScope)
   const { state: academicState } = useAcademicStructure()
@@ -67,9 +59,6 @@ export default function AdminClasses() {
   const years = academicState.status === 'ready' ? academicState.data.years : []
 
   const [teachers, setTeachers] = useState<TeacherRow[]>([])
-  const [subjects, setSubjects] = useState<SubjectRow[]>([])
-  const [slots, setSlots] = useState<TimetableSlotView[]>([])
-  const [slotNonce, setSlotNonce] = useState(0)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<ClassSummary | null>(null)
@@ -78,22 +67,13 @@ export default function AdminClasses() {
   const [deleteTarget, setDeleteTarget] = useState<ClassSummary | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  const [timetableClassId, setTimetableClassId] = useState('')
-  const [slotDraft, setSlotDraft] = useState<{ day: IsoWeekday; period: number } | null>(null)
-  const [slotSubjectId, setSlotSubjectId] = useState('')
-  const [slotTeacherId, setSlotTeacherId] = useState('')
-  const [slotRoom, setSlotRoom] = useState('')
-
-  const activeClass = classes.find((c) => c.id === timetableClassId) ?? classes[0]
-
   useEffect(() => {
     let cancelled = false
     if (!schoolId) return
-    Promise.all([fetchSchoolTeachers(schoolId), fetchSubjects(schoolId)])
-      .then(([ts, ss]) => {
+    fetchSchoolTeachers(schoolId)
+      .then((ts) => {
         if (cancelled) return
         setTeachers(ts)
-        setSubjects(ss)
       })
       .catch(() => {
         // Pickers degrade to empty; the class list still renders.
@@ -102,50 +82,6 @@ export default function AdminClasses() {
       cancelled = true
     }
   }, [schoolId])
-
-  // Timetable slots for the selected class only, scoped explicitly.
-  useEffect(() => {
-    let cancelled = false
-    if (!schoolId || !activeClass) {
-      setSlots([])
-      return
-    }
-    supabase
-      .from('timetable_slots')
-      .select('id, class_id, teacher_id, subject_id, day_of_week, period, start_time, end_time, room')
-      .eq('school_id', schoolId)
-      .eq('class_id', activeClass.id)
-      .then(({ data, error }) => {
-        if (cancelled || error) return
-        const subjectNames = new Map(subjects.map((s) => [s.id, s.name]))
-        setSlots(
-          ((data ?? []) as {
-            id: string
-            class_id: string
-            teacher_id: string | null
-            subject_id: string | null
-            day_of_week: number
-            period: number
-            start_time: string
-            end_time: string
-            room: string | null
-          }[]).map((s) => ({
-            id: s.id,
-            classId: s.class_id,
-            teacherId: s.teacher_id ?? '',
-            day: s.day_of_week as TimetableSlotView['day'],
-            period: s.period,
-            startTime: s.start_time.slice(0, 5),
-            endTime: s.end_time.slice(0, 5),
-            subject: s.subject_id ? (subjectNames.get(s.subject_id) ?? '') : '',
-            room: s.room ?? '',
-          })),
-        )
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [schoolId, activeClass, subjects, slotNonce])
 
   const teacherNames = useMemo(() => new Map(teachers.map((t) => [t.id, t.full_name])), [teachers])
 
@@ -172,7 +108,6 @@ export default function AdminClasses() {
 
   const validate = () => {
     const next: FieldErrors = {}
-    if (!minLength(form.name, 2)) next.name = 'Enter a class name.'
     if (!minLength(form.grade, 1)) next.grade = 'Enter a grade.'
     // Only a NEW class needs the active year; an edit keeps the class's own year.
     if (!editing && !activeYearId) next.name = 'Set an active academic year before creating classes.'
@@ -184,11 +119,11 @@ export default function AdminClasses() {
     if (!validate() || !schoolId) return
     setIsSaving(true)
     const input = {
-      name: form.name,
+      name: editing?.name ?? `Grade ${form.grade.trim()}`,
       grade: form.grade,
-      section: form.section || null,
-      room: form.room || null,
-      capacity: form.capacity ? Number(form.capacity) : null,
+      section: editing?.section ?? null,
+      room: editing?.room ?? null,
+      capacity: editing?.capacity ?? null,
       academicYearId: activeYearId,
       classTeacherId: form.classTeacherId || null,
     }
@@ -230,68 +165,15 @@ export default function AdminClasses() {
     }
   }
 
-  const openSlot = (day: IsoWeekday, period: number) => {
-    setSlotDraft({ day, period })
-    setSlotSubjectId(activeClass?.writableSubjects[0]?.id ?? '')
-    setSlotTeacherId(activeClass?.teacherId ?? '')
-    setSlotRoom(activeClass?.room ?? '')
-  }
-
-  const saveSlot = async () => {
-    if (!schoolId || !activeClass || !slotDraft) return
-    const periodInfo = PERIODS.find((p) => p.period === slotDraft.period)
-    if (!periodInfo) return
-    try {
-      await createTimetableSlot(schoolId, {
-        classId: activeClass.id,
-        subjectId: slotSubjectId || null,
-        teacherId: slotTeacherId || null,
-        dayOfWeek: slotDraft.day,
-        period: slotDraft.period,
-        startTime: periodInfo.startTime,
-        endTime: periodInfo.endTime,
-        room: slotRoom || null,
-      })
-      showToast({ type: 'success', title: 'Timetable updated' })
-      setSlotDraft(null)
-      setSlotNonce((n) => n + 1)
-    } catch (err: unknown) {
-      showToast({
-        type: 'error',
-        title: 'Slot not added',
-        description: errorMessage(err),
-      })
-    }
-  }
-
-  const removeSlot = async (id: string) => {
-    if (!schoolId) return
-    try {
-      await deleteTimetableSlot(schoolId, id)
-      setSlotNonce((n) => n + 1)
-    } catch (err: unknown) {
-      showToast({
-        type: 'error',
-        title: 'Slot not removed',
-        description: errorMessage(err),
-      })
-    }
-  }
-
   return (
     <div>
       <PageHeader
         title="Classes"
-        description="Class groups, their homeroom teachers and weekly timetables."
+        description="Class groups and their homeroom teachers."
         actions={
-          <div className="flex flex-wrap gap-2.5">
-            <Button variant="outline" onClick={() => setImportOpen(true)} icon={<FileSpreadsheet className="h-4 w-4" />}>
-              Import from Excel
-            </Button>
-            <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
-              Add Class
-            </Button>
-          </div>
+          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
+            Add Class
+          </Button>
         }
       />
 
@@ -382,30 +264,6 @@ export default function AdminClasses() {
               ))}
             </div>
 
-            <div className="mt-10">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-xl bg-accent/10 p-2.5 text-accent">
-                    <CalendarRange className="h-4 w-4" />
-                  </div>
-                  <h3 className="font-semibold text-ink dark:text-white">Weekly Timetable</h3>
-                </div>
-                <Select
-                  value={timetableClassId || rows[0]?.id}
-                  onChange={(e) => setTimetableClassId(e.target.value)}
-                  className="w-56"
-                >
-                  {rows.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="card p-5">
-                <TimetableGrid slots={slots} editable onAddSlot={openSlot} onRemoveSlot={removeSlot} />
-              </div>
-            </div>
           </>
         )}
       </ResourceGate>
@@ -415,6 +273,7 @@ export default function AdminClasses() {
         onClose={() => setModalOpen(false)}
         title={editing ? 'Edit Class' : 'Add Class'}
         footer={
+          isSaving ? <RequestProcessing compact title={editing ? 'Updating class' : 'Creating class'} description="Saving your changes securely…" /> :
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
@@ -425,67 +284,20 @@ export default function AdminClasses() {
           </>
         }
       >
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Class name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} />
-            <Input label="Grade" required value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} error={errors.grade} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Section" value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} />
-            <Input label="Room" value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="Capacity"
-              type="number"
-              min={1}
-              value={form.capacity}
-              onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-            />
-            <Select
-              label="Homeroom teacher"
-              value={form.classTeacherId}
-              onChange={(e) => setForm({ ...form, classTeacherId: e.target.value })}
-            >
-              <option value="">None</option>
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.full_name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {!activeYearId && (
-            <p className="text-xs text-red-500">
-              No active academic year is set. A class belongs to an academic year, so one must exist first.
-            </p>
-          )}
-        </div>
-      </Modal>
-
-      <Modal
-        open={!!slotDraft}
-        onClose={() => setSlotDraft(null)}
-        title={slotDraft ? `Day ${slotDraft.day} · Period ${slotDraft.period}` : undefined}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setSlotDraft(null)}>
-              Cancel
-            </Button>
-            <Button onClick={saveSlot}>Save</Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Select label="Subject" value={slotSubjectId} onChange={(e) => setSlotSubjectId(e.target.value)}>
-            <option value="">None</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Teacher" value={slotTeacherId} onChange={(e) => setSlotTeacherId(e.target.value)}>
+        {isSaving ? <RequestProcessing title={editing ? 'Updating class' : 'Creating class'} description="Your class details are being saved securely." /> : <div className="space-y-4">
+          <Input
+            label="Grade"
+            required
+            value={form.grade}
+            onChange={(e) => setForm({ ...form, grade: e.target.value })}
+            error={errors.grade}
+            placeholder="e.g. 7 or Kindergarten"
+          />
+          <Select
+            label="Foremaster / homeroom teacher"
+            value={form.classTeacherId}
+            onChange={(e) => setForm({ ...form, classTeacherId: e.target.value })}
+          >
             <option value="">None</option>
             {teachers.map((t) => (
               <option key={t.id} value={t.id}>
@@ -493,25 +305,23 @@ export default function AdminClasses() {
               </option>
             ))}
           </Select>
-          <Input label="Room" value={slotRoom} onChange={(e) => setSlotRoom(e.target.value)} />
-        </div>
+          {!editing && <p className="text-xs text-graphite">The class name will be generated from the selected grade.</p>}
+          {!activeYearId && (
+            <p className="text-xs text-red-500">
+              No active academic year is set. A class belongs to an academic year, so one must exist first.
+            </p>
+          )}
+        </div>}
       </Modal>
 
       <ConfirmDialog
         open={!!deleteTarget}
         title={`Remove ${deleteTarget?.name}?`}
-        description="Only a class with no attendance, grades, homework, exams or enrolled students (past or present) can be removed. Its timetable, subject assignments and class announcements are removed with it."
+        description="Only a class with no attendance, grades, homework, exams or enrolled students (past or present) can be removed."
         confirmLabel="Remove Class"
         danger
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
-      />
-
-      <ImportDialog
-        kind={classesImport}
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onImported={reload}
       />
     </div>
   )

@@ -149,18 +149,6 @@ export interface ClassInput {
   capacity: number | null
   academicYearId: string
   classTeacherId: string | null
-  /**
-   * Optional, and omitted entirely when absent.
-   *
-   * The header records that the frontend does not become campus-aware, and the
-   * class FORM still sends nothing here, so creating a class by hand behaves
-   * exactly as it did. Bulk import is the one caller that names a campus,
-   * because a spreadsheet covering a multi-campus school has no other way to
-   * say which "Grade 5A" it means. RLS is unchanged either way:
-   * classes_management_insert checks has_campus_scoped_management(school_id,
-   * campus_id), so naming a campus can only ever narrow what is permitted.
-   */
-  campusId?: string | null
 }
 
 export async function createClass(schoolId: string, input: ClassInput): Promise<string> {
@@ -175,9 +163,7 @@ export async function createClass(schoolId: string, input: ClassInput): Promise<
       room: input.room,
       capacity: input.capacity,
       class_teacher_id: input.classTeacherId,
-      // Sent only when the caller named one; otherwise the column is left out
-      // entirely, exactly as before. See ClassInput.campusId.
-      ...(input.campusId ? { campus_id: input.campusId } : {}),
+      // campus_id deliberately omitted. See the header.
     })
     .select('id')
     .single()
@@ -261,6 +247,20 @@ export interface TimetableSlotInput {
 
 /** Adds a timetable slot. Management only, per can_manage_class. */
 export async function createTimetableSlot(schoolId: string, input: TimetableSlotInput): Promise<void> {
+  if (input.teacherId) {
+    const { data: conflict, error: conflictError } = await supabase
+      .from('timetable_slots')
+      .select('id, class_id')
+      .eq('school_id', schoolId)
+      .eq('teacher_id', input.teacherId)
+      .eq('day_of_week', input.dayOfWeek)
+      .eq('period', input.period)
+      .maybeSingle()
+    if (conflictError) throw conflictError
+    if (conflict && conflict.class_id !== input.classId) {
+      throw new Error('This teacher is already scheduled for another class at that time.')
+    }
+  }
   const { error } = await supabase.from('timetable_slots').insert({
     school_id: schoolId,
     class_id: input.classId,
@@ -280,5 +280,38 @@ export async function createTimetableSlot(schoolId: string, input: TimetableSlot
 
 export async function deleteTimetableSlot(schoolId: string, id: string): Promise<void> {
   const { error } = await supabase.from('timetable_slots').delete().eq('school_id', schoolId).eq('id', id)
+  if (error) throw error
+}
+
+/** Updates a lesson or break while keeping the same class and slot identity. */
+export async function updateTimetableSlot(schoolId: string, id: string, input: TimetableSlotInput): Promise<void> {
+  if (input.teacherId) {
+    const { data: conflict, error: conflictError } = await supabase
+      .from('timetable_slots')
+      .select('id, class_id')
+      .eq('school_id', schoolId)
+      .eq('teacher_id', input.teacherId)
+      .eq('day_of_week', input.dayOfWeek)
+      .eq('period', input.period)
+      .neq('id', id)
+      .maybeSingle()
+    if (conflictError) throw conflictError
+    if (conflict && conflict.class_id !== input.classId) {
+      throw new Error('This teacher is already scheduled for another class at that time.')
+    }
+  }
+  const { error } = await supabase
+    .from('timetable_slots')
+    .update({
+      subject_id: input.subjectId,
+      teacher_id: input.teacherId,
+      day_of_week: input.dayOfWeek,
+      period: input.period,
+      start_time: input.startTime,
+      end_time: input.endTime,
+      room: input.room,
+    })
+    .eq('school_id', schoolId)
+    .eq('id', id)
   if (error) throw error
 }

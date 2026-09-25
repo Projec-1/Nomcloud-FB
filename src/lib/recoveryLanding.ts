@@ -32,40 +32,6 @@ function fragmentParams(): URLSearchParams {
 const params = fragmentParams()
 const type = params.get('type')
 
-/**
- * Rescues a link that arrived on the wrong page.
- *
- * Supabase honours `redirect_to` only when it is on the project's allow-list.
- * For anything else — a link sent from a dev server, a preview deployment, a
- * subdomain, a future custom domain — it falls back to the Site URL WITHOUT
- * reporting an error, so the person lands on the marketing homepage holding a
- * perfectly valid session in the fragment and sees no password form at all.
- * That happened on 2026-09-24.
- *
- * The sending side is fixed separately, by configuring the origin instead of
- * reading it from whoever sent the invitation. This exists because that fix
- * cannot reach the emails ALREADY in people's inboxes: those links still point
- * at the homepage, and without this they stay broken forever.
- *
- * It runs before React and before supabase-js has consumed the fragment, and
- * carries the fragment across unchanged, so the destination page sees exactly
- * what it would have seen had the redirect been right in the first place.
- */
-function rescueMisdirectedLanding() {
-  if (typeof window === 'undefined' || !type) return
-  const destination = type === 'invite' ? '/activate' : type === 'recovery' ? '/reset-password' : null
-  if (!destination) return
-
-  // Pages that legitimately handle a token fragment. Being on any of them means
-  // the redirect worked and there is nothing to rescue.
-  const handled = ['/activate', '/reset-password', '/first-login']
-  if (handled.includes(window.location.pathname)) return
-
-  window.location.replace(`${destination}${window.location.search}${window.location.hash}`)
-}
-
-rescueMisdirectedLanding()
-
 export const recoveryLanding = {
   /** The page was opened by following a password-recovery link. */
   isRecovery: type === 'recovery',

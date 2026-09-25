@@ -164,7 +164,10 @@ export default function AttendanceMarker({ classes, schoolId, timeZone }: Attend
     }
   }, [selectedClass, students, draft, schoolId, date, showToast])
 
-  const presentCount = students.filter((s) => draft[s.id]?.status === 'present').length
+  const counts = (Object.keys(statusConfig) as AttendanceStatus[]).reduce(
+    (result, status) => ({ ...result, [status]: students.filter((s) => draft[s.id]?.status === status).length }),
+    { present: 0, absent: 0, late: 0, excused: 0 } as Record<AttendanceStatus, number>,
+  )
 
   return (
     <div>
@@ -190,12 +193,27 @@ export default function AttendanceMarker({ classes, schoolId, timeZone }: Attend
         <EmptyState title="No students in this class" description="Add students to this class to begin marking attendance." />
       ) : (
         <div className="card overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/5 px-5 py-4 dark:border-white/10">
-            <p className="text-sm text-graphite">
-              <span className="font-semibold text-ink dark:text-white">{presentCount}</span> / {students.length} marked present
-            </p>
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-4 border-b border-ink/5 px-4 py-4 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div>
+              <p className="text-sm text-graphite">
+                <span className="font-semibold text-ink dark:text-white">{counts.present}</span> / {students.length} students present
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-graphite">
+                <span className="text-emerald-600">Present {counts.present}</span>
+                <span className="text-red-500">Absent {counts.absent}</span>
+                <span className="text-amber-600">Late {counts.late}</span>
+                <span className="text-accent">Excused {counts.excused}</span>
+              </div>
+            </div>
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+              <button
+                onClick={() => markAll('present')}
+                className="rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600"
+              >
+                Mark all present
+              </button>
               {(Object.keys(statusConfig) as AttendanceStatus[]).map((status) => (
+                status === 'present' ? null :
                 <button
                   key={status}
                   onClick={() => markAll(status)}
@@ -210,7 +228,7 @@ export default function AttendanceMarker({ classes, schoolId, timeZone }: Attend
             {students.map((s) => {
               const current = draft[s.id]?.status ?? 'present'
               return (
-                <div key={s.id} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div key={s.id} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div className="flex items-center gap-3">
                     <Avatar name={s.name} color={s.avatarColor} size="sm" />
                     <div>
@@ -218,22 +236,34 @@ export default function AttendanceMarker({ classes, schoolId, timeZone }: Attend
                       <p className="text-xs text-graphite">{s.admissionNo}</p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex w-full flex-wrap gap-1.5 sm:w-auto">
                     {(Object.keys(statusConfig) as AttendanceStatus[]).map((status) => {
                       const config = statusConfig[status]
                       const active = current === status
                       return (
-                        <button
-                          key={status}
-                          onClick={() => setStatus(s.id, status)}
-                          className={cn(
-                            'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all',
-                            active ? config.tone : 'bg-ink/5 text-graphite hover:bg-ink/10 dark:bg-white/10',
+                        <div key={status} className="flex items-center gap-1">
+                          <button
+                            onClick={() => setStatus(s.id, status)}
+                            className={cn(
+                              'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all',
+                              active ? config.tone : 'bg-ink/5 text-graphite hover:bg-ink/10 dark:bg-white/10',
+                            )}
+                          >
+                            <config.icon className="h-3 w-3" />
+                            {config.label}
+                          </button>
+                          {status === 'excused' && active && (
+                            <input
+                              value={draft[s.id]?.note ?? ''}
+                              onChange={(event) =>
+                                setDraft((current) => ({ ...current, [s.id]: { ...current[s.id], status, note: event.target.value } }))
+                              }
+                              placeholder="Optional note"
+                              className="h-8 w-32 rounded-full border border-ink/10 bg-white px-3 text-xs outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+                              aria-label={`Excused note for ${s.name}`}
+                            />
                           )}
-                        >
-                          <config.icon className="h-3 w-3" />
-                          {config.label}
-                        </button>
+                        </div>
                       )
                     })}
                   </div>

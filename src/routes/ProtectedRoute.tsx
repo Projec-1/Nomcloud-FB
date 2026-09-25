@@ -3,9 +3,10 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { PageLoader } from '@/components/ui/Loader'
 import { mustChangePassword } from '@/services/accountService'
+import SignOutButton from '@/components/ui/SignOutButton'
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { authState, authUser, logout } = useAuth()
+  const { authState, authUser } = useAuth()
   const location = useLocation()
 
   if (authState === 'initialising' || authState === 'loading_profile') {
@@ -33,13 +34,11 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
           >
             Try again
           </button>
-          <button
-            type="button"
-            onClick={logout}
+          <SignOutButton
             className="rounded-xl border border-ink/10 px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-ink/5 dark:border-white/10 dark:text-white dark:hover:bg-white/10"
           >
             Sign out
-          </button>
+          </SignOutButton>
         </div>
       </div>
     )

@@ -17,15 +17,22 @@ interface TimetableGridProps {
   slots: TimetableSlot[]
   editable?: boolean
   onAddSlot?: (day: IsoWeekday, period: number) => void
+  onEditSlot?: (slot: TimetableSlot) => void
   onRemoveSlot?: (id: string) => void
 }
 
-export default function TimetableGrid({ slots, editable = false, onAddSlot, onRemoveSlot }: TimetableGridProps) {
-  // Columns come from the signed-in school's weekend, not from a fixed
-  // Monday-to-Friday array (Phase 8 decision 9). With the Somali default of
-  // {5,6} this renders Monday, Tuesday, Wednesday, Thursday, Sunday.
+export default function TimetableGrid({ slots, editable = false, onAddSlot, onEditSlot, onRemoveSlot }: TimetableGridProps) {
+  // Columns come from the signed-in school's configured weekend. The Somali
+  // default renders Saturday through Wednesday, with Thursday optional.
   const { school } = useAuth()
   const days = schoolWeekdays(school?.weekend_days ?? DEFAULT_WEEKEND_DAYS)
+  const periods = Array.from(
+    new Map(
+      [...PERIODS, ...slots.map((slot) => ({ period: slot.period, startTime: slot.startTime, endTime: slot.endTime }))]
+        .sort((a, b) => a.period - b.period)
+        .map((period) => [period.period, period]),
+    ).values(),
+  )
 
   const find = (day: IsoWeekday, period: number) => slots.find((s) => s.day === day && s.period === period)
 
@@ -41,7 +48,7 @@ export default function TimetableGrid({ slots, editable = false, onAddSlot, onRe
           </tr>
         </thead>
         <tbody>
-          {PERIODS.map((p) => (
+          {periods.map((p) => (
             <tr key={p.period}>
               <td className="align-top py-1 text-[11px] text-graphite">
                 {p.startTime}
@@ -53,9 +60,23 @@ export default function TimetableGrid({ slots, editable = false, onAddSlot, onRe
                 return (
                   <td key={day} className="align-top">
                     {slot ? (
-                      <div className="group relative rounded-xl bg-accent/10 p-2.5 text-accent">
-                        <p className="font-semibold">{slot.subject}</p>
-                        <p className="text-[10px] text-accent/70">{slot.room}</p>
+                      <div className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => editable && onEditSlot?.(slot)}
+                          className={cn(
+                            'w-full rounded-xl p-2.5 text-left',
+                          slot.subject ? 'bg-accent/10 text-accent' : 'bg-amber-400/20 text-amber-700 dark:text-amber-300',
+                          editable && 'transition-transform hover:-translate-y-0.5',
+                          )}
+                        >
+                          <p className="font-semibold">{slot.subject || 'Break'}</p>
+                          {slot.teacherName && <p className="text-[10px] text-accent/70">Teacher: {slot.teacherName}</p>}
+                          <p className="mt-1 text-[10px] text-accent/70">
+                            {slot.startTime}–{slot.endTime}
+                          </p>
+                          {slot.room && <p className="text-[10px] text-accent/70">{slot.room}</p>}
+                        </button>
                         {editable && onRemoveSlot && (
                           <button
                             onClick={() => onRemoveSlot(slot.id)}
