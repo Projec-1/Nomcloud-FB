@@ -1,9 +1,10 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import SignOutButton from '@/components/ui/SignOutButton'
 
 export default function PlatformLayout() {
-  const { profile, logout } = useAuth()
+  const { profile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -21,7 +22,7 @@ export default function PlatformLayout() {
           </button>
           <div className="flex items-center gap-4">
             <span className="hidden text-sm text-slate-300 sm:block">{profile?.full_name}</span>
-            <button onClick={logout} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/10 hover:text-white"><LogOut className="h-4 w-4" /> Sign out</button>
+            <SignOutButton className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/10 hover:text-white"><LogOut className="h-4 w-4" /> Sign out</SignOutButton>
           </div>
         </div>
       </header>

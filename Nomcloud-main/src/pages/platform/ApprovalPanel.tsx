@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import { errorMessage } from '@/utils/errorMessage'
+import SignOutButton from '@/components/ui/SignOutButton'
 
 interface PendingApplication {
   id: string
@@ -56,7 +57,7 @@ async function functionErrorMessage(error: unknown): Promise<string> {
 }
 
 export default function ApprovalPanel() {
-  const { authUser, logout } = useAuth()
+  const { authUser } = useAuth()
   const [isPlatformAdmin, setIsPlatformAdmin] = useState<boolean | null>(null)
   const [applications, setApplications] = useState<PendingApplication[]>([])
   const [shortcodes, setShortcodes] = useState<Record<string, string>>({})
@@ -172,9 +173,9 @@ export default function ApprovalPanel() {
         <p className="mt-2 text-sm text-red-700 dark:text-red-300">
           School application approval is restricted to an unrevoked platform-admin account.
         </p>
-        <Button className="mt-5" variant="outline" onClick={logout}>
+        <SignOutButton className="btn-outline mt-5">
           Sign out
-        </Button>
+        </SignOutButton>
       </section>
     )
   }
