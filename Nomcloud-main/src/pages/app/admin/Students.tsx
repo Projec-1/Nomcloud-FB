@@ -130,6 +130,13 @@ function cell(row: Record<string, unknown>, aliases: string[]) {
   return key ? String(row[key] ?? '').trim() : ''
 }
 
+function semanticCell(row: Record<string, unknown>, aliases: string[], matcher: (header: string) => boolean) {
+  const exact = cell(row, aliases)
+  if (exact) return exact
+  const key = Object.keys(row).find((candidate) => matcher(normalizeHeader(candidate)))
+  return key ? String(row[key] ?? '').trim() : ''
+}
+
 /** "Amina Yusuf (Mother)", or just the name when no relationship is recorded. */
 function guardianLabel(g: DirectoryStudent['guardians'][number]): string {
   return g.relationship ? `${g.name} (${g.relationship})` : g.name
@@ -480,8 +487,16 @@ export default function AdminStudents() {
         const name = cell(source, ['name', 'fullname', 'studentname'])
         const admissionNo = cell(source, ['studentid', 'admissionnumber', 'admissionno', 'admissionid', 'id'])
         const className = cell(source, ['class', 'classname', 'section', 'classsection'])
-        const guardian = cell(source, ['parent', 'parentguardian', 'guardian', 'parentname', 'guardianname'])
-        const parentPhone = cell(source, ['phone', 'phonenumber', 'parentphone', 'parentphonenumber', 'guardianphone', 'guardianphonenumber'])
+        const guardian = semanticCell(
+          source,
+          ['parent', 'parentguardian', 'guardian', 'parentname', 'guardianname', 'parentguardianname', 'parentsguardians'],
+          (header) => (header.includes('parent') || header.includes('guardian')) && !header.includes('phone') && !header.includes('mobile') && !header.includes('email'),
+        )
+        const parentPhone = semanticCell(
+          source,
+          ['phone', 'phonenumber', 'parentphone', 'parentphonenumber', 'guardianphone', 'guardianphonenumber', 'parentguardianphone'],
+          (header) => (header.includes('phone') || header.includes('mobile') || header.includes('contact')) && (header.includes('parent') || header.includes('guardian')),
+        )
         const duplicate = Boolean(admissionNo) && (seen.has(admissionNo.toLowerCase()) || existingIds.has(admissionNo.toLowerCase()))
         if (admissionNo) seen.add(admissionNo.toLowerCase())
         const errors = [
@@ -546,9 +561,15 @@ export default function AdminStudents() {
         guardians: row.guardian ? [{ id: `mock-guardian-${Date.now()}-${index}`, name: row.guardian, isPrimary: true, relationship: row.relationship || null }] : [],
       }
     })
-    const stored = [...importedStudentsForSchool(schoolId), ...imported]
+    const existingImported = importedStudentsForSchool(schoolId)
+    const importedByKey = new Map(existingImported.map((student) => [student.admissionNo.toLowerCase() || student.name.toLowerCase(), student]))
+    imported.forEach((student) => importedByKey.set(student.admissionNo.toLowerCase() || student.name.toLowerCase(), student))
+    const stored = Array.from(importedByKey.values())
     localStorage.setItem(`${MOCK_IMPORT_KEY}:${schoolId}`, JSON.stringify(stored))
-    setStudents((current) => [...current, ...imported])
+    setStudents((current) => {
+      const importedKeys = new Set(stored.map((student) => student.admissionNo.toLowerCase() || student.name.toLowerCase()))
+      return [...current.filter((student) => !importedKeys.has(student.admissionNo.toLowerCase() || student.name.toLowerCase())), ...stored]
+    })
     setBulkImporting(false)
     setBulkOpen(false)
     setBulkRows([])
