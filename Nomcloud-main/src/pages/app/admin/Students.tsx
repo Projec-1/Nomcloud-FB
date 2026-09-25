@@ -43,6 +43,7 @@ import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
 import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
 import { errorMessage, toError } from '@/utils/errorMessage'
 import * as XLSX from 'xlsx'
+import { saveMockGuardians, type MockGuardian } from '@/data/mockGuardianStore'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Real students, enrolments and guardian links.
@@ -127,6 +128,13 @@ function normalizeHeader(value: unknown) {
 
 function cell(row: Record<string, unknown>, aliases: string[]) {
   const key = Object.keys(row).find((candidate) => aliases.includes(normalizeHeader(candidate)))
+  return key ? String(row[key] ?? '').trim() : ''
+}
+
+function semanticCell(row: Record<string, unknown>, aliases: string[], matcher: (header: string) => boolean) {
+  const exact = cell(row, aliases)
+  if (exact) return exact
+  const key = Object.keys(row).find((candidate) => matcher(normalizeHeader(candidate)))
   return key ? String(row[key] ?? '').trim() : ''
 }
 
@@ -407,6 +415,15 @@ export default function AdminStudents() {
         guardianNote = form.guardianIsPrimary
           ? `${form.newGuardianName} was added as the primary contact.`
           : `${form.newGuardianName} was added as a guardian.`
+        saveMockGuardians([{
+          id: guardianId,
+          schoolId,
+          name: form.newGuardianName,
+          phone: form.newGuardianPhone,
+          email: form.newGuardianEmail || null,
+          relationship: form.guardianRelationship || null,
+          children: [{ studentName: form.name, studentId }],
+        }])
       }
 
       // The invitation goes through send-invitation, exactly as the Guardians
@@ -480,8 +497,16 @@ export default function AdminStudents() {
         const name = cell(source, ['name', 'fullname', 'studentname'])
         const admissionNo = cell(source, ['studentid', 'admissionnumber', 'admissionno', 'admissionid', 'id'])
         const className = cell(source, ['class', 'classname', 'section', 'classsection'])
-        const guardian = cell(source, ['parent', 'parentguardian', 'guardian', 'parentname', 'guardianname'])
-        const parentPhone = cell(source, ['phone', 'phonenumber', 'parentphone', 'parentphonenumber', 'guardianphone', 'guardianphonenumber'])
+        const guardian = semanticCell(
+          source,
+          ['parent', 'parentguardian', 'guardian', 'parentname', 'guardianname', 'parentguardianname', 'parentsguardians'],
+          (header) => (header.includes('parent') || header.includes('guardian')) && !header.includes('phone') && !header.includes('mobile') && !header.includes('email'),
+        )
+        const parentPhone = semanticCell(
+          source,
+          ['phone', 'phonenumber', 'parentphone', 'parentphonenumber', 'guardianphone', 'guardianphonenumber', 'parentguardianphone'],
+          (header) => (header.includes('phone') || header.includes('mobile') || header.includes('contact')) && (header.includes('parent') || header.includes('guardian')),
+        )
         const duplicate = Boolean(admissionNo) && (seen.has(admissionNo.toLowerCase()) || existingIds.has(admissionNo.toLowerCase()))
         if (admissionNo) seen.add(admissionNo.toLowerCase())
         const errors = [
@@ -529,9 +554,10 @@ export default function AdminStudents() {
     const validRows = bulkRows.filter((row) => row.valid)
     setBulkImporting(true)
     await new Promise((resolve) => window.setTimeout(resolve, 700))
+    const importedGuardians: MockGuardian[] = []
     const imported = validRows.map((row, index): DirectoryStudent => {
       const classMatch = classes.find((item) => item.name.toLowerCase() === row.className.toLowerCase() || item.id.toLowerCase() === row.className.toLowerCase())
-      return {
+      const student = {
         id: `mock-import-${Date.now()}-${index}`,
         name: row.name,
         admissionNo: row.admissionNo || `IMPORT-${Date.now()}-${index + 1}`,
@@ -545,10 +571,19 @@ export default function AdminStudents() {
         className: classMatch?.name ?? row.className,
         guardians: row.guardian ? [{ id: `mock-guardian-${Date.now()}-${index}`, name: row.guardian, isPrimary: true, relationship: row.relationship || null }] : [],
       }
+      if (row.guardian && row.parentPhone) importedGuardians.push({ id: `mock-guardian-${Date.now()}-${index}`, schoolId, name: row.guardian, phone: row.parentPhone, email: null, relationship: row.relationship || null, children: [{ studentName: row.name, studentId: student.id }] })
+      return student
     })
-    const stored = [...importedStudentsForSchool(schoolId), ...imported]
+    saveMockGuardians(importedGuardians)
+    const existingImported = importedStudentsForSchool(schoolId)
+    const importedByKey = new Map(existingImported.map((student) => [student.admissionNo.toLowerCase() || student.name.toLowerCase(), student]))
+    imported.forEach((student) => importedByKey.set(student.admissionNo.toLowerCase() || student.name.toLowerCase(), student))
+    const stored = Array.from(importedByKey.values())
     localStorage.setItem(`${MOCK_IMPORT_KEY}:${schoolId}`, JSON.stringify(stored))
-    setStudents((current) => [...current, ...imported])
+    setStudents((current) => {
+      const importedKeys = new Set(stored.map((student) => student.admissionNo.toLowerCase() || student.name.toLowerCase()))
+      return [...current.filter((student) => !importedKeys.has(student.admissionNo.toLowerCase() || student.name.toLowerCase())), ...stored]
+    })
     setBulkImporting(false)
     setBulkOpen(false)
     setBulkRows([])
