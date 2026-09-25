@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Menu, Moon, Sun, ChevronDown, Settings, LogOut, Camera, Trash2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import SignOutButton from '@/components/ui/SignOutButton'
 import { useToast } from '@/context/ToastContext'
 import { useSignedImageUrl } from '@/hooks/useSignedImageUrl'
 import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
@@ -15,7 +16,7 @@ import Avatar from '@/components/ui/Avatar'
 import NotificationsDropdown from '@/components/dashboard/NotificationsDropdown'
 
 export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
-  const { profile, logout, workspaces, activeRole, activeMembership, setActiveRole, school, platformAdmin, memberships, refreshProfile } =
+  const { profile, workspaces, activeRole, activeMembership, setActiveRole, school, platformAdmin, memberships, refreshProfile } =
     useAuth()
   const { showToast } = useToast()
   const avatarUrl = useSignedImageUrl(BUCKETS.profileAvatars, profile?.avatar_url)
@@ -173,12 +174,11 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                     <Settings className="h-4 w-4" /> {t('dash.nav.settings')}
                   </Link>
                 )}
-                <button
-                  onClick={logout}
+                <SignOutButton
                   className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-red-500 hover:bg-red-500/10"
                 >
                   <LogOut className="h-4 w-4" /> {t('dash.topbar.signOut')}
-                </button>
+                </SignOutButton>
               </div>
             </div>
           )}

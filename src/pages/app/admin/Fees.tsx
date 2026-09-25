@@ -40,6 +40,7 @@ import { minLength } from '@/utils/validators'
 import { formatDate, formatMoney } from '@/utils/format'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { errorMessage } from '@/utils/errorMessage'
+import FeeAnalysisCard from '@/components/dashboard/FeeAnalysisCard'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 6. Real fee_records and fee_payments.
@@ -99,6 +100,7 @@ export default function AdminFees() {
   const [students, setStudents] = useState<RosterStudent[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | FeeStatus>('all')
+  const [analysisMode, setAnalysisMode] = useState<'collected' | 'outstanding'>('collected')
 
   const [feeModalOpen, setFeeModalOpen] = useState(false)
   const [editing, setEditing] = useState<FeeRecordView | null>(null)
@@ -166,6 +168,24 @@ export default function AdminFees() {
       return matchesSearch && matchesStatus
     })
   }, [records, search, statusFilter])
+
+  const monthlyAnalysis = useMemo(() => {
+    const current = new Date(`${todayInTimeZone(timeZone)}T12:00:00`)
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(current.getFullYear(), current.getMonth() - (6 - index), 1)
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      const collected = records.reduce(
+        (sum, fee) => sum + fee.payments.filter((payment) => payment.paidOn.startsWith(key)).reduce((total, payment) => total + payment.amount, 0),
+        0,
+      )
+      const billed = records.reduce((sum, fee) => sum + (fee.dueDate.startsWith(key) ? fee.amount : 0), 0)
+      return {
+        key,
+        label: date.toLocaleDateString('en-US', { month: 'short' }),
+        value: analysisMode === 'collected' ? collected : Math.max(0, billed - collected),
+      }
+    })
+  }, [analysisMode, records, timeZone])
 
   const openCreate = () => {
     setEditing(null)
@@ -443,6 +463,13 @@ export default function AdminFees() {
               <StatCard label="Overdue invoices" value={totals.overdue} icon={AlertTriangle} tint="#EF4444" />
             </div>
 
+            <FeeAnalysisCard
+              currency={currency}
+              mode={analysisMode}
+              onModeChange={setAnalysisMode}
+              months={monthlyAnalysis}
+            />
+
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
               <SearchInput value={search} onChange={setSearch} placeholder="Search by student or fee category…" className="sm:w-80" />
               <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="sm:w-48">
@@ -554,6 +581,7 @@ export default function AdminFees() {
             </Button>
           </>
         }
+
       >
         <div className="space-y-4">
           <div>
@@ -715,7 +743,7 @@ export default function AdminFees() {
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl bg-mist p-4 dark:bg-white/5">
                 <p className="text-base font-semibold text-ink dark:text-white">
                   {formatMoney(statementTarget.amount, statementTarget.currency, true)}

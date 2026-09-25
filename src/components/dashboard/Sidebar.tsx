@@ -4,8 +4,8 @@ import SchoolBrandLogo from '@/components/dashboard/SchoolBrandLogo'
 import { navByRole, roleLabelKey } from '@/components/dashboard/navConfig'
 import type { Role } from '@/types'
 import { cn } from '@/utils/cn'
-import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
+import SignOutButton from '@/components/ui/SignOutButton'
 
 interface SidebarProps {
   role: Role
@@ -15,7 +15,6 @@ interface SidebarProps {
 
 export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
   const items = navByRole[role]
-  const { logout } = useAuth()
   const { t } = useLanguage()
 
   const content = (
@@ -55,12 +54,11 @@ export default function Sidebar({ role, mobileOpen, onClose }: SidebarProps) {
             batch 0), which is real data in the real database and is untouched:
             resetting that tenant would be a server-side operation, recorded as
             open question H.11. */}
-        <button
-          onClick={logout}
+        <SignOutButton
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-red-500/10"
         >
           <LogOut className="h-4 w-4" /> {t('dash.topbar.signOut')}
-        </button>
+        </SignOutButton>
       </div>
     </div>
   )
