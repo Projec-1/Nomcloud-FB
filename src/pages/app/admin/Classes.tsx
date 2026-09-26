@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookOpen, Plus, Pencil, Trash2, Users, MapPin } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, Users, MapPin, FileSpreadsheet } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
+import ImportDialog from '@/components/import/ImportDialog'
+import { classesImport } from '@/services/import/kinds'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -51,6 +53,7 @@ export default function AdminClasses() {
   const { school } = useAuth()
   const { showToast } = useToast()
   // K6: the current year by default; any other year, or all of them, on request.
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [yearScope, setYearScope] = useState<string>('active')
   const { state, classes, schoolId, reload } = useRecordableClasses(yearScope)
   const { state: academicState } = useAcademicStructure()
@@ -171,9 +174,12 @@ export default function AdminClasses() {
         title="Classes"
         description="Class groups and their homeroom teachers."
         actions={
-          <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>
-            Add Class
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setBulkOpen(true)} icon={<FileSpreadsheet className="h-4 w-4" />}>
+              Bulk Import
+            </Button>
+            <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>Add Class</Button>
+          </div>
         }
       />
 
@@ -323,6 +329,8 @@ export default function AdminClasses() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <ImportDialog kind={classesImport} open={bulkOpen} onClose={() => setBulkOpen(false)} onImported={reload} />
     </div>
   )
 }

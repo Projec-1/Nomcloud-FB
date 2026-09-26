@@ -14,6 +14,8 @@ import EmptyState from '@/components/ui/EmptyState'
 import Avatar from '@/components/ui/Avatar'
 import ResourceGate from '@/components/ui/ResourceGate'
 import RequestProcessing from '@/components/ui/RequestProcessing'
+import ImportDialog from '@/components/import/ImportDialog'
+import { studentsImport } from '@/services/import/kinds'
 import { deriveResourceState } from '@/lib/resourceState'
 import { useRecordableClasses } from '@/hooks/useRecordableClasses'
 import { useAcademicStructure } from '@/hooks/useAcademicStructure'
@@ -42,8 +44,6 @@ import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
 import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
 import { errorMessage, toError } from '@/utils/errorMessage'
-import * as XLSX from 'xlsx'
-import { saveMockGuardians, type MockGuardian } from '@/data/mockGuardianStore'
 
 // ---------------------------------------------------------------------------
 // Phase 8 batch 8. Real students, enrolments and guardian links.
@@ -94,50 +94,6 @@ const emptyForm = {
   inviteGuardian: false,
 }
 
-type BulkStudentRow = {
-  name: string
-  admissionNo: string
-  className: string
-  gender: string
-  dateOfBirth: string
-  guardian: string
-  relationship: string
-  parentPhone: string
-  studentPhone: string
-  attendance: string
-  averageGrade: string
-  homeworkStatus: string
-  accountStatus: string
-  valid: boolean
-  error?: string
-}
-
-const MOCK_IMPORT_KEY = 'nomcloud_mock_imported_students'
-
-function importedStudentsForSchool(schoolId: string): DirectoryStudent[] {
-  try {
-    return JSON.parse(localStorage.getItem(`${MOCK_IMPORT_KEY}:${schoolId}`) ?? '[]') as DirectoryStudent[]
-  } catch {
-    return []
-  }
-}
-
-function normalizeHeader(value: unknown) {
-  return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '')
-}
-
-function cell(row: Record<string, unknown>, aliases: string[]) {
-  const key = Object.keys(row).find((candidate) => aliases.includes(normalizeHeader(candidate)))
-  return key ? String(row[key] ?? '').trim() : ''
-}
-
-function semanticCell(row: Record<string, unknown>, aliases: string[], matcher: (header: string) => boolean) {
-  const exact = cell(row, aliases)
-  if (exact) return exact
-  const key = Object.keys(row).find((candidate) => matcher(normalizeHeader(candidate)))
-  return key ? String(row[key] ?? '').trim() : ''
-}
-
 /** "Amina Yusuf (Mother)", or just the name when no relationship is recorded. */
 function guardianLabel(g: DirectoryStudent['guardians'][number]): string {
   return g.relationship ? `${g.name} (${g.relationship})` : g.name
@@ -171,14 +127,7 @@ export default function AdminStudents() {
   const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map())
   const [photoBusy, setPhotoBusy] = useState(false)
   const photoInput = useRef<HTMLInputElement>(null)
-  const bulkInput = useRef<HTMLInputElement>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
-  const [bulkRows, setBulkRows] = useState<BulkStudentRow[]>([])
-  const [bulkError, setBulkError] = useState('')
-  const [bulkSearch, setBulkSearch] = useState('')
-  const [bulkClassFilter, setBulkClassFilter] = useState('all')
-  const [bulkPage, setBulkPage] = useState(1)
-  const [bulkImporting, setBulkImporting] = useState(false)
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -193,7 +142,7 @@ export default function AdminStudents() {
     Promise.all([fetchStudentDirectory(schoolId), fetchSchoolGuardians(schoolId)])
       .then(([rows, gs]) => {
         if (cancelled) return
-        setStudents([...rows, ...(schoolId ? importedStudentsForSchool(schoolId) : [])])
+        setStudents(rows)
         setGuardians(gs)
       })
       .catch((err: unknown) => {
@@ -271,18 +220,6 @@ export default function AdminStudents() {
       return matchesSearch && matchesClass
     })
   }, [students, search, classFilter])
-
-  const filteredBulkRows = useMemo(() => {
-    const query = bulkSearch.trim().toLowerCase()
-    return bulkRows.filter((row) => {
-      const matchesSearch = !query || `${row.name} ${row.admissionNo} ${row.className}`.toLowerCase().includes(query)
-      const matchesClass = bulkClassFilter === 'all' || row.className.toLowerCase() === bulkClassFilter.toLowerCase()
-      return matchesSearch && matchesClass
-    })
-  }, [bulkRows, bulkSearch, bulkClassFilter])
-  const bulkPageSize = 25
-  const bulkPageCount = Math.max(1, Math.ceil(filteredBulkRows.length / bulkPageSize))
-  const visibleBulkRows = filteredBulkRows.slice((bulkPage - 1) * bulkPageSize, bulkPage * bulkPageSize)
 
   const openAdd = () => {
     setEditing(null)
@@ -415,15 +352,6 @@ export default function AdminStudents() {
         guardianNote = form.guardianIsPrimary
           ? `${form.newGuardianName} was added as the primary contact.`
           : `${form.newGuardianName} was added as a guardian.`
-        saveMockGuardians([{
-          id: guardianId,
-          schoolId,
-          name: form.newGuardianName,
-          phone: form.newGuardianPhone,
-          email: form.newGuardianEmail || null,
-          relationship: form.guardianRelationship || null,
-          children: [{ studentName: form.name, studentId }],
-        }])
       }
 
       // The invitation goes through send-invitation, exactly as the Guardians
@@ -475,119 +403,6 @@ export default function AdminStudents() {
     } finally {
       setDeleteTarget(null)
     }
-
-  }
-
-  const processBulkFile = async (file: File) => {
-    if (!file) return
-    setBulkError('')
-    try {
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
-      const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const sourceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
-      if (sourceRows.length === 0) {
-        setBulkError('Add a header row and at least one student.')
-        setBulkRows([])
-        return
-      }
-
-      const seen = new Set<string>()
-      const existingIds = new Set(students.map((student) => student.admissionNo.toLowerCase()))
-      const rows = sourceRows.map((source) => {
-        const name = cell(source, ['name', 'fullname', 'studentname'])
-        const admissionNo = cell(source, ['studentid', 'admissionnumber', 'admissionno', 'admissionid', 'id'])
-        const className = cell(source, ['class', 'classname', 'section', 'classsection'])
-        const guardian = semanticCell(
-          source,
-          ['parent', 'parentguardian', 'guardian', 'parentname', 'guardianname', 'parentguardianname', 'parentsguardians'],
-          (header) => (header.includes('parent') || header.includes('guardian')) && !header.includes('phone') && !header.includes('mobile') && !header.includes('email'),
-        )
-        const parentPhone = semanticCell(
-          source,
-          ['phone', 'phonenumber', 'parentphone', 'parentphonenumber', 'guardianphone', 'guardianphonenumber', 'parentguardianphone'],
-          (header) => (header.includes('phone') || header.includes('mobile') || header.includes('contact')) && (header.includes('parent') || header.includes('guardian')),
-        )
-        const duplicate = Boolean(admissionNo) && (seen.has(admissionNo.toLowerCase()) || existingIds.has(admissionNo.toLowerCase()))
-        if (admissionNo) seen.add(admissionNo.toLowerCase())
-        const errors = [
-          !name ? 'Missing student name' : '',
-          !guardian ? 'Missing parent/guardian' : '',
-          !parentPhone ? 'Missing parent phone number' : '',
-          duplicate ? 'Duplicate student ID' : '',
-        ].filter(Boolean)
-        return {
-          name,
-          admissionNo,
-          className,
-          gender: cell(source, ['gender', 'sex']),
-          dateOfBirth: cell(source, ['dateofbirth', 'dob', 'birthdate']),
-          guardian,
-          relationship: cell(source, ['relationship', 'guardianrelationship']),
-          parentPhone,
-          studentPhone: cell(source, ['studentphone', 'mobile']),
-          attendance: cell(source, ['attendance', 'attendancerate']),
-          averageGrade: cell(source, ['averagegrade', 'average', 'grade']),
-          homeworkStatus: cell(source, ['homeworkstatus', 'homework']),
-          accountStatus: cell(source, ['accountstatus', 'status']) || 'Active',
-          valid: errors.length === 0,
-          error: errors.join(', '),
-        }
-      })
-      setBulkRows(rows)
-      setBulkPage(1)
-      setBulkSearch('')
-      setBulkClassFilter('all')
-    } catch {
-      setBulkError(`Could not read ${file.name}. Please choose a valid XLSX, XLS, or CSV file.`)
-      setBulkRows([])
-    }
-  }
-
-  const handleBulkFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (file) await processBulkFile(file)
-  }
-
-  const importBulkRows = async () => {
-    if (!schoolId) return
-    const validRows = bulkRows.filter((row) => row.valid)
-    setBulkImporting(true)
-    await new Promise((resolve) => window.setTimeout(resolve, 700))
-    const importedGuardians: MockGuardian[] = []
-    const imported = validRows.map((row, index): DirectoryStudent => {
-      const classMatch = classes.find((item) => item.name.toLowerCase() === row.className.toLowerCase() || item.id.toLowerCase() === row.className.toLowerCase())
-      const student = {
-        id: `mock-import-${Date.now()}-${index}`,
-        name: row.name,
-        admissionNo: row.admissionNo || `IMPORT-${Date.now()}-${index + 1}`,
-        gender: row.gender.toLowerCase() || null,
-        dateOfBirth: row.dateOfBirth || null,
-        status: row.accountStatus.toLowerCase() || 'active',
-        enrolledDate: new Date().toISOString().slice(0, 10),
-        avatarColor: '#FF5A1F',
-        photoPath: null,
-        classId: classMatch?.id ?? null,
-        className: classMatch?.name ?? row.className,
-        guardians: row.guardian ? [{ id: `mock-guardian-${Date.now()}-${index}`, name: row.guardian, isPrimary: true, relationship: row.relationship || null }] : [],
-      }
-      if (row.guardian && row.parentPhone) importedGuardians.push({ id: `mock-guardian-${Date.now()}-${index}`, schoolId, name: row.guardian, phone: row.parentPhone, email: null, relationship: row.relationship || null, children: [{ studentName: row.name, studentId: student.id }] })
-      return student
-    })
-    saveMockGuardians(importedGuardians)
-    const existingImported = importedStudentsForSchool(schoolId)
-    const importedByKey = new Map(existingImported.map((student) => [student.admissionNo.toLowerCase() || student.name.toLowerCase(), student]))
-    imported.forEach((student) => importedByKey.set(student.admissionNo.toLowerCase() || student.name.toLowerCase(), student))
-    const stored = Array.from(importedByKey.values())
-    localStorage.setItem(`${MOCK_IMPORT_KEY}:${schoolId}`, JSON.stringify(stored))
-    setStudents((current) => {
-      const importedKeys = new Set(stored.map((student) => student.admissionNo.toLowerCase() || student.name.toLowerCase()))
-      return [...current.filter((student) => !importedKeys.has(student.admissionNo.toLowerCase() || student.name.toLowerCase())), ...stored]
-    })
-    setBulkImporting(false)
-    setBulkOpen(false)
-    setBulkRows([])
-    showToast({ type: 'success', title: `Successfully imported ${imported.length} students`, description: 'Imported students are now available in the Student Directory.' })
   }
 
   return (
@@ -691,56 +506,10 @@ export default function AdminStudents() {
         )}
       </ResourceGate>
 
-      <Modal
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        title="Bulk import students"
-        description="1 Upload → 2 Review → 3 Import. Everything is processed in your browser."
-        size="xl"
-        footer={
-          bulkImporting ? <RequestProcessing compact title="Importing students…" description="Adding valid rows to the local Student Directory…" /> :
-          <>
-            <Button variant="ghost" onClick={() => setBulkOpen(false)}>Close</Button>
-            <Button disabled={bulkRows.length === 0 || bulkRows.every((row) => !row.valid) || bulkImporting} onClick={importBulkRows}>
-              Import {bulkRows.filter((row) => row.valid).length} valid students
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-5">
-          <div className="flex items-center gap-2 text-xs font-semibold text-graphite"><span className="rounded-full bg-brand px-2 py-1 text-white">1 Upload</span><span>→</span><span className={bulkRows.length ? 'rounded-full bg-brand px-2 py-1 text-white' : ''}>2 Review</span><span>→</span><span className={bulkRows.length && !bulkRows.some((row) => !row.valid) ? 'rounded-full bg-brand px-2 py-1 text-white' : ''}>3 Import</span></div>
-          <input ref={bulkInput} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleBulkFile} />
-          <button
-            type="button"
-            onClick={() => bulkInput.current?.click()}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault()
-              const file = event.dataTransfer.files[0]
-              if (file) void processBulkFile(file)
-            }}
-            className="flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-ink/10 px-6 py-10 text-center hover:border-accent dark:border-white/10"
-          >
-            <Upload className="h-7 w-7 text-accent" />
-            <span className="mt-3 text-sm font-semibold text-ink dark:text-white">Upload Student File</span>
-            <span className="mt-1 text-xs text-graphite">Drop a file here or choose Excel File</span>
-            <span className="mt-2 text-[11px] text-graphite">Supported formats: XLSX, XLS, CSV</span>
-          </button>
-          {bulkError && <p className="flex items-center gap-2 rounded-xl bg-red-500/10 px-3 py-2.5 text-xs text-red-500"><AlertTriangle className="h-4 w-4" />{bulkError}</p>}
-          {bulkRows.length > 0 && (
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <div><p className="text-sm font-semibold text-ink dark:text-white">{bulkRows.length} students detected</p><p className="text-xs text-graphite">{bulkRows.filter((row) => row.valid).length} valid · {bulkRows.filter((row) => !row.valid).length} errors</p></div>
-                <div className="flex gap-2"><input className="input h-9 w-40 text-xs" value={bulkSearch} onChange={(event) => { setBulkSearch(event.target.value); setBulkPage(1) }} placeholder="Search preview" /><select className="input h-9 w-36 text-xs" value={bulkClassFilter} onChange={(event) => { setBulkClassFilter(event.target.value); setBulkPage(1) }}><option value="all">All classes</option>{Array.from(new Set(bulkRows.map((row) => row.className).filter(Boolean))).map((name) => <option key={name} value={name}>{name}</option>)}</select></div>
-              </div>
-              <div className="max-h-64 overflow-y-auto rounded-xl border border-ink/5 dark:border-white/10">
-                <table className="w-full min-w-[1100px] text-left text-xs"><thead className="sticky top-0 bg-mist/95 text-graphite"><tr>{['Student ID', 'Student Name', 'Class', 'Gender', 'Date of Birth', 'Parent/Guardian', 'Relationship', 'Parent Phone', 'Student Phone', 'Attendance', 'Average Grade', 'Homework', 'Status', 'Validation'].map((heading) => <th key={heading} className="px-3 py-2 font-semibold">{heading}</th>)}</tr></thead><tbody>{visibleBulkRows.map((row, index) => <tr key={`${row.admissionNo}-${index}`} className="border-t border-ink/5 align-top"><td className="px-3 py-2">{row.admissionNo || '—'}</td><td className="px-3 py-2 font-medium">{row.name || '—'}</td><td className="px-3 py-2">{row.className || '—'}</td><td className="px-3 py-2">{row.gender || '—'}</td><td className="px-3 py-2">{row.dateOfBirth || '—'}</td><td className="px-3 py-2">{row.guardian || '—'}</td><td className="px-3 py-2">{row.relationship || '—'}</td><td className="px-3 py-2">{row.parentPhone || '—'}</td><td className="px-3 py-2">{row.studentPhone || '—'}</td><td className="px-3 py-2">{row.attendance || '—'}</td><td className="px-3 py-2">{row.averageGrade || '—'}</td><td className="px-3 py-2">{row.homeworkStatus || '—'}</td><td className="px-3 py-2">{row.accountStatus}</td><td className={`px-3 py-2 font-semibold ${row.valid ? 'text-emerald-600' : 'text-red-500'}`}>{row.valid ? 'Valid' : row.error}</td></tr>)}</tbody></table>
-              </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-graphite"><span>{filteredBulkRows.length ? `${(bulkPage - 1) * bulkPageSize + 1}–${Math.min(bulkPage * bulkPageSize, filteredBulkRows.length)} of ${filteredBulkRows.length}` : '0 students'}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={bulkPage === 1} onClick={() => setBulkPage((page) => page - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={bulkPage >= bulkPageCount} onClick={() => setBulkPage((page) => page + 1)}>Next</Button></div></div>
-            </div>
-          )}
-        </div>
-      </Modal>
+      {/* His Bulk Import chrome now lives inside ImportDialog, so the same
+          Upload -> Review -> Import design serves students, teachers and
+          classes, driven by the real importer. */}
+      <ImportDialog kind={studentsImport} open={bulkOpen} onClose={() => setBulkOpen(false)} onImported={reload} />
 
       <Modal
         open={modalOpen}

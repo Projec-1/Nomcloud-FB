@@ -18,7 +18,6 @@ import { listLiveInvitations, sendInvitation, type InvitationRow } from '@/servi
 import BulkInviteBar from '@/components/ui/BulkInviteBar'
 import { runBulkInvite, type BulkInviteProgress, type BulkInviteResult } from '@/services/bulkInvite'
 import { errorMessage, toError } from '@/utils/errorMessage'
-import { loadMockGuardians } from '@/data/mockGuardianStore'
 
 // ---------------------------------------------------------------------------
 // Guardians — the families of this school.
@@ -70,27 +69,7 @@ export default function AdminGuardians() {
     Promise.all([fetchGuardianDirectory(schoolId), fetchGuardianAccess(schoolId), listLiveInvitations(schoolId)])
       .then(([rows, accessMap, live]) => {
         if (cancelled) return
-        const mockRows: GuardianDirectoryRow[] = loadMockGuardians(schoolId).map((guardian) => ({
-          id: guardian.id,
-          school_id: schoolId,
-          full_name: guardian.name,
-          email: guardian.email,
-          phone: guardian.phone,
-          status: 'active',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          studentNames: guardian.children.map((child) => child.studentName),
-        }))
-        const merged = [...rows]
-        mockRows.forEach((mockGuardian) => {
-          const existing = merged.find((guardian) => guardian.full_name.toLowerCase() === mockGuardian.full_name.toLowerCase() && guardian.phone === mockGuardian.phone)
-          if (existing) {
-            existing.studentNames = Array.from(new Set([...existing.studentNames, ...mockGuardian.studentNames]))
-          } else {
-            merged.push(mockGuardian)
-          }
-        })
-        setGuardians(merged)
+        setGuardians(rows)
         setAccess(accessMap)
         setInvitations(new Map(live.filter((i) => i.role === 'guardian').map((i) => [i.email.toLowerCase(), i])))
       })
