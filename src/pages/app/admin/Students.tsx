@@ -43,7 +43,6 @@ import { sendInvitation } from '@/services/invitationService'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
 import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
-import { studentsImport } from '@/services/import/kinds'
 import { errorMessage, toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
