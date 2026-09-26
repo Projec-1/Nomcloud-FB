@@ -1,9 +1,9 @@
-import type { LucideIcon } from 'lucide-react'
-import { Inbox } from 'lucide-react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
+import { Tray as Inbox } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 
 interface EmptyStateProps {
-  icon?: LucideIcon
+  icon?: PhosphorIcon
   title: string
   description?: string
   action?: ReactNode

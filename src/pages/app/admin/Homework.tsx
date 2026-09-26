@@ -1,4 +1,4 @@
-import { BookOpen } from 'lucide-react'
+import { BookOpen } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import PageHeader from '@/components/ui/PageHeader'
 import ResourceGate from '@/components/ui/ResourceGate'

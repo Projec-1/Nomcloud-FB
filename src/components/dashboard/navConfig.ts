@@ -1,34 +1,11 @@
-import type { LucideIcon } from 'lucide-react'
-import {
-  LayoutDashboard,
-  Users,
-  GraduationCap,
-  BookOpen,
-  CalendarCheck,
-  ClipboardList,
-  ClipboardCheck,
-  BarChart3,
-  Wallet,
-  Bell,
-  MessageSquare,
-  CalendarRange,
-  Table2,
-  Settings,
-  BellRing,
-  UserCircle,
-  PlayCircle,
-  Activity,
-  Clock3,
-  FolderOpen,
-  TrendingUp,
-  FileText,
-} from 'lucide-react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
+import { Layout as LayoutDashboard, Users, GraduationCap, BookOpen, CalendarCheck, ClipboardText as ClipboardList, ClipboardText as ClipboardCheck, ChartBar as BarChart3, Wallet, Bell, ChatText as MessageSquare, CalendarBlank as CalendarRange, Table as Table2, Gear as Settings, BellRinging as BellRing, UserCircle, PlayCircle, Pulse as Activity, Clock as Clock3, FolderOpen, TrendUp as TrendingUp, FileText } from '@phosphor-icons/react'
 import type { Role } from '@/types'
 
 export interface NavItem {
   to: string
   labelKey: string
-  icon: LucideIcon
+  icon: PhosphorIcon
   end?: boolean
   group?: string
 }

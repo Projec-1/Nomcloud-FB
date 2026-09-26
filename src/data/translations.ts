@@ -47,8 +47,8 @@ export const translations: Record<Lang, Dict> = {
 
     // Home / Hero
     'hero.eyebrow': 'Somali-founded · Built for modern schools',
-    'hero.title': 'The private operating system for your school.',
-    'hero.subtitle': 'Nom Cloud connects school administration, teachers, parents and students in one calm, beautifully designed platform.',
+    'hero.title': 'One school system for every role.',
+    'hero.subtitle': 'Bring school administration, teaching, and family communication together in one place.',
     'hero.point1': 'Student records, organized',
     'hero.point2': 'Attendance in one tap',
     'hero.point3': 'Grades that sync instantly',

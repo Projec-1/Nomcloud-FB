@@ -26,6 +26,7 @@
 
 import { supabase } from '@/lib/supabase'
 import type { ClassSummary } from '@/services/teacherService'
+import type { TimetableSlotView } from '@/services/teacherService'
 
 /**
  * Every class in the school, with roster and subjects, ordered by name.
@@ -257,6 +258,58 @@ export interface TimetableSlotInput {
   startTime: string
   endTime: string
   room: string | null
+}
+
+export async function fetchManagedTimetable(schoolId: string, classId: string): Promise<TimetableSlotView[]> {
+  const { data, error } = await supabase
+    .from('timetable_slots')
+    .select('id, class_id, teacher_id, subject_id, day_of_week, period, start_time, end_time, room')
+    .eq('school_id', schoolId)
+    .eq('class_id', classId)
+    .order('day_of_week')
+    .order('period')
+  if (error) throw error
+
+  const rows = (data ?? []) as {
+    id: string
+    class_id: string
+    teacher_id: string | null
+    subject_id: string | null
+    day_of_week: number
+    period: number
+    start_time: string
+    end_time: string
+    room: string | null
+  }[]
+  if (rows.length === 0) return []
+
+  const subjectIds = Array.from(new Set(rows.flatMap((row) => row.subject_id ? [row.subject_id] : [])))
+  const teacherIds = Array.from(new Set(rows.flatMap((row) => row.teacher_id ? [row.teacher_id] : [])))
+  const [subjects, teachers] = await Promise.all([
+    subjectIds.length
+      ? supabase.from('subjects').select('id, name').eq('school_id', schoolId).in('id', subjectIds)
+      : Promise.resolve({ data: [], error: null }),
+    teacherIds.length
+      ? supabase.from('teachers').select('id, full_name').eq('school_id', schoolId).in('id', teacherIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (subjects.error) throw subjects.error
+  if (teachers.error) throw teachers.error
+
+  const subjectNames = new Map(((subjects.data ?? []) as { id: string; name: string }[]).map((row) => [row.id, row.name]))
+  const teacherNames = new Map(((teachers.data ?? []) as { id: string; full_name: string }[]).map((row) => [row.id, row.full_name]))
+  return rows.map((row) => ({
+    id: row.id,
+    classId: row.class_id,
+    teacherId: row.teacher_id ?? '',
+    day: row.day_of_week as TimetableSlotView['day'],
+    period: row.period,
+    startTime: row.start_time.slice(0, 5),
+    endTime: row.end_time.slice(0, 5),
+    subject: row.subject_id ? subjectNames.get(row.subject_id) ?? 'Subject unavailable' : 'Break',
+    teacherName: row.teacher_id ? teacherNames.get(row.teacher_id) : undefined,
+    room: row.room ?? '',
+  }))
 }
 
 /** Adds a timetable slot. Management only, per can_manage_class. */

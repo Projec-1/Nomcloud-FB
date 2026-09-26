@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Check } from 'lucide-react'
+import { CaretDown as ChevronDown, Check } from '@phosphor-icons/react'
 import Avatar from '@/components/ui/Avatar'
 import type { ChildSummary } from '@/services/guardianService'
 import { cn } from '@/utils/cn'

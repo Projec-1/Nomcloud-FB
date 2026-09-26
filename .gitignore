@@ -18,3 +18,7 @@ vite.config.js
 vite.config.d.ts
 
 .vercel
+.impeccable/build/
+.impeccable/config.local.json
+.impeccable/mocks/
+.impeccable/review/

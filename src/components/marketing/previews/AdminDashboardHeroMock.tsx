@@ -1,14 +1,4 @@
-import {
-  ArrowUpRight,
-  Bell,
-  BookOpen,
-  CalendarCheck,
-  Check,
-  LayoutGrid,
-  MessageSquare,
-  Settings,
-  Users,
-} from 'lucide-react'
+import { ArrowUpRight, Bell, BookOpen, CalendarCheck, Check, SquaresFour as LayoutGrid, ChatText as MessageSquare, Gear as Settings, Users } from '@phosphor-icons/react'
 
 const navItems = [
   { icon: LayoutGrid, label: 'Overview', active: true },
@@ -28,18 +18,18 @@ const statMetrics = [
 const attendanceBars = [40, 52, 47, 60, 56, 68, 64, 75, 82, 78, 88, 97]
 
 const barColors = [
-  '#E9F2FF',
-  '#DCEBFF',
-  '#CFE4FF',
-  '#C2DDFF',
-  '#B5D6FF',
-  '#A8CFFF',
-  '#9BC8FF',
-  '#8EC1FF',
-  '#81BAFF',
-  '#74B3FF',
-  '#67ACFF',
-  '#007AFF',
+  '#E8EAE7',
+  '#E3E5E2',
+  '#DDE0DC',
+  '#D8DAD7',
+  '#D2D5D1',
+  '#CDD0CC',
+  '#C7CAC6',
+  '#C2C5C1',
+  '#BCBFBB',
+  '#B7BAB6',
+  '#D88E72',
+  '#C9471B',
 ]
 
 const recentActivity = [
@@ -51,8 +41,8 @@ const recentActivity = [
 
 export default function AdminDashboardHeroMock() {
   return (
-    <div className="overflow-hidden rounded-[28px] bg-white shadow-[0_40px_90px_-20px_rgba(15,23,42,0.18)]">
-      <div className="flex h-[600px] text-[#1D1D1F]">
+    <div className="overflow-hidden rounded-xl border border-ink/10 bg-white dark:border-white/10 dark:bg-[#202320]">
+      <div className="flex h-[600px] text-[#222321] dark:text-white">
         {/* Sidebar */}
         <aside className="hidden w-[200px] flex-shrink-0 flex-col border-r border-[#ECECEC] px-4 py-6 sm:flex">
           <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9CA3AF]">School</div>
@@ -62,10 +52,10 @@ export default function AdminDashboardHeroMock() {
               <div
                 key={label}
                 className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] transition-colors ${
-                  active ? 'bg-[#E6F0FF] font-medium text-[#007AFF]' : 'text-[#6B7280] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]'
+                  active ? 'bg-[#FBEDE7] font-medium text-[#C9471B]' : 'text-[#555954] hover:bg-[#F0F2EF] hover:text-[#222321]'
                 }`}
               >
-                {active && <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-[#007AFF]" />}
+                {active && <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-[#C9471B]" />}
                 <Icon className="h-4 w-4" />
                 <span>{label}</span>
               </div>
@@ -76,7 +66,7 @@ export default function AdminDashboardHeroMock() {
             <div className="relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] text-[#6B7280] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]">
               <Settings className="h-4 w-4" />
               <span>Settings</span>
-              <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#007AFF]" />
+              <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#C9471B]" />
             </div>
           </div>
         </aside>
@@ -87,15 +77,15 @@ export default function AdminDashboardHeroMock() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <img src="/logo-512.png" alt="Nom Cloud" className="h-8 w-8 object-contain" />
-              <span className="text-[15px] font-semibold tracking-tight text-[#1D1D1F]">Nom Cloud</span>
+              <span className="text-[15px] font-semibold tracking-tight text-[#222321]">Nom Cloud</span>
               <span className="text-[15px] text-[#9CA3AF]">/</span>
               <span className="text-[15px] text-[#9CA3AF]">Admin workspace</span>
             </div>
             <div className="flex items-center gap-4">
               <Bell className="h-5 w-5 text-[#6B7280]" />
               <div className="relative">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#007AFF] text-[12px] font-semibold text-white">AM</div>
-                <span className="absolute -bottom-1.5 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#007AFF]" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#C9471B] text-[12px] font-semibold text-white">AM</div>
+                <span className="absolute -bottom-1.5 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#C9471B]" />
               </div>
             </div>
           </div>
@@ -104,11 +94,11 @@ export default function AdminDashboardHeroMock() {
           <div className="mt-10 flex items-start justify-between">
             <div className="min-w-0 flex-1 text-center">
               <p className="text-[13px] text-[#9CA3AF]">Tuesday, 18 June 2024</p>
-              <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.02em] text-[#1D1D1F] sm:text-[40px]">Good morning, Ahmed.</h1>
+              <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.02em] text-[#222321] sm:text-[40px]">Good morning, Ahmed.</h1>
             </div>
             <button
               type="button"
-              className="ml-6 flex-shrink-0 rounded-lg bg-[#007AFF] px-5 py-2.5 text-[14px] font-medium text-white shadow-[0_8px_20px_rgba(0,122,255,0.25)]"
+              className="ml-6 flex-shrink-0 rounded-lg bg-[#C9471B] px-5 py-2.5 text-[14px] font-medium text-white"
             >
               View report
             </button>
@@ -132,8 +122,8 @@ export default function AdminDashboardHeroMock() {
             {/* Attendance chart */}
             <div>
               <div className="flex items-center justify-between">
-                <h3 className="text-[15px] font-semibold text-[#1D1D1F]">Attendance this term</h3>
-                <span className="flex items-center gap-1 text-[13px] font-medium text-[#007AFF]">
+                <h3 className="text-[15px] font-semibold text-[#222321]">Attendance this term</h3>
+                <span className="flex items-center gap-1 text-[13px] font-medium text-[#C9471B]">
                   <ArrowUpRight className="h-3.5 w-3.5" />
                   +4.8%
                 </span>
@@ -143,7 +133,7 @@ export default function AdminDashboardHeroMock() {
                   <div
                     key={index}
                     className="flex-1 rounded-t-[6px]"
-                    style={{ height: `${value}%`, backgroundColor: barColors[index], animation: `rise 850ms ${index * 80}ms ease-out both` }}
+                    style={{ height: `${value}%`, backgroundColor: barColors[index] }}
                   />
                 ))}
               </div>
@@ -157,7 +147,7 @@ export default function AdminDashboardHeroMock() {
             <div>
               <div className="flex items-center justify-between">
                 <h3 className="text-[15px] font-semibold text-[#1D1D1F]">Recent activity</h3>
-                <ArrowUpRight className="h-4 w-4 text-[#007AFF]" />
+                <ArrowUpRight className="h-4 w-4 text-[#C9471B]" />
               </div>
               <div className="mt-3 divide-y divide-[#F0F0F0]">
                 {recentActivity.map((item) => (
@@ -179,12 +169,6 @@ export default function AdminDashboardHeroMock() {
           </div>
         </main>
       </div>
-      <style>{`
-        @keyframes rise {
-          0% { transform: scaleY(0.6); opacity: 0; }
-          100% { transform: scaleY(1); opacity: 1; }
-        }
-      `}</style>
     </div>
   )
 }

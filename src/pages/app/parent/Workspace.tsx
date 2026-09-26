@@ -1,23 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import {
-  ArrowRight,
-  Bell,
-  BookOpen,
-  CalendarDays,
-  Check,
-  ChevronDown,
-  Clock,
-  GraduationCap,
-  MessageCircle,
-  Paperclip,
-  Plus,
-  Settings,
-  ShieldCheck,
-  UserCircle,
-  Users,
-  X,
-} from 'lucide-react'
+import { ArrowRight, Bell, BookOpen, CalendarDots as CalendarDays, Check, CaretDown as ChevronDown, Clock, GraduationCap, ChatCircle as MessageCircle, Paperclip, Plus, Gear as Settings, ShieldCheck, UserCircle, Users, X } from '@phosphor-icons/react'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'

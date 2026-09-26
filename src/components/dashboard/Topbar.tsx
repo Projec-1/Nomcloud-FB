@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Menu, Moon, Sun, ChevronDown, Settings, LogOut, Camera, Trash2 } from 'lucide-react'
+import { List as Menu, Moon, Sun, CaretDown as ChevronDown, Gear as Settings, SignOut as LogOut, Camera, Trash as Trash2 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import SignOutButton from '@/components/ui/SignOutButton'
 import { useToast } from '@/context/ToastContext'

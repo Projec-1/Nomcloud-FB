@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react'
+import { Lock } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { ACCESS_DENIED_MESSAGE } from '@/lib/resourceState'
 

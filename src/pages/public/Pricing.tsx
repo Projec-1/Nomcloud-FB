@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Minus, Users, Wallet, Building2, Sparkles } from 'lucide-react'
+import { Check, Minus, Users, Wallet, Buildings as Building2 } from '@phosphor-icons/react'
 import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
 import FaqAccordion from '@/components/marketing/FaqAccordion'
-import { paymentMethods, PaymentBadge } from '@/components/marketing/PaymentLogos'
+import { PaymentMarquee } from '@/components/marketing/PaymentLogos'
 import { cn } from '@/utils/cn'
 import { useLanguage } from '@/context/LanguageContext'
 
@@ -17,13 +17,11 @@ const planDefs = [
 const comparisonCategories: {
   icon: typeof Users
   prefix: string
-  tint: string
   rows: { key: string; starter: boolean | 'support'; growth: boolean | 'support'; enterprise: boolean | 'support' }[]
 }[] = [
   {
     icon: Users,
     prefix: 'pricing.cat1',
-    tint: '#0071E3',
     rows: [
       { key: 'row1', starter: true, growth: true, enterprise: true },
       { key: 'row2', starter: true, growth: true, enterprise: true },
@@ -33,7 +31,6 @@ const comparisonCategories: {
   {
     icon: Wallet,
     prefix: 'pricing.cat2',
-    tint: '#FF5A1F',
     rows: [
       { key: 'row1', starter: false, growth: true, enterprise: true },
       { key: 'row2', starter: false, growth: true, enterprise: true },
@@ -43,7 +40,6 @@ const comparisonCategories: {
   {
     icon: Building2,
     prefix: 'pricing.cat3',
-    tint: '#A855F7',
     rows: [
       { key: 'row1', starter: false, growth: false, enterprise: true },
       { key: 'row2', starter: false, growth: false, enterprise: true },
@@ -74,9 +70,8 @@ export default function Pricing() {
       <section className="pt-20 pb-12 sm:pt-28">
         <div className="container text-center">
           <Reveal>
-            <span className="eyebrow">{t('pricing.eyebrow')}</span>
-            <h1 className="mx-auto mt-6 max-w-3xl text-display-lg text-ink dark:text-white">{t('pricing.title')}</h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-graphite">{t('pricing.subtitle')}</p>
+            <h1 className="mx-auto max-w-3xl text-display-lg text-ink dark:text-white">{t('pricing.title')}</h1>
+            <p className="mx-auto mt-5 max-w-2xl text-lg text-graphite">{t('pricing.subtitle')}</p>
           </Reveal>
           <Reveal delay={120} className="mt-10 inline-flex items-center gap-3 rounded-full bg-ink/5 p-1.5 dark:bg-white/10">
             <button
@@ -186,7 +181,7 @@ export default function Pricing() {
                     {[68, 71, 69, 75, 72, 78, 82, 85, 88, 91, 93, 95].map((value, i) => (
                       <div key={i} className="flex flex-col items-center flex-1 gap-2">
                         <div
-                          className="w-full bg-gradient-to-t from-brand/60 to-brand rounded-t-md transition-all duration-300 hover:from-brand hover:to-brand/80"
+                          className="w-full rounded-t-md bg-brand"
                           style={{ height: `${(value / 100) * 160}px` }}
                         />
                         <p className="text-xs text-graphite/50">W{String(i + 1).padStart(2, '0')}</p>
@@ -204,25 +199,16 @@ export default function Pricing() {
       <section className="pb-14">
         <div className="container">
           <p className="mb-6 text-center text-xs font-semibold uppercase tracking-[0.2em] text-graphite">{t('footer.payments')}</p>
-          <div className="overflow-hidden">
-            <div className="flex w-max animate-marquee-slow items-center gap-[32px] [animation-duration:54.8s]">
-              {[...paymentMethods, ...paymentMethods, ...paymentMethods].map((m, i) => (
-                <PaymentBadge key={`${m.name}-${i}`} method={m} />
-              ))}
-            </div>
-          </div>
+          <PaymentMarquee />
         </div>
       </section>
 
       <section className="section overflow-hidden bg-white dark:bg-white/[0.02]">
         <div className="container">
-          <Reveal className="mx-auto max-w-2xl text-center">
-            <span className="eyebrow">
-              <Sparkles className="h-3.5 w-3.5" /> {t('pricing.compare.eyebrow')}
-            </span>
-            <h2 className="mt-5 text-display-md text-ink dark:text-white">{t('pricing.compare.title')}</h2>
+          <div className="mx-auto max-w-2xl">
+            <h2 className="text-display-md text-ink dark:text-white">{t('pricing.compare.title')}</h2>
             <p className="mt-4 text-base text-graphite">{t('pricing.compare.subtitle')}</p>
-          </Reveal>
+          </div>
 
           <Reveal delay={100} className="mx-auto mt-10 grid max-w-3xl grid-cols-3 gap-3 sm:mt-14">
             {planDefs.map((p) => (
@@ -236,10 +222,9 @@ export default function Pricing() {
             {comparisonCategories.map((cat, ci) => (
               <Reveal key={cat.prefix} delay={ci * 120}>
                 <div className="group relative overflow-hidden rounded-[1.75rem] border border-ink/5 bg-white shadow-soft dark:border-white/10 dark:bg-[#161618]">
-                  <div className="pointer-events-none absolute inset-0 -translate-x-full animate-scan-x bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 group-hover:opacity-100 dark:via-white/10" />
                   <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start sm:p-8">
                     <div className="flex items-center gap-3 sm:w-56 sm:flex-shrink-0">
-                      <div className="rounded-2xl p-3" style={{ backgroundColor: `${cat.tint}1A`, color: cat.tint }}>
+                      <div className="rounded-xl bg-brand/10 p-3 text-brand">
                         <cat.icon className="h-5 w-5" />
                       </div>
                       <h3 className="font-semibold text-ink dark:text-white">{t(`${cat.prefix}.title`)}</h3>
@@ -274,10 +259,7 @@ export default function Pricing() {
 
       <section className="section">
         <div className="container max-w-3xl">
-          <Reveal className="text-center">
-            <span className="eyebrow">{t('pricing.faq.eyebrow')}</span>
-            <h2 className="mt-5 text-display-md text-ink dark:text-white">{t('pricing.faq.title')}</h2>
-          </Reveal>
+          <h2 className="text-display-md text-ink dark:text-white">{t('pricing.faq.title')}</h2>
           <div className="mt-12">
             <FaqAccordion items={faqs} />
           </div>

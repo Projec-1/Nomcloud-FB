@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Send, Plus, MessageSquare, Search, Lock } from 'lucide-react'
+import { PaperPlaneTilt as Send, Plus, ChatText as MessageSquare, MagnifyingGlass as Search, Lock } from '@phosphor-icons/react'
 import { useToast } from '@/context/ToastContext'
 import Modal from '@/components/ui/Modal'
 import Select from '@/components/ui/Select'

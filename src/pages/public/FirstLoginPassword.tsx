@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { ArrowRight, Eye, EyeOff, KeyRound, Lock } from 'lucide-react'
+import { ArrowRight, Eye, EyeSlash as EyeOff, Key as KeyRound, Lock } from '@phosphor-icons/react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
@@ -79,26 +79,40 @@ export default function FirstLoginPassword() {
           type={showPassword ? 'text' : 'password'}
           required
           icon={<Lock className="h-4 w-4" />}
+          endAdornment={
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-graphite hover:bg-ink/5 dark:hover:bg-white/10"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="••••••••"
           hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
         />
-        <button type="button" onClick={() => setShowPassword((value) => !value)} className="-mt-3 flex items-center gap-1.5 text-xs font-medium text-graphite hover:text-ink dark:hover:text-white">
-          {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />} {showPassword ? 'Hide password' : 'Show password'}
-        </button>
         <Input
           label="Confirm new password"
           type={showConfirmPassword ? 'text' : 'password'}
           required
           icon={<Lock className="h-4 w-4" />}
+          endAdornment={
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((value) => !value)}
+              aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-graphite hover:bg-ink/5 dark:hover:bg-white/10"
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
           placeholder="••••••••"
         />
-        <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} className="-mt-3 flex items-center gap-1.5 text-xs font-medium text-graphite hover:text-ink dark:hover:text-white">
-          {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />} {showConfirmPassword ? 'Hide password' : 'Show password'}
-        </button>
         {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">{error}</p>}
         <Button type="submit" size="lg" loading={saving} className="w-full">
           Save password <ArrowRight className="h-4 w-4" />

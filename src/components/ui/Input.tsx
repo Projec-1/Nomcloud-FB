@@ -1,16 +1,18 @@
-import { forwardRef, type InputHTMLAttributes } from 'react'
+import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '@/utils/cn'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
   hint?: string
-  icon?: React.ReactNode
+  icon?: ReactNode
+  endAdornment?: ReactNode
 }
 
-const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, icon, className, id, ...props }, ref) => {
+const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, icon, endAdornment, className, id, ...props }, ref) => {
   const inputId = id || props.name
   const hasIcon = Boolean(icon)
+  const hasEndAdornment = Boolean(endAdornment)
 
   return (
     <div className="w-full">
@@ -25,9 +27,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, ic
         <input
           ref={ref}
           id={inputId}
-          className={cn('input', hasIcon && 'pl-11', error && 'border-red-400 focus:ring-red-300 focus:border-red-400', className)}
+          className={cn('input', hasIcon && 'pl-11', hasEndAdornment && 'pr-12', error && 'border-red-400 focus:ring-red-300 focus:border-red-400', className)}
           {...props}
         />
+        {endAdornment && <div className="absolute right-2 top-1/2 -translate-y-1/2">{endAdornment}</div>}
       </div>
       {error ? (
         <p className="mt-1.5 text-xs font-medium text-red-500">{error}</p>

@@ -1,4 +1,4 @@
-import { Wallet, CreditCard, CheckCircle2, Download } from 'lucide-react'
+import { Wallet, CreditCard, CheckCircle as CheckCircle2, Download } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import { useChildFees } from '@/hooks/useFinance'

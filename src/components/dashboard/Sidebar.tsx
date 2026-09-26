@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { X, LogOut } from 'lucide-react'
+import { X, SignOut as LogOut } from '@phosphor-icons/react'
 import SchoolBrandLogo from '@/components/dashboard/SchoolBrandLogo'
 import { navByRole, roleLabelKey } from '@/components/dashboard/navConfig'
 import type { Role } from '@/types'

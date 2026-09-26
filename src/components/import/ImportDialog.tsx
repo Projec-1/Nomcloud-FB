@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Download, MinusCircle, Upload, XCircle } from 'lucide-react'
+import { Warning as AlertTriangle, CheckCircle as CheckCircle2, Download, MinusCircle, Upload, XCircle } from '@phosphor-icons/react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
 import RequestProcessing from '@/components/ui/RequestProcessing'

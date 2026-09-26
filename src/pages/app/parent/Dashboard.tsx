@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarCheck, BookOpen, Wallet, ClipboardCheck, ArrowRight, Users } from 'lucide-react'
+import { CalendarCheck, BookOpen, Wallet, ClipboardText as ClipboardCheck, ArrowRight, Users } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import { useAnnouncements } from '@/hooks/useCommunications'
@@ -116,7 +116,7 @@ export default function ParentDashboard() {
         }
       />
 
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="parent-dashboard__stats grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Attendance"
           value={summary.attendanceRate === null ? '—' : `${summary.attendanceRate}%`}

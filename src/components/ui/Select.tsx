@@ -1,5 +1,5 @@
 import { forwardRef, type SelectHTMLAttributes } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { CaretDown as ChevronDown } from '@phosphor-icons/react'
 import { cn } from '@/utils/cn'
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {

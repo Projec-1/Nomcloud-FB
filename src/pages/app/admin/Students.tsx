@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { Users, Plus, Pencil, Trash2, Upload, FileSpreadsheet, AlertTriangle } from 'lucide-react'
+import { Users, Plus, Pencil, Trash as Trash2, Upload, FileXls as FileSpreadsheet } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
@@ -43,6 +43,7 @@ import { sendInvitation } from '@/services/invitationService'
 import { todayInTimeZone, DEFAULT_TIME_ZONE } from '@/utils/schoolCalendar'
 import { IMAGE_ACCEPT, prepareImage } from '@/lib/imageUpload'
 import { BUCKETS, createSignedImageUrls, removeStudentPhoto, replaceStudentPhoto } from '@/services/storageService'
+import { studentsImport } from '@/services/import/kinds'
 import { errorMessage, toError } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
@@ -506,9 +507,6 @@ export default function AdminStudents() {
         )}
       </ResourceGate>
 
-      {/* His Bulk Import chrome now lives inside ImportDialog, so the same
-          Upload -> Review -> Import design serves students, teachers and
-          classes, driven by the real importer. */}
       <ImportDialog kind={studentsImport} open={bulkOpen} onClose={() => setBulkOpen(false)} onImported={reload} />
 
       <Modal

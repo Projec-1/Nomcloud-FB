@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, KeyRound, Lock, ShieldAlert } from 'lucide-react'
+import { ArrowRight, Eye, EyeSlash as EyeOff, Key as KeyRound, Lock, ShieldWarning as ShieldAlert } from '@phosphor-icons/react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
@@ -54,6 +54,8 @@ export default function ActivateAccount() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -289,9 +291,19 @@ export default function ActivateAccount() {
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         <Input
           label="New password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           required
           icon={<Lock className="h-4 w-4" />}
+          endAdornment={
+            <button
+              type="button"
+              onClick={() => setShowPassword((visible) => !visible)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-graphite hover:bg-ink/5 dark:hover:bg-white/10"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="••••••••"
@@ -299,9 +311,19 @@ export default function ActivateAccount() {
         />
         <Input
           label="Confirm password"
-          type="password"
+          type={showConfirmPassword ? 'text' : 'password'}
           required
           icon={<Lock className="h-4 w-4" />}
+          endAdornment={
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((visible) => !visible)}
+              aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-graphite hover:bg-ink/5 dark:hover:bg-white/10"
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
           value={confirmPassword}
           onChange={(event) => setConfirmPassword(event.target.value)}
           placeholder="••••••••"

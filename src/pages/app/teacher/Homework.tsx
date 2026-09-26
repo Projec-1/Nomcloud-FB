@@ -1,4 +1,4 @@
-import { ClipboardCheck } from 'lucide-react'
+import { ClipboardText as ClipboardCheck } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import ResourceGate from '@/components/ui/ResourceGate'
 import PageHeader from '@/components/ui/PageHeader'

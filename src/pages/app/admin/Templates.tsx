@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Copy, Eye, FilePlus2, Pencil, Star, Trash2, X } from 'lucide-react'
+import { Copy, Eye, FilePlus as FilePlus2, Pencil, Star, Trash as Trash2, X } from '@phosphor-icons/react'
 import { useToast } from '@/context/ToastContext'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'

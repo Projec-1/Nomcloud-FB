@@ -1,4 +1,5 @@
-import { Smartphone, Landmark, Send } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { DeviceMobile as Smartphone, Bank as Landmark, PaperPlaneTilt as Send } from '@phosphor-icons/react'
 
 // Payment methods accepted for parent fee payments, ordered from most to least widely
 // recognized in the Somali / East African market.
@@ -37,21 +38,61 @@ export const paymentMethods: PaymentMethod[] = [
 export function PaymentBadge({ method, dark = true }: { method: PaymentMethod; dark?: boolean }) {
   const logoSrc = method.imageSrc ?? method.markSrc
 
-  const isPayPal = method.name === 'PayPal'
-
   return (
-    <div className="flex flex-shrink-0 items-center justify-center">
+    <div className="flex h-14 w-40 shrink-0 items-center justify-center px-4">
       <img
         src={logoSrc}
         alt={`${method.name} logo`}
-        className="h-7 w-auto max-w-[120px] object-contain object-center select-none opacity-85"
+        className="h-9 w-full max-w-[136px] object-contain object-center select-none opacity-80"
         style={{
-          filter: isPayPal ? 'grayscale(1) brightness(1.18) contrast(1.1)' : 'grayscale(1) brightness(1.18) contrast(1.1)',
+          filter: dark ? 'grayscale(1) brightness(1.18) contrast(1.1)' : 'grayscale(1) contrast(1.05)',
           background: 'transparent',
           transform: 'none',
         }}
         loading="lazy"
       />
+    </div>
+  )
+}
+
+export function PaymentMarquee() {
+  const [paused, setPaused] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const syncPreference = () => setPaused(preference.matches)
+    syncPreference()
+    preference.addEventListener('change', syncPreference)
+    return () => preference.removeEventListener('change', syncPreference)
+  }, [])
+
+  return (
+    <div
+      role="region"
+      aria-label="Accepted payment methods"
+      className={`payment-marquee ${paused ? 'is-paused' : ''}`}
+    >
+      <div className="payment-marquee__viewport">
+        <div className="payment-marquee__track">
+          <div className="payment-marquee__group">
+            {paymentMethods.map((method) => <PaymentBadge key={method.name} method={method} />)}
+          </div>
+          <div className="payment-marquee__group" aria-hidden="true">
+            {paymentMethods.map((method) => <PaymentBadge key={`duplicate-${method.name}`} method={method} />)}
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        aria-label={paused ? 'Resume payment logo motion' : 'Pause payment logo motion'}
+        aria-pressed={paused}
+        onClick={() => setPaused((value) => !value)}
+        className="mx-auto mt-2 block min-h-11 px-3 text-xs font-medium text-graphite underline underline-offset-4 hover:text-ink dark:hover:text-white"
+      >
+        {paused ? 'Play animation' : 'Pause animation'}
+      </button>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Mail, Phone, MapPin, CheckCircle2, ArrowRight } from 'lucide-react'
+import { Envelope as Mail, Phone, MapPin, CheckCircle as CheckCircle2, ArrowRight } from '@phosphor-icons/react'
 import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
 import Input from '@/components/ui/Input'

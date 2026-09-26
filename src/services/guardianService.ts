@@ -41,6 +41,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { avatarColorForId } from '@/services/studentService'
+import type { TimetableSlotView } from '@/services/teacherService'
 
 export interface GuardianRow {
   id: string
@@ -113,6 +114,69 @@ export function toChildSummary(
     classId: enrolledClass?.id ?? null,
     className: enrolledClass?.name ?? null,
   }
+}
+
+/** Timetable slots for a child's currently assigned class. */
+export async function fetchChildTimetable(
+  schoolId: string,
+  classId: string,
+): Promise<TimetableSlotView[]> {
+  const { data, error } = await supabase
+    .from('timetable_slots')
+    .select('id, class_id, teacher_id, subject_id, day_of_week, period, start_time, end_time, room')
+    .eq('school_id', schoolId)
+    .eq('class_id', classId)
+    .order('day_of_week')
+    .order('period')
+
+  if (error) throw error
+
+  const rows = (data ?? []) as {
+    id: string
+    class_id: string
+    teacher_id: string | null
+    subject_id: string | null
+    day_of_week: number
+    period: number
+    start_time: string
+    end_time: string
+    room: string | null
+  }[]
+  if (rows.length === 0) return []
+
+  const subjectIds = Array.from(new Set(rows.flatMap((row) => row.subject_id ? [row.subject_id] : [])))
+  const teacherIds = Array.from(new Set(rows.flatMap((row) => row.teacher_id ? [row.teacher_id] : [])))
+  const [subjectsResult, teachersResult] = await Promise.all([
+    subjectIds.length
+      ? supabase.from('subjects').select('id, name').eq('school_id', schoolId).in('id', subjectIds)
+      : Promise.resolve({ data: [], error: null }),
+    teacherIds.length
+      ? supabase.from('teachers').select('id, full_name').eq('school_id', schoolId).in('id', teacherIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (subjectsResult.error) throw subjectsResult.error
+  if (teachersResult.error) throw teachersResult.error
+
+  const subjectNames = new Map(
+    ((subjectsResult.data ?? []) as { id: string; name: string }[]).map((subject) => [subject.id, subject.name]),
+  )
+  const teacherNames = new Map(
+    ((teachersResult.data ?? []) as { id: string; full_name: string }[]).map((teacher) => [teacher.id, teacher.full_name]),
+  )
+
+  return rows.map((row) => ({
+    id: row.id,
+    classId: row.class_id,
+    teacherId: row.teacher_id ?? '',
+    day: row.day_of_week as TimetableSlotView['day'],
+    period: row.period,
+    startTime: row.start_time.slice(0, 5),
+    endTime: row.end_time.slice(0, 5),
+    subject: row.subject_id ? subjectNames.get(row.subject_id) ?? 'Subject unavailable' : 'Unassigned',
+    teacherName: row.teacher_id ? teacherNames.get(row.teacher_id) : undefined,
+    room: row.room ?? '',
+  }))
 }
 
 /**

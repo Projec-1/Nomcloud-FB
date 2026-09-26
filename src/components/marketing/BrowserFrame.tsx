@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Lock, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react'
+import { Lock, CaretLeft as ChevronLeft, CaretRight as ChevronRight, ArrowClockwise as RotateCw } from '@phosphor-icons/react'
 import { cn } from '@/utils/cn'
 
 export default function BrowserFrame({

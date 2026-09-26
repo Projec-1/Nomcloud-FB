@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, ShieldAlert } from 'lucide-react'
+import { ArrowRight, CheckCircle as CheckCircle2, Eye, EyeSlash as EyeOff, Lock, ShieldWarning as ShieldAlert } from '@phosphor-icons/react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'

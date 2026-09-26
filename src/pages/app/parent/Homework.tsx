@@ -1,4 +1,4 @@
-import { ClipboardCheck, Calendar } from 'lucide-react'
+import { ClipboardText as ClipboardCheck, Calendar } from '@phosphor-icons/react'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import { useChildHomework } from '@/hooks/useChildRecords'
 import PageHeader from '@/components/ui/PageHeader'

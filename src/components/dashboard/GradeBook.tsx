@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Save, Lock } from 'lucide-react'
+import { FloppyDisk as Save, Lock } from '@phosphor-icons/react'
 import { useToast } from '@/context/ToastContext'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'

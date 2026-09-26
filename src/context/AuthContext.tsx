@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Role } from '@/types'
-import { supabase } from '@/lib/supabase'
+import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import { workspaceForMembershipRole, workspacesForMembershipRoles } from '@/lib/roles'
 import {
   fetchActiveMemberships,
@@ -14,7 +14,7 @@ const ACTIVE_ROLE_KEY = 'nomcloud_active_role'
 
 interface AuthContextValue {
   isLoading: boolean
-  logout: () => void
+  logout: () => Promise<void>
   authUser: AuthSessionUser | null
   platformAdmin: boolean
   profile: ProfileRow | null
@@ -59,6 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+
+    if (!isSupabaseConfigured) {
+      setAuthState('error')
+      setIsLoading(false)
+      return
+    }
 
     const clearIdentity = () => {
       if (cancelled) return
@@ -160,7 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [identityNonce])
 
-  const logout = () => {
+  const logout = async () => {
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    }
+    supabaseUserRef.current = null
     setAuthUser(null)
     setPlatformAdmin(false)
     setProfile(null)
@@ -169,7 +180,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActiveRoleState(null)
     setAuthState('signed_out')
     setIsLoading(false)
-    if (supabaseUserRef.current) void supabase.auth.signOut()
   }
 
   const workspaces = workspacesForMembershipRoles(memberships.map((membership) => membership.role))

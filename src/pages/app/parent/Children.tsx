@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, CalendarCheck, BookOpen, Wallet } from 'lucide-react'
+import { Users, CalendarCheck, BookOpen, Wallet } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import PageHeader from '@/components/ui/PageHeader'

@@ -1,4 +1,4 @@
-import { ClipboardList } from 'lucide-react'
+import { ClipboardText as ClipboardList } from '@phosphor-icons/react'
 import ResourceGate from '@/components/ui/ResourceGate'
 import PageHeader from '@/components/ui/PageHeader'
 import GradeBook from '@/components/dashboard/GradeBook'

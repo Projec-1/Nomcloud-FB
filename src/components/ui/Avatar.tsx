@@ -36,7 +36,7 @@ export default function Avatar({ name, color = '#0071E3', size = 'md', className
 
   return (
     <div
-      className={cn('flex shrink-0 items-center justify-center rounded-full font-semibold text-white', sizeClass[size], className)}
+      className={cn('avatar flex shrink-0 items-center justify-center rounded-full font-semibold text-white', sizeClass[size], className)}
       style={{ backgroundColor: color }}
       title={name}
     >

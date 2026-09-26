@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { Save, School, Palette, Bell, ShieldCheck, Upload, Trash2 } from 'lucide-react'
+import { FloppyDisk as Save, Buildings as School, Palette, Bell, ShieldCheck, Upload, Trash as Trash2 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'

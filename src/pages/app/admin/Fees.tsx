@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Wallet, Search, FileText, TrendingUp, AlertTriangle, Plus, Pencil, Trash2, Lock, Send } from 'lucide-react'
+import { Wallet, MagnifyingGlass as Search, FileText, TrendUp as TrendingUp, Warning as AlertTriangle, Plus, Pencil, Trash as Trash2, Lock, PaperPlaneTilt as Send } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
