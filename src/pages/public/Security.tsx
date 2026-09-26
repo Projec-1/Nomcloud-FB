@@ -1,8 +1,7 @@
-import { Lock, ShieldCheck, ServerCog, KeyRound, Eye, FileCheck2, Sparkles, IdCard, Users, ClipboardList, Wallet, MessageSquare, MapPin } from 'lucide-react'
+import { Lock, ShieldCheck, HardDrive as ServerCog, Key as KeyRound, Eye, FileText as FileCheck2, Prohibit as ProhibitIcon, IdentificationCard as IdCard, Users, ClipboardText as ClipboardList, Wallet, ChatText as MessageSquare, MapPin } from '@phosphor-icons/react'
 import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
 import FaqAccordion from '@/components/marketing/FaqAccordion'
-import TiltCard from '@/components/marketing/TiltCard'
 import { useLanguage } from '@/context/LanguageContext'
 import { img } from '@/data/images'
 
@@ -37,15 +36,11 @@ export default function Security() {
         description="How Nom Cloud protects student and school data — private by default, encrypted, and never sold or shared."
         path="/security"
       />
-      <section className="relative overflow-hidden pt-20 pb-16 sm:pt-28">
-        <div className="absolute inset-0 bg-mesh-orange" />
-        <div className="container relative text-center">
+      <section className="pt-12 pb-10 sm:pt-16 sm:pb-14">
+        <div className="container text-center">
           <Reveal>
-            <span className="eyebrow">
-              <ShieldCheck className="h-3.5 w-3.5" /> {t('security.eyebrow')}
-            </span>
-            <h1 className="mx-auto mt-6 max-w-3xl text-display-lg text-ink dark:text-white">{t('security.title')}</h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-graphite">{t('security.subtitle')}</p>
+            <h1 className="mx-auto max-w-3xl text-display-lg text-ink dark:text-white">{t('security.title')}</h1>
+            <p className="mx-auto mt-5 max-w-2xl text-lg text-graphite">{t('security.subtitle')}</p>
           </Reveal>
         </div>
       </section>
@@ -53,16 +48,16 @@ export default function Security() {
       <section className="pb-24">
         <div className="container">
           <Reveal>
-            <div className="grid overflow-hidden rounded-[2.5rem] shadow-floaty lg:grid-cols-2">
+            <div className="grid overflow-hidden rounded-xl border border-ink/10 bg-white dark:border-white/10 dark:bg-[#202320] lg:grid-cols-2">
               <div className="relative flex min-h-[18rem] flex-col justify-end overflow-hidden p-10 sm:p-14">
                 <img src="/kids photodownload (6).jpeg" alt="Students in a classroom" className="absolute inset-0 h-full w-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/70 to-ink/30" />
-                <div className="relative flex h-16 w-16 items-center justify-center rounded-3xl bg-white/10 backdrop-blur">
+                <div className="absolute inset-0 bg-ink/65" />
+                <div className="relative flex h-16 w-16 items-center justify-center rounded-xl bg-white/10">
                   <Lock className="h-8 w-8 text-white" />
                 </div>
                 <h2 className="relative mt-6 text-2xl font-semibold text-white sm:text-display-md">{t('security.isolated.title')}</h2>
               </div>
-              <div className="flex items-center bg-white p-10 dark:bg-[#161618] sm:p-14">
+              <div className="flex items-center bg-white p-6 dark:bg-[#202320] sm:p-10">
                 <p className="text-base leading-relaxed text-graphite">{t('security.isolated.body')}</p>
               </div>
             </div>
@@ -72,11 +67,10 @@ export default function Security() {
 
       <section className="section bg-white dark:bg-white/[0.02]">
         <div className="container">
-          <Reveal className="mx-auto max-w-3xl text-center">
-            <span className="eyebrow">{t('security.protect.eyebrow')}</span>
-            <h2 className="mt-5 text-display-md text-ink dark:text-white">{t('security.protect.title')}</h2>
-            <p className="mt-5 text-base leading-relaxed text-graphite">{t('security.protect.intro')}</p>
-          </Reveal>
+          <div className="mx-auto max-w-3xl">
+            <h2 className="text-display-md text-ink dark:text-white">{t('security.protect.title')}</h2>
+            <p className="mt-4 text-base leading-relaxed text-graphite">{t('security.protect.intro')}</p>
+          </div>
 
           <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {dataTypes.map((d, i) => (
@@ -92,16 +86,13 @@ export default function Security() {
           <div className="mt-16 grid gap-6 sm:grid-cols-2">
             {pillars.map((p, i) => (
               <Reveal key={p.titleKey} delay={i * 100}>
-                <TiltCard max={5}>
-                  <div className="group relative overflow-hidden rounded-[1.75rem] border border-ink/5 bg-white p-8 shadow-soft transition-transform duration-500 hover:-translate-y-1.5 dark:border-white/10 dark:bg-[#161618]">
-                    <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand/5 blur-2xl transition-transform duration-500 group-hover:scale-125 dark:bg-brand/10" />
-                    <div className="relative inline-flex rounded-2xl bg-brand/10 p-3 text-brand">
-                      <p.icon className="h-5 w-5" />
-                    </div>
-                    <h3 className="relative mt-5 text-lg font-semibold text-ink dark:text-white">{t(p.titleKey)}</h3>
-                    <p className="relative mt-2.5 text-sm leading-relaxed text-graphite">{t(p.bodyKey)}</p>
+                <article className="h-full rounded-xl border border-ink/10 bg-white p-6 dark:border-white/10 dark:bg-[#202320] sm:p-8">
+                  <div className="inline-flex rounded-xl bg-brand/10 p-3 text-brand">
+                    <p.icon className="h-5 w-5" />
                   </div>
-                </TiltCard>
+                  <h3 className="mt-5 text-lg font-semibold text-ink dark:text-white">{t(p.titleKey)}</h3>
+                  <p className="mt-2.5 text-sm leading-relaxed text-graphite">{t(p.bodyKey)}</p>
+                </article>
               </Reveal>
             ))}
           </div>
@@ -143,7 +134,7 @@ export default function Security() {
               </div>
               <div className="p-8">
                 <p className="mb-4 flex items-center gap-2 text-sm font-semibold text-red-500">
-                  <Sparkles className="h-4 w-4" /> {t('security.never.label')}
+                  <ProhibitIcon className="h-4 w-4" /> {t('security.never.label')}
                 </p>
                 <ul className="space-y-3 text-sm text-ink dark:text-white">
                   {neverItems.map((k) => (

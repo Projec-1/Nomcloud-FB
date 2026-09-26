@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Calendar, Users, Trash2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { Plus, Calendar, Users, Trash as Trash2, CaretDown as ChevronDown, CaretUp as ChevronUp, Lock } from '@phosphor-icons/react'
 import { useToast } from '@/context/ToastContext'
 import Select from '@/components/ui/Select'
 import Button from '@/components/ui/Button'

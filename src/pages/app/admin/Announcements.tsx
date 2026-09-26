@@ -1,4 +1,4 @@
-import { Megaphone } from 'lucide-react'
+import { Megaphone } from '@phosphor-icons/react'
 import PageHeader from '@/components/ui/PageHeader'
 import ResourceGate from '@/components/ui/ResourceGate'
 import AnnouncementBoard from '@/components/dashboard/AnnouncementBoard'

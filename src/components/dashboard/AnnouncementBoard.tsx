@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Pin, Megaphone, Pencil, Archive, Trash2 } from 'lucide-react'
+import { Plus, PushPin as Pin, Megaphone, Pencil, Archive, Trash as Trash2 } from '@phosphor-icons/react'
 import { useToast } from '@/context/ToastContext'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'

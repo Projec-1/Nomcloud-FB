@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react'
+import { Plus, X } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import type { IsoWeekday, TimetableSlot } from '@/types'
 import { cn } from '@/utils/cn'

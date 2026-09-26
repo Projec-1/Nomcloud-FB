@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { ArrowRight, Mail, Lock, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, Envelope as Mail, Lock, Eye, EyeSlash as EyeOff, CheckCircle as CheckCircle2 } from '@phosphor-icons/react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext'
 import { isValidEmail } from '@/utils/validators'
 import { useToast } from '@/context/ToastContext'
 import { useLanguage } from '@/context/LanguageContext'
-import { supabase } from '@/lib/supabase'
+import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import { fetchActiveMemberships, fetchPlatformAdminStatus, isTransientIdentityFailure } from '@/services/identityService'
 import { workspacesForMembershipRoles } from '@/lib/roles'
 import { mustChangePassword } from '@/services/accountService'
@@ -47,6 +47,7 @@ export default function Login() {
   // served from the public school-branding bucket by exact path; no session is
   // needed and nothing lets this page list or read any other file.
   useEffect(() => {
+    if (!isSupabaseConfigured) return
     const shortcode = resolveSchoolShortcode(window.location.hostname, location.search)
     setBranding(null)
     setLogoFailed(false)
@@ -89,12 +90,29 @@ export default function Login() {
       setError('Please enter your password.')
       return
     }
+    if (!isSupabaseConfigured) {
+      setError('Sign-in is unavailable because this app is missing its Supabase configuration.')
+      return
+    }
     setLoading(true)
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    })
+    let signInResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>
+    try {
+      signInResult = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+    } catch (signInFailure: unknown) {
+      setLoading(false)
+      setError(
+        isTransientIdentityFailure(signInFailure)
+          ? 'We could not reach the server just now. Please try signing in again.'
+          : 'We could not complete sign-in. Please try again.',
+      )
+      return
+    }
+
+    const { data, error: signInError } = signInResult
 
     if (signInError || !data.user) {
       setLoading(false)
@@ -163,37 +181,52 @@ export default function Login() {
   const requestPasswordReset = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
+    if (!isSupabaseConfigured) {
+      setError('Password reset is unavailable because this app is missing its Supabase configuration.')
+      return
+    }
     const target = resetEmail.trim()
     if (!isValidEmail(target)) {
       setError('Please enter a valid email address.')
       return
     }
     setResetSending(true)
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(target, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-    setResetSending(false)
-    if (resetError) {
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(target, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (resetError) {
+        setError('We could not send the reset email just now. Please try again in a moment.')
+        return
+      }
+      setResetSent(true)
+    } catch {
       setError('We could not send the reset email just now. Please try again in a moment.')
-      return
+    } finally {
+      setResetSending(false)
     }
-    setResetSent(true)
   }
 
   const resendConfirmation = async () => {
+    if (!isSupabaseConfigured) return
     setResendingConfirmation(true)
     setConfirmationSent(false)
-    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: email.trim() })
-    setResendingConfirmation(false)
-    if (resendError) {
+    try {
+      const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: email.trim() })
+      if (resendError) {
+        setError('We could not resend the confirmation email. Please try again.')
+        return
+      }
+      setConfirmationSent(true)
+    } catch {
       setError('We could not resend the confirmation email. Please try again.')
-      return
+    } finally {
+      setResendingConfirmation(false)
     }
-    setConfirmationSent(true)
   }
 
   return (
-    <AuthLayout title={t('auth.login.title')} subtitle={t('auth.login.subtitle')}>
+    <AuthLayout title={t('auth.login.title')} subtitle={t('auth.login.subtitle')} singleScreen>
       {branding && (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-ink/5 p-3 dark:border-white/10" data-testid="school-login-branding">
           {branding.logoUrl && !logoFailed ? (
@@ -220,6 +253,16 @@ export default function Login() {
           <p className="text-sm font-medium text-green-700 dark:text-green-400">
             Your password was updated. Please sign in again with your new password.
           </p>
+        </div>
+      )}
+
+      {!isSupabaseConfigured && (
+        <div role="alert" className="login-config-alert mb-4 rounded-xl border border-amber-700/20 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-amber-900 dark:border-amber-300/20 dark:text-amber-200">
+          <p><strong>Supabase setup required.</strong></p>
+          <details className="mt-2 text-xs">
+            <summary className="min-h-11 cursor-pointer py-2 font-medium underline underline-offset-4">Details</summary>
+            <p className="break-words">Set <code className="break-all">VITE_SUPABASE_URL</code> and <code className="break-all">VITE_SUPABASE_PUBLISHABLE_KEY</code>, then restart the app.</p>
+          </details>
         </div>
       )}
 
@@ -260,7 +303,7 @@ export default function Login() {
                 placeholder="you@school.nclass.ac"
               />
               {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm font-medium text-red-500">{error}</p>}
-              <Button type="submit" size="lg" loading={resetSending} className="w-full">
+              <Button type="submit" size="lg" loading={resetSending} disabled={!isSupabaseConfigured} className="w-full">
                 Send reset link <ArrowRight className="h-4 w-4" />
               </Button>
               <button
@@ -324,22 +367,22 @@ export default function Login() {
           <button
             type="button"
             onClick={resendConfirmation}
-            disabled={resendingConfirmation}
+            disabled={resendingConfirmation || !isSupabaseConfigured}
             className="text-left text-sm font-medium text-accent disabled:opacity-60"
           >
             {resendingConfirmation ? 'Sending confirmation email…' : 'Resend confirmation email'}
           </button>
         )}
         {confirmationSent && <p className="text-sm font-medium text-green-600">Confirmation email sent. Check your inbox.</p>}
-        <Button type="submit" size="lg" loading={loading} className="w-full">
+        <Button type="submit" size="md" loading={loading} disabled={!isSupabaseConfigured} className="w-full">
           Sign in <ArrowRight className="h-4 w-4" />
         </Button>
       </form>
       )}
 
-      <div className="mt-8 rounded-2xl border border-brand/15 bg-brand/[0.06] px-4 py-4 text-center">
-        <p className="text-sm text-graphite">{t('auth.login.noAccount')}</p>
-        <Link to="/signup" className="mt-1 inline-flex items-center gap-1 text-base font-semibold text-brand hover:text-brand-600">
+      <div className="mt-8 border-t border-ink/10 pt-6 dark:border-white/10">
+        <p className="text-sm font-medium text-ink dark:text-white">{t('auth.login.noAccount')}</p>
+        <Link to="/signup" className="btn-outline mt-3 flex w-full justify-center gap-2 px-4 py-3 text-sm font-semibold text-brand">
           {t('auth.login.signup')} <ArrowRight className="h-4 w-4" />
         </Link>
       </div>

@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Clock, Users } from 'lucide-react'
+import { CheckCircle as CheckCircle2, Circle, Clock, Users } from '@phosphor-icons/react'
 import BrowserFrame from '@/components/marketing/BrowserFrame'
 
 const schedule = [

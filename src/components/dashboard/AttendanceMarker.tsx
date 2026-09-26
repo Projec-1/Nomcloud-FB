@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, X, Clock, FileWarning, Save } from 'lucide-react'
+import { Check, X, Clock, Warning as FileWarning, FloppyDisk as Save } from '@phosphor-icons/react'
 import { useToast } from '@/context/ToastContext'
 import Select from '@/components/ui/Select'
 import Input from '@/components/ui/Input'

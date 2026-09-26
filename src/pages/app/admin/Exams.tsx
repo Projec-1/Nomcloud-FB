@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, BarChart3, Clock, MapPin } from 'lucide-react'
+import { Plus, Pencil, Trash as Trash2, ChartBar as BarChart3, Clock, MapPin } from '@phosphor-icons/react'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
 import Select from '@/components/ui/Select'

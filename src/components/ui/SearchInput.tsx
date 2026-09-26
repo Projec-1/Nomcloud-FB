@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react'
+import { MagnifyingGlass as Search, X } from '@phosphor-icons/react'
 
 interface SearchInputProps {
   value: string

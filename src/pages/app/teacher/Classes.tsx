@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, MapPin, BookOpen, CalendarRange, Lock } from 'lucide-react'
+import { Users, MapPin, BookOpen, CalendarBlank as CalendarRange, Lock } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import ResourceGate from '@/components/ui/ResourceGate'
 import { useTeacherClasses } from '@/hooks/useTeacherClasses'

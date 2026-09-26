@@ -1,205 +1,220 @@
-import { useState } from 'react'
-import { CalendarRange, Clock3, Pencil, Plus, Trash2, Users, Sparkles, BookOpen } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CalendarBlank as CalendarRange, Clock, Pencil, Plus, Trash as Trash2 } from '@phosphor-icons/react'
 import PageHeader from '@/components/ui/PageHeader'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
 import Modal from '@/components/ui/Modal'
-import Badge from '@/components/ui/Badge'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import EmptyState from '@/components/ui/EmptyState'
+import ResourceGate from '@/components/ui/ResourceGate'
+import { useAuth } from '@/context/AuthContext'
+import { useRecordableClasses } from '@/hooks/useRecordableClasses'
+import { createTimetableSlot, deleteTimetableSlot, fetchManagedTimetable, updateTimetableSlot, type TimetableSlotInput } from '@/services/classService'
+import { fetchSchoolTeachers, type TeacherRow } from '@/services/teacherService'
+import type { TimetableSlotView } from '@/services/teacherService'
+import { isoWeekdayLabel, schoolWeekdays } from '@/utils/schoolCalendar'
+import { toError } from '@/utils/errorMessage'
 import { useToast } from '@/context/ToastContext'
-import { lessonTone, loadMockLessons, MOCK_CLASSES, MOCK_TEACHERS, saveMockLessons, timeRows, WEEKDAYS, type MockLesson } from '@/data/mockTimetable'
 
-type LessonForm = {
+type SlotForm = {
   day: string
-  subject: string
-  teacher: string
+  period: string
+  subjectId: string
+  teacherId: string
   startTime: string
   endTime: string
-  type: MockLesson['type']
+  room: string
 }
 
-const emptyLesson: LessonForm = { day: '6', subject: 'Mathematics', teacher: 'Ahmed Hassan', startTime: '08:00', endTime: '08:40', type: 'lesson' }
+const emptyForm: SlotForm = {
+  day: '6',
+  period: '1',
+  subjectId: '',
+  teacherId: '',
+  startTime: '08:00',
+  endTime: '08:40',
+  room: '',
+}
 
 export default function AdminTimetables() {
+  const { school } = useAuth()
   const { showToast } = useToast()
-  const [lessons, setLessons] = useState<MockLesson[]>(loadMockLessons)
-  const [classId, setClassId] = useState(MOCK_CLASSES[0].id)
-  const [teacherFilter, setTeacherFilter] = useState('all')
-  const [weekMode, setWeekMode] = useState<'five' | 'six'>('five')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<MockLesson | null>(null)
-  const [form, setForm] = useState(emptyLesson)
+  const { state, classes, reload: reloadClasses } = useRecordableClasses()
+  const [classId, setClassId] = useState('')
+  const [slots, setSlots] = useState<TimetableSlotView[]>([])
+  const [teachers, setTeachers] = useState<TeacherRow[]>([])
+  const [loadingSlots, setLoadingSlots] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editing, setEditing] = useState<TimetableSlotView | null>(null)
+  const [form, setForm] = useState<SlotForm>(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<TimetableSlotView | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const activeClass = MOCK_CLASSES.find((item) => item.id === classId) ?? MOCK_CLASSES[0]
-  const visibleDays = WEEKDAYS.slice(0, weekMode === 'five' ? 5 : 6)
-  const classLessons = lessons.filter((lesson) => lesson.classId === classId && (teacherFilter === 'all' || lesson.teacher === teacherFilter))
-  const rows = timeRows(classLessons)
+  const schoolId = school?.id ?? null
+  const selectedClass = classes.find((item) => item.id === classId) ?? classes[0] ?? null
+  const weekdays = useMemo(() => schoolWeekdays(school?.weekend_days), [school?.weekend_days])
+  const reload = useCallback(() => setReloadKey((value) => value + 1), [])
 
-  const openNew = (day?: number, startTime?: string, endTime?: string) => {
+  useEffect(() => {
+    if (!classId && classes[0]) setClassId(classes[0].id)
+    if (classId && !classes.some((item) => item.id === classId)) setClassId(classes[0]?.id ?? '')
+  }, [classId, classes])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!schoolId) {
+      setLoadingSlots(false)
+      setSlots([])
+      return
+    }
+    setLoadingSlots(true)
+    setError(null)
+    Promise.all([
+      classId ? fetchManagedTimetable(schoolId, classId) : Promise.resolve([]),
+      fetchSchoolTeachers(schoolId),
+    ])
+      .then(([timetable, schoolTeachers]) => {
+        if (cancelled) return
+        setSlots(timetable)
+        setTeachers(schoolTeachers)
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(toError(cause))
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSlots(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, classId, reloadKey])
+
+  const openNew = (day?: number) => {
     setEditing(null)
-    setForm({ ...emptyLesson, day: String(day ?? 6), startTime: startTime ?? '08:00', endTime: endTime ?? '08:40' })
-    setModalOpen(true)
+    const nextPeriod = Math.max(0, ...slots.filter((slot) => slot.day === (day ?? weekdays[0] ?? 6)).map((slot) => slot.period)) + 1
+    setForm({ ...emptyForm, day: String(day ?? weekdays[0] ?? 6), period: String(nextPeriod) })
+    setEditorOpen(true)
   }
 
-  const openEdit = (lesson: MockLesson) => {
-    setEditing(lesson)
-    setForm({ day: String(lesson.day), subject: lesson.subject, teacher: lesson.teacher, startTime: lesson.startTime, endTime: lesson.endTime, type: lesson.type })
-    setModalOpen(true)
+  const openEdit = (slot: TimetableSlotView) => {
+    setEditing(slot)
+    setForm({
+      day: String(slot.day),
+      period: String(slot.period),
+      subjectId: selectedClass?.writableSubjects.find((subject) => subject.name === slot.subject)?.id ?? '',
+      teacherId: slot.teacherId,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      room: slot.room,
+    })
+    setEditorOpen(true)
   }
 
-  const saveLesson = () => {
-    if (!form.startTime || !form.endTime || form.endTime <= form.startTime) {
-      showToast({ type: 'error', title: 'Check the lesson time', description: 'End time must be later than start time.' })
+  const saveSlot = async () => {
+    if (!schoolId || !selectedClass) return
+    if (!form.startTime || !form.endTime || form.endTime <= form.startTime || Number(form.period) < 1) {
+      showToast({ type: 'error', title: 'Check the lesson details', description: 'Enter a valid period and an end time later than the start time.' })
       return
     }
-    const conflict = lessons.some((lesson) =>
-      lesson.id !== editing?.id &&
-      lesson.teacher === form.teacher &&
-      lesson.teacher &&
-      lesson.day === Number(form.day) &&
-      lesson.startTime === form.startTime &&
-      lesson.endTime === form.endTime,
-    )
-    if (conflict) {
-      showToast({ type: 'error', title: 'Teacher conflict', description: `${form.teacher} is already teaching another class at this time.` })
-      return
-    }
-    const teacher = MOCK_TEACHERS.find((item) => item.name === form.teacher)
-    if (form.type === 'lesson' && teacher && teacher.subject !== form.subject) {
-      showToast({ type: 'error', title: 'Subject teacher mismatch', description: `${teacher.name} is assigned to ${teacher.subject}, not ${form.subject}.` })
-      return
-    }
-    const next: MockLesson = {
-      id: editing?.id ?? `mock-${Date.now()}`,
-      classId,
-      day: Number(form.day) as MockLesson['day'],
-      subject: form.type === 'break' ? '' : form.subject,
-      teacher: form.type === 'break' ? '' : form.teacher,
+    const input: TimetableSlotInput = {
+      classId: selectedClass.id,
+      subjectId: form.subjectId || null,
+      teacherId: form.teacherId || null,
+      dayOfWeek: Number(form.day),
+      period: Number(form.period),
       startTime: form.startTime,
       endTime: form.endTime,
-      type: form.type,
+      room: form.room.trim() || null,
     }
-    const updated = editing ? lessons.map((lesson) => (lesson.id === editing.id ? next : lesson)) : [...lessons, next]
-    setLessons(updated)
-    saveMockLessons(updated)
-    setModalOpen(false)
-    showToast({ type: 'success', title: editing ? 'Lesson updated' : 'Lesson added', description: 'Saved to this browser for the frontend demo.' })
+    setSaving(true)
+    try {
+      if (editing) await updateTimetableSlot(schoolId, editing.id, input)
+      else await createTimetableSlot(schoolId, input)
+      showToast({ type: 'success', title: editing ? 'Timetable slot updated' : 'Timetable slot added' })
+      setEditorOpen(false)
+      reload()
+    } catch (cause: unknown) {
+      showToast({ type: 'error', title: 'Timetable was not saved', description: cause instanceof Error ? cause.message : String(cause) })
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const removeLesson = (id: string) => {
-    const updated = lessons.filter((lesson) => lesson.id !== id)
-    setLessons(updated)
-    saveMockLessons(updated)
-    showToast({ type: 'success', title: 'Timetable item removed' })
+  const confirmDelete = async () => {
+    if (!schoolId || !deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteTimetableSlot(schoolId, deleteTarget.id)
+      showToast({ type: 'success', title: 'Timetable slot removed' })
+      setDeleteTarget(null)
+      reload()
+    } catch (cause: unknown) {
+      showToast({ type: 'error', title: 'Timetable slot was not removed', description: cause instanceof Error ? cause.message : String(cause) })
+    } finally {
+      setDeleting(false)
+    }
   }
 
-  const lessonAt = (day: number, row: { startTime: string; endTime: string }) =>
-    classLessons.find((lesson) => lesson.day === day && lesson.startTime === row.startTime && lesson.endTime === row.endTime)
+  const byDay = (day: number) => slots.filter((slot) => slot.day === day).sort((a, b) => a.period - b.period)
 
   return (
     <div>
-      <div className="relative mb-7 overflow-hidden rounded-[2rem] border border-[#FF5A1F]/15 bg-white p-6 text-ink shadow-[0_18px_60px_rgba(255,90,31,0.08)] dark:bg-[#161618] dark:text-white sm:p-8">
-        <div className="pointer-events-none absolute -bottom-32 left-1/2 h-64 w-[115%] -translate-x-1/2 rounded-[50%] border border-[#FF5A1F]/20" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/2 h-48 w-[90%] -translate-x-1/2 rounded-[50%] border border-[#FF5A1F]/15" />
-        <div className="pointer-events-none absolute -bottom-16 left-1/2 h-32 w-[65%] -translate-x-1/2 rounded-[50%] border border-[#FF5A1F]/10" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#FF5A1F]"><Sparkles className="h-4 w-4" /> Academic planning</div>
-            <h1 className="max-w-2xl text-3xl font-semibold tracking-[-0.04em] sm:text-5xl">A clearer rhythm for every school day.</h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-graphite">Plan six focused lessons across the Somali school week, then add extra periods whenever your classes need them.</p>
-          </div>
-          <Button onClick={() => openNew()} className="bg-[#FF5A1F] text-white hover:bg-[#e94d16]" icon={<Plus className="h-4 w-4" />}>Add Lesson</Button>
-        </div>
-      </div>
-
-      <div className="space-y-5">
-        <div className="rounded-2xl border border-ink/5 bg-white p-3 shadow-[0_12px_35px_rgba(20,20,20,0.04)] dark:border-white/10 dark:bg-[#161618] sm:p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2"><Users className="h-4 w-4 text-accent" /><h2 className="text-sm font-semibold text-ink dark:text-white">Choose class</h2></div>
-            <span className="text-[11px] text-graphite">{MOCK_CLASSES.length} classes</span>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {MOCK_CLASSES.map((item) => (
-              <button key={item.id} type="button" onClick={() => setClassId(item.id)} className={`min-w-[150px] shrink-0 rounded-xl px-3.5 py-2.5 text-left transition-all ${item.id === classId ? 'bg-[#FF5A1F] text-white shadow-sm' : 'bg-[#fff7f3] text-ink hover:bg-[#FF5A1F]/10 dark:bg-white/5 dark:text-white'}`}>
-                <p className="text-sm font-semibold">{item.name}</p>
-                <p className={`mt-0.5 truncate text-[11px] ${item.id === classId ? 'text-white/70' : 'text-graphite'}`}>{item.homeroomTeacher}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <section className="min-w-0">
-          <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-ink/5 bg-white p-4 shadow-[0_12px_35px_rgba(20,20,20,0.04)] dark:border-white/10 dark:bg-[#161618] sm:flex-row sm:items-end sm:justify-between sm:p-5">
-            <div>
-              <div className="flex items-center gap-2"><div className="rounded-xl bg-[#FF5A1F]/10 p-2 text-[#FF5A1F]"><BookOpen className="h-4 w-4" /></div><div><p className="text-xs font-semibold uppercase tracking-wider text-[#FF5A1F]">Weekly schedule</p><h2 className="mt-1 text-xl font-semibold text-ink dark:text-white">{activeClass.name}</h2></div></div>
-              <p className="mt-3 text-sm text-graphite">Foremaster / Homeroom Teacher: <span className="font-medium text-ink dark:text-white">{activeClass.homeroomTeacher}</span></p>
-              <p className="mt-1 text-xs text-graphite">Six lesson periods are ready each day. Add a seventh or extra period whenever your school needs one.</p>
-            </div>
-            <div className="grid w-full gap-3 sm:w-80 sm:grid-cols-2">
-              <Select label="School week" value={weekMode} onChange={(event) => setWeekMode(event.target.value as 'five' | 'six')}>
-                <option value="five">5 days · Saturday–Wednesday</option>
-                <option value="six">6 days · Saturday–Thursday</option>
+      <PageHeader title="Timetables" description="Manage published lesson times for your school classes." actions={selectedClass && <Button onClick={() => openNew()} icon={<Plus className="h-4 w-4" />}>Add lesson</Button>} />
+      <ResourceGate state={state} empty={{ icon: CalendarRange, title: 'No classes available', description: 'Create a class and assign an academic year before adding timetable slots.' }} deniedHint="Timetable management is available to school administrators.">
+        {() => selectedClass ? (
+          <section className="space-y-5">
+            <div className="flex flex-col gap-4 rounded-2xl border border-ink/5 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03] sm:flex-row sm:items-end sm:justify-between">
+              <Select label="Class" value={selectedClass.id} onChange={(event) => setClassId(event.target.value)} className="sm:max-w-sm">
+                {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </Select>
-              <Select label="Teacher" value={teacherFilter} onChange={(event) => setTeacherFilter(event.target.value)}>
-                <option value="all">All teachers</option>
-                {MOCK_TEACHERS.map((teacher) => <option key={teacher.id} value={teacher.name}>{teacher.name}</option>)}
-              </Select>
+              <p className="text-sm text-graphite">{selectedClass.subject.length} subjects assigned</p>
             </div>
-          </div>
+            {error ? <div role="alert" className="rounded-xl border border-red-500/20 p-4 text-sm text-red-700 dark:text-red-300">{error.message}<Button variant="outline" size="sm" className="ml-3" onClick={reload}>Retry</Button></div> : loadingSlots ? <p className="py-12 text-center text-sm text-graphite">Loading timetable…</p> : slots.length === 0 ? (
+              <EmptyState icon={CalendarRange} title="No lessons scheduled" description={`Add the first timetable slot for ${selectedClass.name}.`} action={<Button onClick={() => openNew()}>Add lesson</Button>} />
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {weekdays.map((day) => {
+                  const daySlots = byDay(day)
+                  return <section key={day} className="overflow-hidden rounded-2xl border border-ink/5 bg-white dark:border-white/10 dark:bg-white/[0.03]">
+                    <div className="flex items-center justify-between border-b border-ink/5 px-5 py-4 dark:border-white/10">
+                      <div><p className="text-xs font-semibold uppercase tracking-wider text-accent">{isoWeekdayLabel(day)}</p><h2 className="mt-1 font-semibold text-ink dark:text-white">{daySlots.length} scheduled periods</h2></div>
+                      <Button variant="outline" size="sm" onClick={() => openNew(day)} icon={<Plus className="h-4 w-4" />}>Add</Button>
+                    </div>
+                    <div className="space-y-2 p-3">
+                      {daySlots.map((slot) => <article key={slot.id} className="flex min-w-0 items-center gap-3 rounded-xl bg-mist/70 p-3 dark:bg-white/[0.04]">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent"><Clock className="h-4 w-4" /></span>
+                        <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-ink dark:text-white">{slot.subject}</p><p className="text-xs text-graphite">{slot.startTime}–{slot.endTime} · Period {slot.period}</p><p className="truncate text-xs text-graphite">{slot.teacherName ?? 'Teacher unassigned'}{slot.room ? ` · ${slot.room}` : ''}</p></div>
+                        <button type="button" aria-label={`Edit period ${slot.period}`} className="rounded-lg p-2 text-graphite hover:bg-white dark:hover:bg-white/10" onClick={() => openEdit(slot)}><Pencil className="h-4 w-4" /></button>
+                        <button type="button" aria-label={`Remove period ${slot.period}`} className="rounded-lg p-2 text-red-600 hover:bg-white dark:text-red-400 dark:hover:bg-white/10" onClick={() => setDeleteTarget(slot)}><Trash2 className="h-4 w-4" /></button>
+                      </article>)}
+                      {daySlots.length === 0 && <p className="px-2 py-6 text-center text-sm text-graphite">No lessons scheduled.</p>}
+                    </div>
+                  </section>
+                })}
+              </div>
+            )}
+          </section>
+        ) : null}
+      </ResourceGate>
 
-          <div className="overflow-hidden rounded-2xl border border-ink/5 bg-white shadow-[0_12px_35px_rgba(20,20,20,0.04)] dark:border-white/10 dark:bg-[#161618]">
-            <div className="overflow-x-auto p-3 sm:p-5">
-            <table className="w-full min-w-[900px] border-separate border-spacing-2 text-left">
-              <thead>
-                <tr>
-                  <th className="w-32 px-2 py-3 text-xs font-semibold uppercase tracking-wide text-graphite">Time</th>
-                  {visibleDays.map((day) => <th key={day.value} className="rounded-xl bg-[#fff7f3] px-3 py-3 text-sm font-semibold text-ink dark:bg-white/5 dark:text-white">{day.label}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={`${row.startTime}-${row.endTime}`}>
-                    <td className="px-2 py-3 align-top text-xs font-medium leading-5 text-graphite">{row.startTime}<br />{row.endTime}</td>
-                    {visibleDays.map((day) => {
-                      const lesson = lessonAt(day.value, row)
-                      return (
-                        <td key={day.value} className="min-w-[160px] align-top">
-                          {lesson ? (
-                            <div className={`group relative min-h-[112px] rounded-2xl border p-4 shadow-sm transition-shadow hover:shadow-md ${lessonTone(lesson)}`}>
-                              <button type="button" onClick={() => openEdit(lesson)} className="w-full text-left">
-                                <p className="text-sm font-semibold">{lesson.type === 'break' ? 'Break time' : lesson.subject}</p>
-                                <p className="mt-2 flex items-center gap-1 text-xs opacity-75"><Clock3 className="h-3.5 w-3.5" />{lesson.startTime}–{lesson.endTime}</p>
-                                {lesson.teacher && <p className="mt-1.5 truncate text-xs opacity-75">Teacher: {lesson.teacher}</p>}
-                              </button>
-                              <div className="absolute right-2 top-2 hidden gap-1 group-hover:flex">
-                                <button type="button" onClick={() => openEdit(lesson)} className="rounded-md bg-white/70 p-1.5 text-ink" aria-label="Edit lesson"><Pencil className="h-3 w-3" /></button>
-                                <button type="button" onClick={() => removeLesson(lesson.id)} className="rounded-md bg-white/70 p-1.5 text-red-500" aria-label="Delete lesson"><Trash2 className="h-3 w-3" /></button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button type="button" onClick={() => openNew(day.value, row.startTime, row.endTime)} className="flex min-h-[112px] w-full items-center justify-center rounded-2xl border border-dashed border-ink/10 text-graphite/30 transition-colors hover:border-accent hover:bg-accent/5 hover:text-accent dark:border-white/10"><Plus className="h-5 w-5" /></button>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-            {rows.length === 0 && <div className="py-14 text-center text-sm text-graphite">No lessons yet. Use Add Lesson to build this class schedule.</div>}
-          </div>
-        </section>
-      </div>
-
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit timetable item' : 'Add timetable item'} description="This frontend demo saves changes in your browser." footer={<><Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button><Button onClick={saveLesson}>{editing ? 'Save changes' : 'Add lesson'}</Button></>}>
+      <Modal open={editorOpen} onClose={() => setEditorOpen(false)} title={editing ? 'Edit timetable slot' : 'Add timetable slot'} footer={<><Button variant="ghost" onClick={() => setEditorOpen(false)}>Cancel</Button><Button onClick={() => void saveSlot()} disabled={saving}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Add lesson'}</Button></>}>
         <div className="space-y-4">
-          <Select label="Day" value={form.day} onChange={(event) => setForm({ ...form, day: event.target.value })}>{WEEKDAYS.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}</Select>
-          <Select label="Type" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as MockLesson['type'] })}><option value="lesson">Lesson</option><option value="break">Break time</option></Select>
-          {form.type === 'lesson' && <><Select label="Subject" value={form.subject} onChange={(event) => { const subject = event.target.value; const specialist = MOCK_TEACHERS.find((teacher) => teacher.subject === subject); setForm({ ...form, subject, teacher: specialist?.name ?? form.teacher }) }}>{activeClass.subjects.map((subject) => <option key={subject}>{subject}</option>)}</Select><Select label="Subject teacher" value={form.teacher} onChange={(event) => setForm({ ...form, teacher: event.target.value })}>{MOCK_TEACHERS.filter((teacher) => teacher.subject === form.subject).map((teacher) => <option key={teacher.id} value={teacher.name}>{teacher.name} · {teacher.subject}</option>)}</Select><p className="-mt-2 text-xs text-graphite">Teachers are subject specialists and can move between classes during the day.</p></>}
-          <div className="grid gap-4 sm:grid-cols-2"><Input label="Start time" type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} /><Input label="End time" type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} /></div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="Day" value={form.day} onChange={(event) => setForm({ ...form, day: event.target.value })}>{weekdays.map((day) => <option key={day} value={day}>{isoWeekdayLabel(day)}</option>)}</Select>
+            <Input label="Period number" type="number" min="1" value={form.period} onChange={(event) => setForm({ ...form, period: event.target.value })} />
+            <Select label="Subject" value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })}><option value="">Break / unassigned</option>{selectedClass?.writableSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</Select>
+            <Select label="Teacher" value={form.teacherId} onChange={(event) => setForm({ ...form, teacherId: event.target.value })}><option value="">Unassigned</option>{teachers.filter((teacher) => teacher.status === 'active').map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.full_name}</option>)}</Select>
+            <Input label="Start time" type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} />
+            <Input label="End time" type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} />
+          </div>
+          <Input label="Room (optional)" value={form.room} onChange={(event) => setForm({ ...form, room: event.target.value })} />
         </div>
       </Modal>
+      <ConfirmDialog open={Boolean(deleteTarget)} title="Remove timetable slot?" description="This removes the selected lesson from the school's published timetable." confirmLabel={deleting ? 'Removing…' : 'Remove slot'} danger loading={deleting} onCancel={() => setDeleteTarget(null)} onConfirm={() => void confirmDelete()} />
     </div>
   )
 }

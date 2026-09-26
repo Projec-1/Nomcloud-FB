@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, ShieldCheck } from 'lucide-react'
+import { SignOut as LogOut, ShieldCheck } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import SignOutButton from '@/components/ui/SignOutButton'
 

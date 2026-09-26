@@ -1,5 +1,5 @@
-import { AlertTriangle } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { Warning as AlertTriangle } from '@phosphor-icons/react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import AccessDenied from '@/components/ui/AccessDenied'
 import EmptyState from '@/components/ui/EmptyState'
@@ -9,7 +9,7 @@ import type { ResourceState } from '@/lib/resourceState'
 interface ResourceGateProps<T> {
   state: ResourceState<T>
   /** Copy for the `empty` state. Unchanged in spirit from what pages use today. */
-  empty: { title: string; description?: string; icon?: LucideIcon; action?: ReactNode }
+  empty: { title: string; description?: string; icon?: PhosphorIcon; action?: ReactNode }
   /** Optional secondary line on `denied`. Never explains what is being withheld. */
   deniedHint?: string
   /** Override the default skeleton where a page needs a different shape. */

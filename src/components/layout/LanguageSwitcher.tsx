@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Globe, Check } from 'lucide-react'
+import { Globe, Check } from '@phosphor-icons/react'
 import { useLanguage } from '@/context/LanguageContext'
 import { LANGUAGES } from '@/data/translations'
 import { cn } from '@/utils/cn'

@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react'
+import { CheckCircle as CheckCircle2, WarningCircle as AlertCircle, Info, Warning as AlertTriangle, X } from '@phosphor-icons/react'
 import type { ToastMessage } from '@/types'
 import { cn } from '@/utils/cn'
 

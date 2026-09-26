@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarRange, Info, Plus, CheckCircle2 } from 'lucide-react'
+import { CalendarBlank as CalendarRange, Info, Plus, CheckCircle as CheckCircle2 } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'

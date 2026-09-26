@@ -1,4 +1,4 @@
-import { Check, Loader2, ShieldCheck } from 'lucide-react'
+import { Check, CircleNotch as Loader2, ShieldCheck } from '@phosphor-icons/react'
 
 export default function RequestProcessing({
   title = 'Sending your request',

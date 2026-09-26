@@ -1,4 +1,4 @@
-import { FlaskConical } from 'lucide-react'
+import { Flask as FlaskConical } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { shouldShowDemoIndicator } from '@/lib/demoSchool'
 

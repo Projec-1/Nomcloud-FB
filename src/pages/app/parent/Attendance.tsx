@@ -1,4 +1,4 @@
-import { CalendarCheck, Check, X, Clock, FileWarning } from 'lucide-react'
+import { CalendarCheck, Check, X, Clock, Warning as FileWarning } from '@phosphor-icons/react'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import { useChildAttendance } from '@/hooks/useChildRecords'
 import PageHeader from '@/components/ui/PageHeader'

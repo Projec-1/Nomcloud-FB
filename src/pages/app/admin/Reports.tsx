@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, TrendingUp, CalendarCheck, Wallet, Users, GraduationCap, CalendarRange } from 'lucide-react'
+import { Download, TrendUp as TrendingUp, CalendarCheck, Wallet, Users, GraduationCap, CalendarBlank as CalendarRange } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'

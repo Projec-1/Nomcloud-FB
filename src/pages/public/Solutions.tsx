@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, School, GraduationCap, Users, BookOpen } from 'lucide-react'
+import { ArrowRight, Buildings as School, GraduationCap, Users, BookOpen } from '@phosphor-icons/react'
 import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
 import Tabs from '@/components/ui/Tabs'
-import AdminDashboardMock from '@/components/marketing/previews/AdminDashboardMock'
+import AdministratorWorkspacePreview from '@/components/marketing/previews/AdministratorWorkspacePreview'
 import TeacherDashboardMock from '@/components/marketing/previews/TeacherDashboardMock'
 import ParentAppMock from '@/components/marketing/previews/ParentAppMock'
 import FeatureMock from '@/components/marketing/previews/FeatureMock'
@@ -82,7 +82,7 @@ export default function Solutions() {
             </div>
           </div>
           <div key={`${active}-mock`} className="flex animate-fade-up justify-center">
-            {solution.mock === 'admin' && <AdminDashboardMock />}
+            {solution.mock === 'admin' && <AdministratorWorkspacePreview />}
             {solution.mock === 'teacher' && <TeacherDashboardMock />}
             {solution.mock === 'parent' && <ParentAppMock />}
             {solution.mock === 'student' && (

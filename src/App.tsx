@@ -48,7 +48,7 @@ import OperatorTemplates from '@/pages/platform/Templates'
 
 import TeacherDashboard from '@/pages/app/teacher/Dashboard'
 import TeacherClasses from '@/pages/app/teacher/Classes'
-import TeacherTimetable from '@/pages/app/teacher/Timetable'
+import TeacherTimetable from '@/pages/app/teacher/ConnectedTimetable'
 import TeacherWorkspace from '@/pages/app/teacher/Workspace'
 import TeacherAttendance from '@/pages/app/teacher/Attendance'
 import TeacherGrades from '@/pages/app/teacher/Grades'
@@ -59,6 +59,7 @@ import TeacherTutorials from '@/pages/app/teacher/Tutorials'
 
 import ParentDashboard from '@/pages/app/parent/Dashboard'
 import ParentWorkspace from '@/pages/app/parent/Workspace'
+import ParentTimetable from '@/pages/app/parent/Timetable'
 import ParentChildren from '@/pages/app/parent/Children'
 import ParentAttendance from '@/pages/app/parent/Attendance'
 import ParentGrades from '@/pages/app/parent/Grades'
@@ -104,6 +105,10 @@ export default function App() {
         {/* Where the activation email lands. Public: the person following it is
             signed out until Supabase's link opens their session. */}
         <Route path="/activate" element={<ActivateAccount />} />
+        <Route
+          path="/__dev/platform-preview"
+          element={import.meta.env.DEV ? <PlatformWorkspace /> : <NotFound />}
+        />
         {/* The approval screen used to exist only in development builds at this
             path. It now lives in the platform workspace; the old address still works. */}
         <Route path="/dev/approval" element={<Navigate to="/platform/applications" replace />} />
@@ -185,19 +190,19 @@ export default function App() {
           <Route index element={<TeacherDashboard />} />
           <Route path="classes" element={<TeacherClasses />} />
           <Route path="timetable" element={<TeacherTimetable />} />
-          <Route path="my-day" element={<TeacherWorkspace />} />
-          <Route path="students" element={<TeacherWorkspace />} />
+          <Route path="my-day" element={<TeacherDashboard />} />
+          <Route path="students" element={<TeacherClasses />} />
           <Route path="resources" element={<TeacherWorkspace />} />
-          <Route path="progress" element={<TeacherWorkspace />} />
+          <Route path="progress" element={<TeacherGrades />} />
           <Route path="profile" element={<TeacherWorkspace />} />
           <Route path="notifications" element={<TeacherWorkspace />} />
           <Route path="attendance" element={<TeacherAttendance />} />
           <Route path="grades" element={<TeacherGrades />} />
           <Route path="homework" element={<TeacherHomework />} />
-          <Route path="assignments" element={<TeacherWorkspace />} />
-          <Route path="lessons" element={<TeacherWorkspace />} />
+          <Route path="assignments" element={<TeacherHomework />} />
+          <Route path="lessons" element={<TeacherTimetable />} />
           <Route path="exams" element={<TeacherWorkspace />} />
-          <Route path="class-performance" element={<TeacherWorkspace />} />
+          <Route path="class-performance" element={<TeacherGrades />} />
           <Route path="announcements" element={<TeacherAnnouncements />} />
           <Route path="messages" element={<TeacherMessages />} />
           <Route path="tutorials" element={<TeacherTutorials />} />
@@ -213,15 +218,17 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<ParentWorkspace />} />
-          <Route path="children" element={<ParentWorkspace />} />
-          <Route path="timetable" element={<ParentWorkspace />} />
-          <Route path="attendance" element={<ParentWorkspace />} />
-          <Route path="grades" element={<ParentWorkspace />} />
-          <Route path="homework" element={<ParentWorkspace />} />
-          <Route path="announcements" element={<ParentWorkspace />} />
-          <Route path="notifications" element={<ParentWorkspace />} />
-          <Route path="messages" element={<ParentWorkspace />} />
+          <Route index element={<ParentDashboard />} />
+          <Route path="children" element={<ParentChildren />} />
+          <Route path="timetable" element={<ParentTimetable />} />
+          <Route path="attendance" element={<ParentAttendance />} />
+          <Route path="grades" element={<ParentGrades />} />
+          <Route path="homework" element={<ParentHomework />} />
+          <Route path="fees" element={<ParentFees />} />
+          <Route path="announcements" element={<ParentAnnouncements />} />
+          <Route path="notifications" element={<ParentNotifications />} />
+          <Route path="messages" element={<ParentMessages />} />
+          <Route path="tutorials" element={<ParentTutorials />} />
           <Route path="settings" element={<ParentWorkspace />} />
         </Route>
 

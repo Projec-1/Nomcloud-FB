@@ -1,24 +1,20 @@
-import type { LucideIcon } from 'lucide-react'
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react'
+import { ArrowDownRight, ArrowUpRight } from '@phosphor-icons/react'
 import { cn } from '@/utils/cn'
 
 interface StatCardProps {
   label: string
   value: string | number
-  icon: LucideIcon
+  icon: PhosphorIcon
   trend?: { value: string; positive: boolean }
   tint?: string
 }
 
-export default function StatCard({ label, value, icon: Icon, trend, tint = '#0071E3' }: StatCardProps) {
+export default function StatCard({ label, value, icon: Icon, trend }: StatCardProps) {
   return (
-    <div className="card group relative overflow-hidden p-6 transition-transform duration-300 hover:-translate-y-1">
-      <div
-        className="absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-[0.12] blur-xl transition-transform duration-500 group-hover:scale-125"
-        style={{ background: tint }}
-      />
+    <div className="card relative overflow-hidden p-5 sm:p-6">
       <div className="relative flex items-start justify-between">
-        <div className="rounded-2xl p-2.5" style={{ backgroundColor: `${tint}1A`, color: tint }}>
+        <div className="rounded-xl bg-brand/10 p-2.5 text-brand">
           <Icon className="h-5 w-5" />
         </div>
         {trend && (

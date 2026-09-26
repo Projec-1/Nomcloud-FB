@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, Mail, MinusCircle, XCircle } from 'lucide-react'
+import { CheckCircle as CheckCircle2, CircleNotch as Loader2, Envelope as Mail, MinusCircle, XCircle } from '@phosphor-icons/react'
 import Button from '@/components/ui/Button'
 import {
   gmailBudgetNote,

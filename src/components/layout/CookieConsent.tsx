@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Cookie } from 'lucide-react'
+import { Cookie } from '@phosphor-icons/react'
 
 const STORAGE_KEY = 'nomcloud_cookie_consent'
 

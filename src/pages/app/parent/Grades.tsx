@@ -1,4 +1,4 @@
-import { BookOpen } from 'lucide-react'
+import { BookOpen } from '@phosphor-icons/react'
 import { useSelectedChild } from '@/hooks/useSelectedChild'
 import { useChildGrades } from '@/hooks/useChildRecords'
 import PageHeader from '@/components/ui/PageHeader'

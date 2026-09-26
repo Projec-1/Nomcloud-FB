@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { GraduationCap, Plus, Pencil, Trash2, ShieldOff, ShieldCheck, Mail, FileSpreadsheet } from 'lucide-react'
+import { GraduationCap, Plus, Pencil, Trash as Trash2, ShieldSlash as ShieldOff, ShieldCheck, Envelope as Mail, FileXls as FileSpreadsheet } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'

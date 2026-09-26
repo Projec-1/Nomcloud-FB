@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Activity, Bell, BookOpen, CalendarCheck, CheckCircle2, ClipboardCheck, Clock3, GraduationCap, Users } from 'lucide-react'
+import { Pulse as Activity, Bell, BookOpen, CalendarCheck, CheckCircle as CheckCircle2, ClipboardText as ClipboardCheck, Clock as Clock3, GraduationCap, Users } from '@phosphor-icons/react'
 import PageHeader from '@/components/ui/PageHeader'
 import Select from '@/components/ui/Select'
 import Badge from '@/components/ui/Badge'

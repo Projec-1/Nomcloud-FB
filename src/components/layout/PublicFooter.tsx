@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Twitter, Linkedin, Facebook, Mail, CreditCard } from 'lucide-react'
+import { TwitterLogo as Twitter, LinkedinLogo as Linkedin, FacebookLogo as Facebook, Envelope as Mail, CreditCard } from '@phosphor-icons/react'
 import Logo from '@/components/layout/Logo'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher'
 import { useLanguage } from '@/context/LanguageContext'

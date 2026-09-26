@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, ArrowRight, School, Clock, Users, Sparkles } from 'lucide-react'
+import { CheckCircle as CheckCircle2, ArrowRight, Buildings as School, Clock, Users } from '@phosphor-icons/react'
 import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
 import Input from '@/components/ui/Input'
@@ -33,7 +33,7 @@ export default function BookDemo() {
   const highlights = [
     { icon: Clock, text: t('bookDemo.highlight1') },
     { icon: Users, text: t('bookDemo.highlight2') },
-    { icon: Sparkles, text: t('bookDemo.highlight3') },
+    { icon: CheckCircle2, text: t('bookDemo.highlight3') },
   ]
 
   const update = (key: keyof DemoRequestPayload, value: string) => setForm((f) => ({ ...f, [key]: value }))

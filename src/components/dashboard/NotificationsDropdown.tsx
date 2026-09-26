@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, CheckCheck, Megaphone, BookOpen, CalendarCheck, Wallet, ClipboardCheck, MessageSquare } from 'lucide-react'
+import { Bell, Checks as CheckCheck, Megaphone, BookOpen, CalendarCheck, Wallet, ClipboardText as ClipboardCheck, ChatText as MessageSquare } from '@phosphor-icons/react'
 import { timeAgo } from '@/utils/format'
 import { cn } from '@/utils/cn'
 import EmptyState from '@/components/ui/EmptyState'

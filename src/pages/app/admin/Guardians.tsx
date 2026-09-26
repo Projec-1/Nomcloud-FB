@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Users, Mail, ShieldCheck, ShieldOff } from 'lucide-react'
+import { Users, Envelope as Mail, ShieldCheck, ShieldSlash as ShieldOff } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'

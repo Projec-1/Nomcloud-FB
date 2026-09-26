@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { CheckCircle2, ArrowLeft, ArrowRight } from 'lucide-react'
+import { CheckCircle as CheckCircle2, ArrowLeft, ArrowRight } from '@phosphor-icons/react'
 import AuthLayout from '@/components/layout/AuthLayout'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'

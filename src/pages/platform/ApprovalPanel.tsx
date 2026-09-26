@@ -9,7 +9,22 @@ import SignOutButton from '@/components/ui/SignOutButton'
 interface PendingApplication {
   id: string
   school_name: string
+  administrator_name: string
   email: string
+  phone: string
+  country: string | null
+  school_size_band: string
+  message: string | null
+  applicant_position: string | null
+  school_address: string | null
+  campus_count: string | null
+  student_count_band: string | null
+  class_count_band: string | null
+  staff_count_band: string | null
+  curriculum: string | null
+  current_system: string | null
+  reasons: string[] | null
+  created_at: string
 }
 
 /** What approval reported. It contains no password, because none is created. */
@@ -96,7 +111,7 @@ export default function ApprovalPanel() {
     setIsPlatformAdmin(true)
     const { data, error: applicationError } = await supabase
       .from('school_applications')
-      .select('id, school_name, email')
+      .select('id, school_name, administrator_name, email, phone, country, school_size_band, message, applicant_position, school_address, campus_count, student_count_band, class_count_band, staff_count_band, curriculum, current_system, reasons, created_at')
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
 
@@ -231,13 +246,40 @@ export default function ApprovalPanel() {
           applications.map((application) => (
             <div
               key={application.id}
-              className="flex flex-col gap-4 rounded-xl border border-ink/10 bg-white p-5 dark:border-white/10 dark:bg-white/5 sm:flex-row sm:items-end sm:justify-between"
+              className="rounded-xl border border-ink/10 bg-white p-5 dark:border-white/10 dark:bg-white/5"
             >
-              <div>
-                <h2 className="font-semibold text-ink dark:text-white">{application.school_name}</h2>
-                <p className="mt-1 break-all text-xs text-graphite">{application.id}</p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-ink dark:text-white">{application.school_name}</h2>
+                  <p className="mt-1 break-all text-xs text-graphite">{application.id} · Submitted {new Date(application.created_at).toLocaleString()}</p>
+                </div>
+                <span className="rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Pending</span>
               </div>
-              <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-80 sm:flex-row sm:items-end">
+              <dl className="mt-4 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  ['Administrator', application.administrator_name],
+                  ['Email', application.email],
+                  ['Phone', application.phone],
+                  ['Applicant position', application.applicant_position],
+                  ['Country', application.country],
+                  ['School size', application.school_size_band],
+                  ['School address', application.school_address],
+                  ['Campuses', application.campus_count],
+                  ['Students', application.student_count_band],
+                  ['Classes', application.class_count_band],
+                  ['Staff', application.staff_count_band],
+                  ['Curriculum', application.curriculum],
+                  ['Current system', application.current_system],
+                  ['Reasons', application.reasons?.join(', ') || null],
+                ].map(([label, value]) => (
+                  <div key={label} className="min-w-0 border-t border-ink/10 py-3 dark:border-white/10">
+                    <dt className="text-xs text-graphite">{label}</dt>
+                    <dd className="mt-1 break-words text-sm font-medium text-ink dark:text-white">{value || 'Not provided'}</dd>
+                  </div>
+                ))}
+                {application.message && <div className="border-t border-ink/10 py-3 dark:border-white/10 sm:col-span-2 lg:col-span-3"><dt className="text-xs text-graphite">Additional information</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm text-ink dark:text-white">{application.message}</dd></div>}
+              </dl>
+              <div className="mt-4 flex w-full flex-col gap-3 sm:flex-row sm:items-end">
                 <Input
                   label="Shortcode"
                   value={shortcodes[application.id] ?? ''}

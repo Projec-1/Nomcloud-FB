@@ -1,19 +1,7 @@
-import {
-  Users,
-  CalendarCheck,
-  BookOpen,
-  ClipboardCheck,
-  Wallet,
-  Bell,
-  MessageSquare,
-  BellRing,
-  BarChart3,
-  CalendarRange,
-  SlidersHorizontal,
-} from 'lucide-react'
+import { Users, CalendarCheck, BookOpen, ClipboardText as ClipboardCheck, Wallet, Bell, ChatText as MessageSquare, BellRinging as BellRing, ChartBar as BarChart3, CalendarBlank as CalendarRange, SlidersHorizontal } from '@phosphor-icons/react'
 import SEO from '@/components/layout/SEO'
 import Reveal from '@/components/marketing/Reveal'
-import AdminDashboardMock from '@/components/marketing/previews/AdminDashboardMock'
+import AdministratorWorkspacePreview from '@/components/marketing/previews/AdministratorWorkspacePreview'
 import TeacherDashboardMock from '@/components/marketing/previews/TeacherDashboardMock'
 import ParentAppMock from '@/components/marketing/previews/ParentAppMock'
 import FeatureMock, { type FeatureMockVariant } from '@/components/marketing/previews/FeatureMock'
@@ -58,7 +46,7 @@ export default function Features() {
         <div className="container space-y-16">
           <Reveal>
             <p className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-graphite">{t('features.adminLabel')}</p>
-            <AdminDashboardMock />
+            <AdministratorWorkspacePreview />
           </Reveal>
           <div className="grid gap-8 lg:grid-cols-2">
             <Reveal>

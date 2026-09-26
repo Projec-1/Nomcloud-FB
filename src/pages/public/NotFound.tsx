@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Compass } from 'lucide-react'
+import { ArrowRight, Compass } from '@phosphor-icons/react'
 import SEO from '@/components/layout/SEO'
 import { useLanguage } from '@/context/LanguageContext'
 

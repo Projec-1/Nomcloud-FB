@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PlayCircle, Clock, X } from 'lucide-react'
+import { PlayCircle, Clock, X } from '@phosphor-icons/react'
 import PageHeader from '@/components/ui/PageHeader'
 import Modal from '@/components/ui/Modal'
 
@@ -23,14 +23,13 @@ export default function TutorialsPage({ title, description, videos }: { title: s
           <button
             key={v.title}
             onClick={() => setPlaying(v)}
-            className="group card overflow-hidden p-0 text-left transition-transform duration-300 hover:-translate-y-1"
+            className="card overflow-hidden p-0 text-left"
           >
-            <div className="relative flex h-36 items-center justify-center overflow-hidden" style={{ background: `linear-gradient(135deg, ${v.tint}, #1D1D1F)` }}>
-              <div className="absolute inset-0 opacity-[0.15]" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '14px 14px' }} />
-              <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur transition-transform duration-300 group-hover:scale-110">
+            <div className="relative flex h-36 items-center justify-center overflow-hidden bg-ink">
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-white">
                 <PlayCircle className="h-7 w-7" />
               </span>
-              <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-medium text-white">
+              <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-xl bg-black/40 px-2.5 py-1 text-[11px] font-medium text-white">
                 <Clock className="h-3 w-3" /> {v.duration}
               </span>
             </div>

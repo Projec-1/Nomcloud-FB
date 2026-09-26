@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookOpen, Plus, Pencil, Trash2, Users, MapPin, FileSpreadsheet } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash as Trash2, Users, MapPin, FileXls as FileSpreadsheet } from '@phosphor-icons/react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import PageHeader from '@/components/ui/PageHeader'
