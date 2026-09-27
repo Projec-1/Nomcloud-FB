@@ -155,7 +155,7 @@ export default function ImportDialog<T, Ctx>({
     const query = search.trim().toLowerCase()
     if (!query) return plan.rows
     return plan.rows.filter((row) =>
-      kind.columns.some((column) => String((row.value as Record<string, unknown> | null)?.[column.key] ?? '').toLowerCase().includes(query))
+      kind.columns.some((column) => (row.raw[column.key] ?? '').toLowerCase().includes(query))
       || row.problems.join(' ').toLowerCase().includes(query)
       || String(row.row).includes(query),
     )
@@ -323,13 +323,15 @@ export default function ImportDialog<T, Ctx>({
                 </thead>
                 <tbody>
                   {visibleRows.map((row) => {
-                    const values = (row.value ?? {}) as Record<string, unknown>
+                    // The raw cells, so a rejected row still shows the pupil's
+                    // name rather than a line of dashes.
+                    const values = row.raw
                     return (
                       <tr key={row.row} className="border-t border-ink/5 align-top">
                         <td className="px-3 py-2 text-graphite">{row.row}</td>
                         {kind.columns.map((column) => (
                           <td key={column.key} className="px-3 py-2">
-                            {String(values[column.key] ?? '') || '—'}
+                            {values[column.key]?.trim() || '—'}
                           </td>
                         ))}
                         <td

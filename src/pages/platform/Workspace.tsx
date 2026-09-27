@@ -155,7 +155,7 @@ export default function PlatformWorkspace() {
   const [globalQuery, setGlobalQuery] = useState('')
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [emergencyOpen, setEmergencyOpen] = useState(false)
-  const [operator, setOperator] = useState<string | null>(null)
+  const [operator, setOperator] = useState<PlatformOperatorRecord | null>(null)
   const [schoolRecords, setSchoolRecords] = useState<School[]>([])
   const [requestRecords, setRequestRecords] = useState<Request[]>([])
   const [auditRecords, setAuditRecords] = useState<string[][]>([])
@@ -329,15 +329,15 @@ export default function PlatformWorkspace() {
           {section === 'Action Center' && <ActionCenter onSchool={setSchool} onRequest={setRequest} navigate={navigate} schools={schoolRecords} requests={requestRecords} pendingApplicationCount={pendingApplicationCount} loading={platformRecordsLoading} />}
           {section === 'Schools' && (platformRecordsLoading ? <p className="py-12 text-center text-sm text-graphite">Loading schools…</p> : <SchoolsView schools={filteredSchools} query={query} setQuery={setQuery} filter={schoolFilter} setFilter={setSchoolFilter} onSchool={setSchool} onNotify={() => navigate('/platform/applications')} />)}
           {section === 'School Applications' && <PlatformApprovalPanel />}
-          {['People', 'Communications', 'Activity', 'System Health', 'Features', 'Integrations', 'Billing', 'Data'].includes(section) && <OperatorModuleView section={section} onNotify={notify} />}
+          {['People', 'Communications', 'Activity', 'System Health', 'Features', 'Integrations', 'Billing', 'Data'].includes(section) && <OperatorModuleView section={section} />}
           {section === 'Requests & Reviews' && <RequestsView onRequest={setRequest} requests={requestRecords} onAction={updateRequest} />}
           {section === 'Operators' && (platformRecordsLoading ? <p className="py-12 text-center text-sm text-graphite">Loading operators…</p> : <OperatorsView operators={operatorRecords} onNotify={notify} onOperator={setOperator} />)}
-          {section === 'Permissions' && <PermissionsView onNotify={notify} />}
+          {section === 'Permissions' && <PermissionsView />}
           {section === 'Audit Logs' && (platformRecordsLoading ? <p className="py-12 text-center text-sm text-graphite">Loading audit logs…</p> : <AuditView notify={notify} rows={auditRecords} />)}
-          {section === 'Security' && <SecurityView onNotify={notify} />}
-          {section === 'Maintenance' && <MaintenanceView onNotify={notify} />}
+          {section === 'Security' && <SecurityView />}
+          {section === 'Maintenance' && <MaintenanceView />}
           {section === 'Analytics' && <AnalyticsView />}
-          {section === 'Settings' && <SettingsView onNotify={notify} onEmergency={() => setEmergencyOpen(true)} />}
+          {section === 'Settings' && <SettingsView onEmergency={() => setEmergencyOpen(true)} fullName={profile?.full_name ?? ''} email={authUser?.email ?? ''} />}
         </div>
       </main>
       {toast && <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-xl dark:bg-white dark:text-ink"><Check className="h-4 w-4 text-emerald-400" />{toast}</div>}
@@ -360,7 +360,7 @@ export default function PlatformWorkspace() {
         onNoteSaved={notify}
         onOpenSchool={(item) => { setRequest(null); setSchool(item) }}
       />
-      <OperatorModal operator={selectedOperator?.fullName ?? operator} onClose={() => { setOperator(null); setSelectedOperator(null) }} onAction={notify} />
+      <OperatorModal operator={selectedOperator ?? operator} onClose={() => { setOperator(null); setSelectedOperator(null) }} onAction={notify} />
       <Modal open={emergencyOpen} onClose={() => setEmergencyOpen(false)} title="Emergency controls" description="These actions affect live platform access and will be written to the audit log." size="md" footer={<Button variant="outline" onClick={() => setEmergencyOpen(false)}>Close</Button>}><div className="space-y-2">{['Suspend a school account', 'Revoke all sessions for a user', 'Restrict an operator account', 'Put platform into maintenance mode'].map((item) => <button key={item} onClick={() => { setEmergencyOpen(false); notify(`${item} requires founder confirmation`) }} className="flex w-full items-center gap-3 rounded-2xl border border-red-500/15 p-4 text-left text-sm font-semibold text-red-700 hover:bg-red-500/[0.05] dark:text-red-300"><Ban className="h-4 w-4" />{item}<ChevronRight className="ml-auto h-4 w-4" /></button>)}</div></Modal>
       <Modal open={signOutOpen} onClose={() => setSignOutOpen(false)} title="Sign out?" description="Are you sure you want to sign out of Nom Cloud?" size="sm" footer={<><Button variant="outline" onClick={() => setSignOutOpen(false)}>Cancel</Button><Button variant="danger" onClick={() => void handleLogout()}>Sign Out</Button></>}><div /></Modal>
     </div>
@@ -371,45 +371,66 @@ function SectionHeader({ title, description, action }: { eyebrow: string; title:
   return <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-graphite">{description}</p></div>{action}</div>
 }
 
-const moduleContent: Record<string, { eyebrow: string; title: string; description: string; stats: string[]; rows: string[] }> = {
-  People: { eyebrow: 'Network directory', title: 'People', description: 'Search administrators, teachers, students, parents, and operators across the Nom Cloud network.', stats: ['48,290 students', '3,842 teachers', '1,126 administrators'], rows: ['Amina Yusuf · Administrator · Hodan International School', 'Ahmed Hassan · Teacher · Riverside Academy', 'Maryan Ali · Teacher · Al-Noor Primary', 'Leila Hassan · Operator · Nom Cloud'] },
-  Communications: { eyebrow: 'Platform messaging', title: 'Communications', description: 'Create and publish clear platform-wide announcements for schools and operators.', stats: ['12 published', '3 scheduled', '4 drafts'], rows: ['Scheduled maintenance · Scheduled · All schools', 'New attendance tools · Published · School administrators', 'Welcome to the new academic year · Draft · Selected schools'] },
-  Activity: { eyebrow: 'Network activity', title: 'Activity', description: 'Review the latest activity across schools, operators, security, billing, and system services.', stats: ['248 events today', '36 school actions', '12 operator actions'], rows: ['School approved · Hodan International School · Just now', 'Permission changed · Amina Yusuf · 12 min ago', 'Backup created · Platform storage · 34 min ago', 'Announcement published · All schools · 1h ago'] },
-  'System Health': { eyebrow: 'Platform operations', title: 'System Health', description: 'Monitor the services that keep the Nom Cloud network running.', stats: ['99.98% uptime', '11 services', '0 active incidents'], rows: ['Authentication · Operational · 99.99% uptime', 'School Dashboard · Operational · 99.98% uptime', 'Notifications · Degraded · Delivery latency elevated', 'File Storage · Operational · 99.99% uptime'] },
-  Features: { eyebrow: 'Feature control', title: 'Features', description: 'Control feature availability and rollout stages across the Nom Cloud network.', stats: ['10 features', '7 enabled', '2 beta rollouts'], rows: ['Parent App · Enabled · v2.4', 'Online Payments · Beta · v1.8', 'AI Assistant · Coming Soon · v0.9', 'Advanced Analytics · Enabled · v1.3'] },
-  Integrations: { eyebrow: 'Developer center', title: 'Integrations', description: 'Manage connected services, API keys, webhooks, and provider configurations.', stats: ['5 connected', '2 API keys', '98.7% delivery rate'], rows: ['SMS provider · Connected · Last activity 12 min ago', 'Payments · Connected · 142 transactions this month', 'Email delivery · Connected · 99.2% delivery rate', 'Webhooks · 3 endpoints · Operational'] },
-  Billing: { eyebrow: 'Subscriptions', title: 'Billing', description: 'Review school plans, renewals, payment status, and subscription changes.', stats: ['248 schools', '112 Growth', '8 past due'], rows: ['Hodan International School · Growth · Paid · Oct 08, 2026', 'Riverside Academy · Scale · Paid · Oct 18, 2026', 'Al-Noor Primary · Starter · Trial · Oct 20, 2026', 'Maktab Academy · Growth · Past due · Sep 30, 2026'] },
-  Data: { eyebrow: 'Records center', title: 'Data', description: 'Manage exports, imports, backups, archived records, and data requests.', stats: ['2.4 TB stored', '6 recent exports', '3 pending requests'], rows: ['Schools Export · CSV · Completed · 2.4 MB', 'Users Import · Validation required · Ready for review', 'Nightly backup · Healthy · 18.6 GB', 'Data access request · Reviewing · Hodan International School'] },
+// Sections whose screens were built before any data existed behind them. Each
+// one used to render invented figures — "48,290 students", "99.98% uptime",
+// "2.4 TB stored" — which read as real numbers about real schools. They are
+// listed here with the truthful reason instead. Routes and navigation are
+// untouched, so the work can continue later.
+const notAvailableModules: Record<string, { eyebrow: string; title: string; description: string; reason: string }> = {
+  People: {
+    eyebrow: 'Network directory',
+    title: 'People',
+    description: 'Administrators, teachers, parents and operators across the Nom Cloud network.',
+    reason: 'The records exist — profiles, memberships, teachers, guardians — and an operator may already read them, but nothing assembles them into a network-wide directory yet. Individual schools are searchable from the Schools section today.',
+  },
+  Communications: {
+    eyebrow: 'Platform messaging',
+    title: 'Communications',
+    description: 'Platform-wide announcements for schools and operators.',
+    reason: 'Announcements belong to a single school in the database. There is no table for a message addressed to every school at once, so nothing here could be sent or saved.',
+  },
+  Activity: {
+    eyebrow: 'Network activity',
+    title: 'Activity',
+    description: 'Recent activity across schools, operators and services.',
+    reason: 'This would read audit_logs, which exists but is never written to — no trigger, function or service records anything into it yet. Until something does, an activity feed would be empty or invented.',
+  },
+  'System Health': {
+    eyebrow: 'Platform operations',
+    title: 'System Health',
+    description: 'The services that keep the Nom Cloud network running.',
+    reason: 'Nom Cloud does not measure or store service health anywhere. Uptime and incidents are visible in the Supabase and Vercel dashboards, and inventing numbers here would be worse than showing none.',
+  },
+  Features: {
+    eyebrow: 'Feature control',
+    title: 'Features',
+    description: 'Feature availability and rollout stages across the network.',
+    reason: 'There is no feature-flag table. The nearest thing is three per-school switches on the schools row, which an administrator controls for their own school, not a platform rollout.',
+  },
+  Integrations: {
+    eyebrow: 'Developer center',
+    title: 'Integrations',
+    description: 'Connected services, API keys and webhooks.',
+    reason: 'No integration, API key or webhook is recorded in the database. Email and payment credentials live in Supabase configuration, not in a table this screen could manage.',
+  },
+  Billing: {
+    eyebrow: 'Subscriptions',
+    title: 'Billing',
+    description: 'School plans, renewals and payment status.',
+    reason: 'The tables exist — subscription_plans and school_subscriptions — but both are empty and nothing in the product writes to them, so there are no plans or renewals to show yet.',
+  },
+  Data: {
+    eyebrow: 'Records center',
+    title: 'Data',
+    description: 'Exports, imports, backups and data requests.',
+    reason: 'Exports, backups and data requests are not recorded anywhere. Schools can already import and export their own spreadsheets from the Students, Teachers and Classes pages.',
+  },
 }
 
-function OperatorModuleView({ section, onNotify }: { section: string; onNotify: (message: string) => void }) {
-  const config = moduleContent[section]
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [draftTitle, setDraftTitle] = useState('')
-  const [draftMessage, setDraftMessage] = useState('')
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({})
-  const rows = config.rows.filter((row) => row.toLowerCase().includes(query.toLowerCase()))
-  const isComposer = section === 'Communications'
-  const isFeature = section === 'Features'
-  const isIntegrations = section === 'Integrations'
-  const isData = section === 'Data'
-
-  return <div>
-    <SectionHeader eyebrow={config.eyebrow} title={config.title} description={config.description} action={<Button variant="accent" onClick={() => isComposer || isData || isIntegrations ? setCreateOpen(true) : onNotify('Create action started')}>{isComposer ? 'Create announcement' : isData ? 'Create export' : isIntegrations ? 'Add integration' : 'Create'}</Button>} />
-    <div className="mb-6 grid gap-4 sm:grid-cols-3">{config.stats.map((stat) => <div key={stat} className="platform-main-card rounded-xl p-5"><p className="text-lg font-semibold">{stat.split(' ').slice(0, 2).join(' ')}</p><p className="mt-1 text-xs text-graphite">{stat.split(' ').slice(2).join(' ') || 'Current platform status'}</p></div>)}</div>
-    <div className="platform-main-card rounded-xl p-5">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">{isFeature ? 'Feature list' : isIntegrations ? 'Connected services' : isData ? 'Data operations' : `Recent ${section.toLowerCase()}`}</h2><p className="mt-1 text-xs text-graphite">Mock records are ready for backend connection.</p></div><input className="input max-w-xs" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" /></div>
-      <div className="divide-y divide-ink/5 dark:divide-white/10">{rows.length ? rows.map((row) => <button type="button" key={row} onClick={() => setSelected(row)} className="flex w-full items-center gap-4 py-4 text-left hover:bg-ink/[0.02]"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${isFeature && enabled[row] ? 'bg-emerald-100 text-emerald-700' : 'bg-brand/10 text-brand'}`}>{isFeature ? <Sliders className="h-4 w-4" /> : isIntegrations ? <PlugsConnected className="h-4 w-4" /> : isData ? <Database className="h-4 w-4" /> : <Activity className="h-4 w-4" />}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{row.split(' · ')[0]}</span><span className="mt-1 block truncate text-xs text-graphite">{row.split(' · ').slice(1).join(' · ')}</span></span>{isFeature && <span role="switch" aria-checked={Boolean(enabled[row])} onClick={(event) => { event.stopPropagation(); setEnabled((current) => ({ ...current, [row]: !current[row] })); onNotify(`${row.split(' · ')[0]} updated`) }} className={`h-6 w-11 rounded-full p-1 transition ${enabled[row] ? 'bg-brand' : 'bg-ink/15'}`}><span className={`block h-4 w-4 rounded-full bg-white transition ${enabled[row] ? 'translate-x-5' : ''}`} /></span>}<ChevronRight className="h-4 w-4 text-graphite" /></button>) : <div className="py-14 text-center text-sm text-graphite">No records match this search.</div>}</div>
-    </div>
-    <Modal open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.split(' · ')[0] ?? 'Record details'} description={`Mock ${section.toLowerCase()} detail`}>
-      {selected && <div className="space-y-4"><div className="rounded-xl bg-brand/5 p-4 text-sm text-graphite">{selected}</div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-ink/10 p-4"><p className="text-xs text-graphite">Status</p><p className="mt-2 text-sm font-semibold">Operational</p></div><div className="rounded-xl border border-ink/10 p-4"><p className="text-xs text-graphite">Last updated</p><p className="mt-2 text-sm font-semibold">Just now</p></div></div><Button variant="accent" onClick={() => { setSelected(null); onNotify(`${section} record updated`) }}>Save mock change</Button></div>}
-    </Modal>
-    <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={isComposer ? 'Create announcement' : isData ? 'Create data export' : 'Connect integration'} description="This action is simulated locally for the frontend prototype." footer={<><Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button><Button variant="accent" onClick={() => { setCreateOpen(false); onNotify(isComposer ? 'Announcement saved as draft' : isData ? 'Export preparation started' : 'Integration connected') }}>Save mock change</Button></>}>
-      {isComposer ? <div className="space-y-4"><label className="label">Title<input className="input mt-2" value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Scheduled maintenance" /></label><label className="label">Message<textarea className="input mt-2 min-h-28" value={draftMessage} onChange={(event) => setDraftMessage(event.target.value)} placeholder="Write the announcement message..." /></label><Select label="Audience" defaultValue="all"><option value="all">All schools</option><option value="operators">Operators</option><option value="admins">School administrators</option></Select></div> : <div className="space-y-4"><label className="label">{isData ? 'Record type' : 'Provider'}<Select defaultValue={isData ? 'schools' : 'sms'}><option value={isData ? 'schools' : 'sms'}>{isData ? 'Schools' : 'SMS provider'}</option><option value={isData ? 'users' : 'payments'}>{isData ? 'Users' : 'Payment provider'}</option><option value={isData ? 'audit' : 'email'}>{isData ? 'Audit logs' : 'Email provider'}</option></Select></label><div className="rounded-xl border border-dashed border-ink/15 p-5 text-sm text-graphite">{isData ? 'Mock export will show progress and a ready state.' : 'Connection details are simulated and can be replaced by the backend later.'}</div></div>}
-    </Modal>
-  </div>
+function OperatorModuleView({ section }: { section: string }) {
+  const config = notAvailableModules[section]
+  if (!config) return null
+  return <NotAvailablePanel {...config} />
 }
 
 function ActionCenter({ onSchool, onRequest, navigate, schools: schoolRecords, requests: requestRecords, pendingApplicationCount, loading }: { onSchool: (school: School) => void; onRequest: (request: Request) => void; navigate: (path: string) => void; schools: School[]; requests: Request[]; pendingApplicationCount: number; loading: boolean }) {
@@ -455,14 +476,47 @@ function RequestsView({ onRequest, requests: requestRecords, onAction }: { onReq
   return <><SectionHeader eyebrow="Operations queue" title="Requests & reviews" description="Review every submission with the full school context before making a decision." action={<div className="flex gap-2 overflow-x-auto">{(['All', 'Open', 'In review', 'Resolved'] as const).map((item) => <button key={item} onClick={() => setFilter(item)} className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold ${filter === item ? 'bg-ink text-white dark:bg-white dark:text-ink' : 'bg-white text-graphite dark:bg-white/[0.06]'}`}>{item}</button>)}</div>} /><div className="overflow-hidden rounded-3xl border border-ink/[0.07] bg-white shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="hidden grid-cols-[1.2fr_1.5fr_1fr_auto] gap-4 border-b border-ink/[0.06] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-graphite dark:border-white/[0.08] md:grid"><span>Request</span><span>School & context</span><span>Submitted</span><span>Status</span></div>{visible.map((item) => <button key={item.id} onClick={() => onRequest(item)} className="group grid w-full gap-3 border-b border-ink/[0.06] px-5 py-4 text-left last:border-0 hover:bg-ink/[0.025] dark:border-white/[0.08] md:grid-cols-[1.2fr_1.5fr_1fr_auto] md:items-center md:gap-4"><span><span className="flex items-center gap-2 font-semibold"><FileText className="h-4 w-4 text-brand" />{item.type}</span><span className="mt-1 block text-xs text-graphite">{item.id}</span></span><span><span className="block text-sm font-medium">{item.school}</span><span className="mt-1 block text-xs text-graphite">{item.summary}</span></span><span className="text-xs text-graphite">By {item.submittedBy}<span className="block mt-1">{item.submitted}</span></span><span className="flex items-center justify-between gap-3"><Status value={item.status} /><ChevronRight className="h-4 w-4 text-graphite transition group-hover:translate-x-1" /></span></button>)}</div></>
 }
 
-function OperatorsView({ operators, onNotify, onOperator }: { operators: PlatformOperatorRecord[]; onNotify: (message: string) => void; onOperator: (name: string) => void }) {
+function OperatorsView({ operators, onNotify, onOperator }: { operators: PlatformOperatorRecord[]; onNotify: (message: string) => void; onOperator: (operator: PlatformOperatorRecord) => void }) {
   return <><SectionHeader eyebrow="People & access" title="Operators" description="Platform access grants recorded in Nom Cloud." /><div className="overflow-hidden rounded-3xl border border-ink/[0.07] bg-white shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="hidden grid-cols-[1.5fr_1.2fr_1fr_1fr_auto] gap-4 border-b border-ink/[0.06] px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-graphite dark:border-white/[0.08] md:grid"><span>Operator</span><span>Role</span><span>Access granted</span><span>Status</span><span>Actions</span></div>{operators.length ? operators.map((item) => {
     const active = item.revokedAt === null
-    return <div key={item.id} className="grid gap-3 border-b border-ink/[0.06] px-5 py-4 last:border-0 dark:border-white/[0.08] md:grid-cols-[1.5fr_1.2fr_1fr_1fr_auto] md:items-center md:gap-4"><span className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-bold text-white">{item.fullName.charAt(0)}</span><span><span className="block text-sm font-semibold">{item.fullName}</span><span className="block text-xs text-graphite">{item.email}</span></span></span><span className="text-sm text-graphite">Platform administrator</span><span className="text-xs text-graphite">{new Date(item.grantedAt).toLocaleString()}</span><Status value={active ? 'Active' : 'Revoked'} /><span className="flex gap-2"><button onClick={() => onOperator(item.fullName)} className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold dark:border-white/10">View</button>{active && <button onClick={() => onNotify('Operator access revocation is not available from this client.')} className="rounded-xl bg-ink/[0.05] p-2 dark:bg-white/[0.08]" title="Manage operator access" aria-label={`Manage access for ${item.fullName}`}><RotateCcw className="h-3.5 w-3.5" /></button>}</span></div>
+    return <div key={item.id} className="grid gap-3 border-b border-ink/[0.06] px-5 py-4 last:border-0 dark:border-white/[0.08] md:grid-cols-[1.5fr_1.2fr_1fr_1fr_auto] md:items-center md:gap-4"><span className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-bold text-white">{item.fullName.charAt(0)}</span><span><span className="block text-sm font-semibold">{item.fullName}</span><span className="block text-xs text-graphite">{item.email}</span></span></span><span className="text-sm text-graphite">Platform administrator</span><span className="text-xs text-graphite">{new Date(item.grantedAt).toLocaleString()}</span><Status value={active ? 'Active' : 'Revoked'} /><span className="flex gap-2"><button onClick={() => onOperator(item)} className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold dark:border-white/10">View</button>{active && <button onClick={() => onNotify('Operator access revocation is not available from this client.')} className="rounded-xl bg-ink/[0.05] p-2 dark:bg-white/[0.08]" title="Manage operator access" aria-label={`Manage access for ${item.fullName}`}><RotateCcw className="h-3.5 w-3.5" /></button>}</span></div>
   }) : <p className="p-6 text-sm text-graphite">No operator access records were found.</p>}</div></>
 }
 
-function PermissionsView({ onNotify }: { onNotify: (message: string) => void }) { const roles = [['Founder / Super Admin', 'Full platform access', '4 operators'], ['Platform Admin', 'Schools, requests, audit logs', '2 operators'], ['Operations Operator', 'Schools and request reviews', '3 operators'], ['Support Operator', 'Support requests and school context', '5 operators']]; return <><SectionHeader eyebrow="Access governance" title="Roles & permissions" description="A clear permission model for safe delegation across the Nom Cloud operations team." /><div className="grid gap-4">{roles.map((role, index) => <div key={role[0]} className="flex flex-col gap-4 rounded-3xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04] sm:flex-row sm:items-center"><span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${index === 0 ? 'bg-brand text-white' : 'bg-ink/[0.06] text-ink dark:bg-white/[0.1] dark:text-white'}`}><Shield className="h-5 w-5" /></span><span className="flex-1"><span className="block font-semibold">{role[0]}</span><span className="mt-1 block text-sm text-graphite">{role[1]} · {role[2]}</span></span><button onClick={() => onNotify(`Editing ${role[0]}`)} className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold dark:border-white/10">Edit role</button></div>)}</div></> }
+/**
+ * A section with no data source yet.
+ *
+ * Part 3 of the connect-and-clean pass: these panels used to show figures —
+ * school counts, uptime percentages, security events, subscription splits —
+ * that were written into the file by hand. A console that reports invented
+ * numbers is worse than one that admits a gap, so each unbuilt section now says
+ * so. The routes and the navigation are untouched so the work can continue here.
+ */
+function NotAvailablePanel({ eyebrow, title, description, reason }: { eyebrow: string; title: string; description: string; reason: string }) {
+  return (
+    <>
+      <SectionHeader eyebrow={eyebrow} title={title} description={description} />
+      <div className="platform-main-card rounded-xl p-8 text-center">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-ink/[0.06] text-graphite dark:bg-white/[0.1]">
+          <Wrench className="h-5 w-5" />
+        </span>
+        <h2 className="mt-5 text-lg font-semibold">Not available yet</h2>
+        <p className="mx-auto mt-2 max-w-xl text-sm text-graphite">{reason}</p>
+      </div>
+    </>
+  )
+}
+
+function PermissionsView() {
+  return (
+    <NotAvailablePanel
+      eyebrow="Access governance"
+      title="Roles & permissions"
+      description="How access is delegated across the Nom Cloud operations team."
+      reason="Roles are enforced by the database itself, in row-level security, not stored as rows an operator can edit. Changing what a role may do is a migration, not a setting, so there is nothing to manage on this screen yet."
+    />
+  )
+}
 
 function AuditView({ notify, rows }: { notify: (message: string) => void; rows: string[][] }) {
   const [query, setQuery] = useState('')
@@ -470,25 +524,142 @@ function AuditView({ notify, rows }: { notify: (message: string) => void; rows: 
   return <><SectionHeader eyebrow="Traceability" title="Audit logs" description="Read-only, append-only audit events from the platform database." action={<Button variant="outline" size="sm" onClick={() => notify('Audit log export is not available yet.')}><ArrowUpRight className="h-4 w-4" /> Export logs</Button>} /><div className="mb-5 flex gap-3"><div className="relative flex-1"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-graphite" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search action, operator, or target…" className="input pl-10" /></div></div><div className="overflow-hidden rounded-3xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="hidden grid-cols-[1.3fr_1fr_1.5fr_1fr_auto] gap-4 border-b border-ink/[0.06] pb-3 text-[10px] font-bold uppercase tracking-[0.15em] text-graphite dark:border-white/[0.08] sm:grid"><span>Action</span><span>Operator</span><span>Target</span><span>Date</span><span>Status</span></div><AuditTable rows={visible} /></div></>
 }
 
-function SecurityView({ onNotify }: { onNotify: (message: string) => void }) {
-  const events = [['Suspicious login detected', 'Unknown Chrome device · Addis Ababa', '12 min ago', 'Review'], ['Password changed', 'Nadia Warsame · Support Operator', 'Yesterday, 16:18', 'Verified'], ['Failed login attempt', 'Yusuf Ahmed · 3 attempts', 'Sep 22, 09:40', 'Blocked']]
-  return <><SectionHeader eyebrow="Operator protection" title="Security center" description="Review account protection, active sessions, and signals that need a founder's attention." action={<Button variant="outline" size="sm" onClick={() => onNotify('All other operator sessions revoked')}><RotateCcw className="h-4 w-4" /> Revoke other sessions</Button>} /><div className="grid gap-4 md:grid-cols-3">{[['MFA coverage', '3 / 4', 'One operator needs setup'], ['Active sessions', '7', 'Across 4 operators'], ['Failed attempts', '3', 'Blocked this week']].map((item) => <div key={item[0]} className="rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><p className="text-sm text-graphite">{item[0]}</p><p className="mt-3 text-2xl font-semibold">{item[1]}</p><p className="mt-1 text-xs text-graphite">{item[2]}</p></div>)}</div><div className="mt-6 overflow-hidden rounded-3xl border border-ink/[0.07] bg-white shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="border-b border-ink/[0.06] px-5 py-4 dark:border-white/[0.08]"><h2 className="font-semibold">Security events</h2><p className="mt-1 text-xs text-graphite">Security records are retained and cannot be edited by operators.</p></div>{events.map((event) => <div key={event[0]} className="flex flex-col gap-3 border-b border-ink/[0.06] px-5 py-4 last:border-0 dark:border-white/[0.08] sm:flex-row sm:items-center"><span className={`rounded-xl p-2 ${event[3] === 'Review' ? 'bg-red-500/10 text-red-600' : 'bg-emerald-500/10 text-emerald-600'}`}><Shield className="h-4 w-4" /></span><span className="flex-1"><span className="block text-sm font-semibold">{event[0]}</span><span className="block text-xs text-graphite">{event[1]}</span></span><span className="text-xs text-graphite">{event[2]}</span><button onClick={() => onNotify(`${event[0]} opened`)} className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold dark:border-white/10">Review</button></div>)}</div></>
+function SecurityView() {
+  return (
+    <NotAvailablePanel
+      eyebrow="Operator protection"
+      title="Security center"
+      description="Account protection, active sessions and signals that need attention."
+      reason="Nom Cloud does not record security events, sessions or failed sign-in attempts anywhere yet. Supabase Auth keeps its own logs, but the product cannot read them, so there is nothing truthful to show here."
+    />
+  )
 }
 
 function AnalyticsView() {
-  const plans = [['Growth', '112 schools', '45%'], ['Starter', '86 schools', '35%'], ['Scale', '50 schools', '20%']]
-  return <><SectionHeader eyebrow="Nom Cloud network" title="Platform analytics" description="A network-wide view of adoption, activity, and subscription distribution." action={<Button variant="outline" size="sm"><Download className="h-4 w-4" /> Export analytics</Button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[['Schools', '248', '+12 this month'], ['Students', '48,290', '+8.4%'], ['Teachers', '3,184', '+5.2%'], ['Requests', '86', '24 resolved this week']].map((item) => <div key={item[0]} className="rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><p className="text-sm text-graphite">{item[0]}</p><p className="mt-3 text-3xl font-semibold">{item[1]}</p><p className="mt-1 text-xs font-semibold text-emerald-600">{item[2]}</p></div>)}</div><div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_1fr]"><div className="rounded-3xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><h2 className="font-semibold">Platform activity</h2><div className="mt-6 flex h-40 items-end gap-2">{[42, 58, 51, 76, 64, 82, 91, 72, 88, 96, 84, 100].map((height, index) => <div key={index} className="flex-1 rounded-t-lg bg-brand/70" style={{ height: `${height}%` }} title={`${height} activity units`} />)}</div><div className="mt-3 flex justify-between text-[10px] text-graphite"><span>Sep 13</span><span>Sep 24</span></div></div><div className="rounded-3xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><h2 className="font-semibold">Subscription distribution</h2><div className="mt-5 space-y-4">{plans.map((item) => <div key={item[0]}><div className="flex justify-between text-sm"><span className="font-medium">{item[0]}</span><span className="text-graphite">{item[1]}</span></div><div className="mt-2 h-2 rounded-full bg-ink/[0.07] dark:bg-white/[0.08]"><div className="h-2 rounded-full bg-brand" style={{ width: item[2] }} /></div></div>)}</div></div></div></>
+  return (
+    <NotAvailablePanel
+      eyebrow="Nom Cloud network"
+      title="Platform analytics"
+      description="Adoption, activity and subscription distribution across the network."
+      reason="There are no aggregate or reporting tables behind this yet. The underlying records exist — schools, students, teachers, requests — but nothing summarises them, and the Schools and Overview sections already show the real counts."
+    />
+  )
 }
 
-function OperatorModal({ operator, onClose, onAction }: { operator: string | null; onClose: () => void; onAction: (message: string) => void }) {
-  return <Modal open={Boolean(operator)} onClose={onClose} size="lg" title={operator ?? ''} description="Operator profile, permissions, activity, and security history." footer={operator ? <><Button variant="outline" onClick={() => onAction('Password reset email sent')}>Reset password</Button><Button variant="danger" onClick={() => onAction(`${operator} suspension requires confirmation`)}>Suspend operator</Button></> : null}>{operator && <div className="space-y-5"><div className="flex items-center gap-4 rounded-2xl bg-ink/[0.035] p-4 dark:bg-white/[0.05]"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand text-lg font-bold text-white">{operator.charAt(0)}</span><div><p className="font-semibold">{operator}</p><p className="text-sm text-graphite">Platform Admin · Active</p></div></div><div className="grid gap-4 sm:grid-cols-2">{[['Permissions', 'Schools, requests, audit logs'], ['Created', 'May 12, 2026'], ['Last active', 'Today, 07:44'], ['Sessions', '2 active devices']].map((item) => <div key={item[0]} className="rounded-2xl border border-ink/10 p-4 dark:border-white/10"><p className="text-xs text-graphite">{item[0]}</p><p className="mt-2 text-sm font-semibold">{item[1]}</p></div>)}</div><div className="rounded-2xl border border-ink/10 p-4 dark:border-white/10"><p className="font-semibold">Recent actions</p><p className="mt-2 text-sm text-graphite">Reviewed REQ-1038, changed Amina Yusuf's permissions, and approved one school.</p></div></div>}</Modal>
+function OperatorModal({ operator, onClose, onAction }: { operator: PlatformOperatorRecord | null; onClose: () => void; onAction: (message: string) => void }) {
+  // Only what platform_admins actually stores: who they are and when the grant
+  // was made. The previous version showed a fixed creation date, "last active"
+  // time, device count and a sentence of invented recent actions.
+  return (
+    <Modal
+      open={Boolean(operator)}
+      onClose={onClose}
+      size="lg"
+      title={operator?.fullName ?? ''}
+      description="Operator record"
+      footer={operator ? <Button variant="outline" onClick={() => onAction('Operator changes are not available yet.')}>Manage access</Button> : null}
+    >
+      {operator && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-4 rounded-2xl bg-ink/[0.035] p-4 dark:bg-white/[0.05]">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand text-lg font-bold text-white">
+              {operator.fullName.charAt(0).toUpperCase()}
+            </span>
+            <div>
+              <p className="font-semibold">{operator.fullName}</p>
+              <p className="text-sm text-graphite">{operator.email}</p>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-ink/10 p-4 dark:border-white/10">
+              <p className="text-xs text-graphite">Access granted</p>
+              <p className="mt-2 text-sm font-semibold">{new Date(operator.grantedAt).toLocaleDateString()}</p>
+            </div>
+            <div className="rounded-2xl border border-ink/10 p-4 dark:border-white/10">
+              <p className="text-xs text-graphite">Status</p>
+              <p className="mt-2 text-sm font-semibold">{operator.revokedAt ? 'Revoked' : 'Active'}</p>
+            </div>
+          </div>
+          <p className="text-xs text-graphite">
+            Sign-in history and per-operator permissions are not recorded yet, so nothing more is shown here.
+          </p>
+        </div>
+      )}
+    </Modal>
+  )
 }
 
 function AuditTable({ rows }: { rows: string[][] }) { return <div className="mt-5 divide-y divide-ink/[0.06] dark:divide-white/[0.08]">{rows.map((row) => <div key={`${row[0]}-${row[3]}`} className="grid gap-2 py-4 text-sm sm:grid-cols-[1.3fr_1fr_1.5fr_1fr_auto] sm:items-center"><span className="flex items-center gap-2 font-semibold"><span className="h-2 w-2 rounded-full bg-emerald-500" />{row[0]}</span><span className="text-graphite">{row[1]}</span><span className="text-graphite">{row[2]}</span><span className="text-xs text-graphite">{row[3]}</span><span className="text-xs font-semibold text-emerald-600">{row[4]}</span></div>)}</div> }
 
-function MaintenanceView({ onNotify }: { onNotify: (message: string) => void }) { const flags: Array<[string, string, boolean]> = [['Online payments', 'All schools', true], ['SMS notifications', 'Selected schools', true], ['New parent dashboard', 'Test schools', false], ['AI features', 'Disabled globally', false]]; return <><SectionHeader eyebrow="Reliability center" title="Maintenance & system health" description="Monitor platform services, coordinate maintenance windows, and control staged feature rollouts." action={<Button variant="accent" size="sm" onClick={() => onNotify('Maintenance notice composer opened')}><Wrench className="h-4 w-4" /> New notice</Button>} /><div className="grid gap-4 md:grid-cols-3">{[['Authentication', 'Operational', '99.99%'], ['Database', 'Operational', '99.98%'], ['Notifications', 'Operational', '99.97%'], ['Payments', 'Operational', '99.95%'], ['File storage', 'Operational', '99.97%'], ['School dashboards', 'Operational', '99.98%']].map((item) => <div key={item[0]} className="rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="flex items-center gap-2 text-emerald-600"><span className="h-2 w-2 rounded-full bg-current" /><span className="text-xs font-bold uppercase tracking-wider">{item[1]}</span></div><p className="mt-4 font-semibold">{item[0]}</p><p className="mt-1 text-lg font-semibold">{item[2]}</p></div>)}</div><div className="mt-6 grid gap-6 lg:grid-cols-2"><div className="rounded-3xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><h2 className="font-semibold">Upcoming maintenance</h2><div className="mt-4 flex items-center gap-4 rounded-2xl bg-amber-500/[0.08] p-4"><Clock3 className="h-5 w-5 text-amber-600" /><div className="flex-1"><p className="text-sm font-semibold">Database optimization window</p><p className="mt-1 text-xs text-graphite">Sunday, Sep 27 · 02:00–02:30 UTC · No expected downtime</p></div><button onClick={() => onNotify('Maintenance notice details opened')} className="text-xs font-semibold text-brand">View details</button></div></div><div className="rounded-3xl border border-ink/[0.07] bg-white p-5 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><div className="flex items-center justify-between"><div><h2 className="font-semibold">Feature flags</h2><p className="mt-1 text-xs text-graphite">Mock controls ready for backend rollout rules.</p></div><Flag className="h-5 w-5 text-brand" /></div><div className="mt-4 space-y-3">{flags.map((flag) => <div key={flag[0]} className="flex items-center gap-3"><span className={`h-2 w-2 rounded-full ${flag[2] ? 'bg-emerald-500' : 'bg-graphite/40'}`} /><span className="flex-1"><span className="block text-sm font-semibold">{flag[0]}</span><span className="block text-xs text-graphite">{flag[1]}</span></span><button onClick={() => onNotify(`${flag[0]} flag change queued for audit review`)} className={`rounded-full px-3 py-1 text-xs font-semibold ${flag[2] ? 'bg-emerald-500/10 text-emerald-700' : 'bg-ink/[0.06] text-graphite dark:bg-white/[0.08]'}`}>{flag[2] ? 'On' : 'Off'}</button></div>)}</div></div></div></> }
+function MaintenanceView() {
+  return (
+    <NotAvailablePanel
+      eyebrow="Reliability center"
+      title="Maintenance & system health"
+      description="Service status, maintenance windows and staged feature rollouts."
+      reason="Three separate features live here and none has a data source: there is no service-health table, no maintenance-window table, and no feature-flag table. Service health is visible in the Supabase and Vercel dashboards today."
+    />
+  )
+}
 
-function SettingsView({ onNotify, onEmergency }: { onNotify: (message: string) => void; onEmergency: () => void }) { return <><SectionHeader eyebrow="Your account" title="Profile & settings" description="Manage your operator identity, security preferences, and workspace defaults." /><div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]"><div className="rounded-3xl border border-ink/[0.07] bg-ink p-6 text-white shadow-soft"><div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-2xl font-bold">L</div><h2 className="mt-5 text-xl font-semibold">Leila Hassan</h2><p className="mt-1 text-sm text-white/55">Founder / Super Admin</p><div className="mt-8 space-y-3 text-sm text-white/70"><p className="flex items-center gap-2"><LockKeyhole className="h-4 w-4" /> Two-factor authentication enabled</p><p className="flex items-center gap-2"><Activity className="h-4 w-4" /> Last login today at 08:01</p></div></div><div className="rounded-3xl border border-ink/[0.07] bg-white p-6 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]"><h2 className="font-semibold">Personal information</h2><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold text-graphite">First name<input className="input mt-2" defaultValue="Leila" /></label><label className="text-xs font-semibold text-graphite">Last name<input className="input mt-2" defaultValue="Hassan" /></label><label className="text-xs font-semibold text-graphite sm:col-span-2">Email<input className="input mt-2" defaultValue="leila@nom.cloud" /></label><label className="text-xs font-semibold text-graphite">Phone<input className="input mt-2" defaultValue="+252 61 440 8821" /></label><label className="text-xs font-semibold text-graphite">Role<input className="input mt-2" value="Founder / Super Admin" readOnly /></label></div><div className="mt-6 flex flex-wrap gap-3"><Button variant="accent" onClick={() => onNotify('Profile changes saved')}>Save changes</Button><Button variant="outline" onClick={() => onNotify('Security settings opened')}><Shield className="h-4 w-4" /> Security</Button><Button variant="danger" onClick={onEmergency}><Ban className="h-4 w-4" /> Emergency controls</Button></div></div></div></> }
+function SettingsView({ onEmergency, fullName, email }: { onEmergency: () => void; fullName: string; email: string }) {
+  // The operator's OWN identity, from their session. This card used to show a
+  // fixed "Leila Hassan / leila@nom.cloud", two-factor "enabled" and a last
+  // login time — none of it read from anywhere, and the Save button only raised
+  // a toast. Editing an operator's details, 2FA and session history have no
+  // backend, so they are stated as unavailable rather than mocked.
+  return (
+    <>
+      <SectionHeader
+        eyebrow="Your account"
+        title="Profile & settings"
+        description="Your operator identity and the controls available to you."
+      />
+      <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
+        <div className="rounded-3xl border border-ink/[0.07] bg-ink p-6 text-white shadow-soft">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-2xl font-bold">
+            {(fullName || email || '?').charAt(0).toUpperCase()}
+          </div>
+          <h2 className="mt-5 text-xl font-semibold">{fullName || 'Operator'}</h2>
+          <p className="mt-1 text-sm text-white/55">Platform administrator</p>
+          <div className="mt-8 space-y-3 text-sm text-white/70">
+            <p className="flex items-center gap-2">
+              <LockKeyhole className="h-4 w-4" /> Sign-in is protected by your password
+            </p>
+            <p className="flex items-center gap-2">
+              <Activity className="h-4 w-4" /> Session history is not recorded yet
+            </p>
+          </div>
+        </div>
+        <div className="rounded-3xl border border-ink/[0.07] bg-white p-6 shadow-soft dark:border-white/[0.08] dark:bg-white/[0.04]">
+          <h2 className="font-semibold">Personal information</h2>
+          <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-semibold text-graphite">Name</dt>
+              <dd className="mt-2 text-sm font-medium">{fullName || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold text-graphite">Role</dt>
+              <dd className="mt-2 text-sm font-medium">Platform administrator</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-semibold text-graphite">Email</dt>
+              <dd className="mt-2 text-sm font-medium">{email || '—'}</dd>
+            </div>
+          </dl>
+          <p className="mt-5 text-xs text-graphite">
+            Editing your operator profile is not available yet. Your password can be changed from the sign-in page.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button variant="danger" onClick={onEmergency}>
+              <Ban className="h-4 w-4" /> Emergency controls
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
 
 function SchoolModal({ school, onClose, onAction, onStatusChange }: { school: School | null; onClose: () => void; onAction: (message: string) => void; onStatusChange: (id: string, status: SchoolStatus, message: string) => void }) {
   const [tab, setTab] = useState('Overview')

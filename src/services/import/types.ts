@@ -34,6 +34,14 @@ export interface PreparedRow<T> {
   row: number
   /** The parsed, validated record. Null when the row cannot be imported. */
   value: T | null
+  /**
+   * The cells exactly as they were read, keyed by column.
+   *
+   * The preview shows THESE, not the parsed value, because a rejected row has
+   * no parsed value — so it used to render a line of dashes and the school could
+   * not tell which pupil the problem belonged to.
+   */
+  raw: Record<string, string>
   /** Plain-language problems, already prefixed with nothing — the UI adds "Row n:". */
   problems: string[]
   status: RowStatus

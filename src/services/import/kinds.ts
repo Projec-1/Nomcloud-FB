@@ -147,6 +147,7 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
 
       rows.push({
         row,
+        raw,
         value: problems.length ? null : { fullName, email: orNull(email), phone: orNull(raw.phone ?? ''), staffNo: orNull(staffNo), status },
         problems,
         status: problems.length ? 'error' : exists ? 'exists' : 'ready',
@@ -308,6 +309,7 @@ export const classesImport: ImportKind<ClassImportValue, ClassContext> = {
 
       rows.push({
         row,
+        raw,
         value:
           problems.length || !year
             ? null
@@ -556,6 +558,7 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
 
       rows.push({
         row,
+        raw,
         value:
           problems.length || !classId
             ? null
