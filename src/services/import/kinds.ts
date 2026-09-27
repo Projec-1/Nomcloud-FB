@@ -3,7 +3,7 @@ import { createTeacher, fetchSchoolTeachers, type TeacherRow } from '@/services/
 import { createClass } from '@/services/classService'
 import { createStudent, enrolStudent, type StudentGender } from '@/services/studentService'
 import { createGuardian, linkGuardianToStudent, GUARDIAN_RELATIONSHIPS, type GuardianRelationship } from '@/services/guardianService'
-import { fetchAcademicYears, activeAcademicYear, type AcademicYearRow } from '@/services/academicService'
+import { fetchAcademicYears, fetchSubjects, activeAcademicYear, type AcademicYearRow } from '@/services/academicService'
 import { isValidEmail } from '@/utils/validators'
 import type { ColumnSpec, ImportKind, ImportPlan, PreparedRow, RowOutcome } from '@/services/import/types'
 
@@ -23,11 +23,53 @@ import type { ColumnSpec, ImportKind, ImportPlan, PreparedRow, RowOutcome } from
 //   teachers.status  active | inactive
 // student_guardians.relationship has NO database CHECK; the three values offered
 // are the ones the app itself uses (GUARDIAN_RELATIONSHIPS).
+//
+// WHAT IS REQUIRED IS WHAT THE DATABASE REQUIRES, verified against the live
+// schema rather than assumed:
+//   students.full_name, students.admission_no  NOT NULL
+//   students.gender, students.date_of_birth    nullable, so genuinely optional
+//   students.status                            NOT NULL but defaulted 'active'
+//   guardians.full_name, guardians.phone       NOT NULL
+//   guardians.email                            nullable
+//   student_guardians.relationship             nullable
+//   teachers.full_name                         NOT NULL
+//   teachers.email, phone, staff_no            nullable
+// admission_no is the one NOT NULL column with no default, which is why a
+// missing one is generated rather than refused. teachers.email is nullable in the
+// database but required here, because it is the only way to invite a teacher to
+// sign in and a staff list without it cannot be acted on.
 // ---------------------------------------------------------------------------
 
 const GENDERS = ['male', 'female', 'other'] as const
 const STUDENT_STATUSES = ['active', 'inactive', 'graduated', 'transferred'] as const
 const TEACHER_STATUSES = ['active', 'inactive'] as const
+
+// ---------------------------------------------------------------------------
+// HEADER ALIASES — the names real school spreadsheets actually use.
+//
+// Compared with case, spaces, underscores and punctuation removed, so one entry
+// covers "Full Name", "full_name" and "FULL-NAME", and "dob" also matches
+// "D.O.B". Only genuinely distinct words need listing.
+//
+// Shared lists are declared once because the same human word means the same
+// field in all three imports. Where a word is ambiguous BETWEEN kinds it is left
+// out of the shared list and put on the one column it belongs to: "grade" is a
+// class's year group in the classes import but the pupil's class in the students
+// import, so it is not shared.
+// ---------------------------------------------------------------------------
+
+const NAME_ALIASES = ['name', 'full names', 'fullnames', 'names', 'student name', 'pupil name', 'learner name', 'teacher name', 'staff name', 'first name and surname'] as const
+const EMAIL_ALIASES = ['e-mail', 'email address', 'e-mail address', 'mail', 'email id'] as const
+const PHONE_ALIASES = ['mobile', 'contact', 'phone number', 'tel', 'telephone', 'mobile number', 'cell', 'contact number', 'msisdn'] as const
+const STAFF_NO_ALIASES = ['staff id', 'staff no', 'staff number', 'employee id', 'employee no', 'employee number', 'teacher id', 'payroll no', 'payroll number'] as const
+const ADMISSION_ALIASES = ['admission no', 'admission number', 'adm no', 'adm number', 'admno', 'reg no', 'reg number', 'registration no', 'registration number', 'student id', 'student no', 'student number', 'pupil id', 'index number', 'index no', 'roll no', 'roll number'] as const
+const GENDER_ALIASES = ['sex', 'm/f', 'gender (m/f)'] as const
+const DOB_ALIASES = ['dob', 'd.o.b', 'date of birth', 'birth date', 'birthdate', 'birthday', 'born', 'date born'] as const
+const STUDENT_CLASS_ALIASES = ['class name', 'grade', 'form', 'stream', 'section', 'class/section', 'current class', 'classroom', 'standard'] as const
+const GUARDIAN_NAME_ALIASES = ['parent name', 'guardian name', 'parent', 'guardian', 'father name', 'mother name', "father's name", "mother's name", 'next of kin', 'next of kin name', 'parent/guardian', 'parent guardian name', 'contact person'] as const
+const GUARDIAN_PHONE_ALIASES = ['parent phone', 'guardian phone', 'parent mobile', 'guardian mobile', 'parent contact', 'guardian contact', 'mobile', 'contact', 'phone number', 'phone', 'tel', 'telephone', 'parent tel', 'next of kin phone', 'contact number', 'parent phone number'] as const
+const GUARDIAN_EMAIL_ALIASES = ['parent email', 'guardian email', 'parent e-mail', 'guardian e-mail', 'email', 'e-mail', 'email address', 'parent email address'] as const
+const GUARDIAN_RELATIONSHIP_ALIASES = ['relationship', 'relation', 'parent relationship', 'guardian relationship', 'relationship to student', 'relationship to pupil', 'parent type'] as const
 
 const norm = (value: string) => value.trim().toLowerCase()
 const orNull = (value: string) => (value.trim() ? value.trim() : null)
@@ -47,6 +89,39 @@ function parseDate(value: string): { date: string | null; bad: boolean } {
 }
 
 const isPast = (isoDate: string) => new Date(`${isoDate}T00:00:00Z`) < new Date(new Date().toDateString())
+
+/**
+ * Phone numbers compare as "identical" ignoring only the punctuation people type
+ * inside them.
+ *
+ * "+252 61 234 5678" and "+252-612345678" are the same number. "0612345678" is
+ * NOT treated as the same as "+252612345678": guessing at country codes would
+ * merge two people on a hunch, and this comparison is used to decide that two
+ * pupils share a parent.
+ */
+const normPhone = (value: string) => value.replace(/[\s\-().]/g, '')
+
+/** "AHS" + 2026 + 7 -> "AHS-2026-007". Sequences past 999 simply grow. */
+const admissionNumber = (shortcode: string, year: number, sequence: number) =>
+  `${shortcode.toUpperCase()}-${year}-${String(sequence).padStart(3, '0')}`
+
+/**
+ * The highest sequence already issued in the SHORTCODE-YEAR-NNN form, so
+ * generated numbers continue the school's own series instead of colliding with
+ * it. Anything not in that form — a school's own "2026-014" — is ignored here,
+ * and is still protected by the unique index and the duplicate check.
+ */
+function highestAdmissionSequence(existing: string[], shortcode: string, year: number): number {
+  const pattern = new RegExp(`^${shortcode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-${year}-(\\d+)$`, 'i')
+  let highest = 0
+  for (const value of existing) {
+    const match = value.trim().match(pattern)
+    if (!match) continue
+    const sequence = Number(match[1])
+    if (Number.isFinite(sequence) && sequence > highest) highest = sequence
+  }
+  return highest
+}
 
 function emptyPlan<T>(): ImportPlan<T> {
   return { rows: [], notices: [], counts: { total: 0, ready: 0, exists: 0, error: 0 } }
@@ -77,19 +152,26 @@ export interface TeacherImportValue {
   phone: string | null
   staffNo: string | null
   status: string
+  primarySubjectId: string | null
 }
 
 interface TeacherContext {
   byEmail: Map<string, TeacherRow>
   byStaffNo: Map<string, TeacherRow>
+  /** Lower-cased subject name -> id, for the optional Primary subject column. */
+  subjectsByName: Map<string, string>
 }
 
 const teacherColumns: ColumnSpec[] = [
-  { key: 'fullName', header: 'Full name', required: true, example: 'Amina Yusuf Hassan' },
-  { key: 'email', header: 'Email', required: false, example: 'amina.yusuf@example.com', hint: 'Needed later to invite them. Must be unique in the school.' },
-  { key: 'phone', header: 'Phone', required: false, example: '+252612345678' },
-  { key: 'staffNo', header: 'Staff number', required: false, example: 'T-2026-014', hint: 'Must be unique in the school.' },
-  { key: 'status', header: 'Status', required: false, example: 'active', options: TEACHER_STATUSES },
+  { key: 'fullName', header: 'Full name', aliases: NAME_ALIASES, required: true, example: 'Amina Yusuf Hassan' },
+  { key: 'email', header: 'Email', aliases: EMAIL_ALIASES, required: true, example: 'amina.yusuf@example.com', hint: 'Needed to invite them later. Must be unique in the school.' },
+  { key: 'phone', header: 'Phone', aliases: PHONE_ALIASES, required: false, example: '+252612345678' },
+  { key: 'staffNo', header: 'Staff number', aliases: STAFF_NO_ALIASES, required: false, example: 'T-2026-014', hint: 'Must be unique in the school.' },
+  { key: 'status', header: 'Status', aliases: ['employment status', 'state'], required: false, example: 'active', options: TEACHER_STATUSES },
+  // No Date of birth or Gender column: the teachers table has nowhere to put
+  // them (see the report). A school's own DOB column is simply left unmapped and
+  // ignored, rather than shown here as though it were being stored.
+  { key: 'primarySubject', header: 'Primary subject', aliases: ['subject', 'main subject', 'teaching subject', 'specialisation', 'specialization'], required: false, example: '', hint: 'Matched by subject name. Reported as a problem when it names a subject the school does not have.' },
 ]
 
 export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
@@ -99,14 +181,18 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
   maxRows: 1000,
   columns: teacherColumns,
   notes: [
+    'Import your own staff list. Nom Cloud recognises headers such as "Teacher Name", "Staff ID" or "E-mail"; anything it cannot place, you point at yourself before importing.',
+    'Only the name and the email address are needed. Phone, staff number, status and primary subject can all be missing, and are left empty.',
+    'The email address is required because it is the only way to invite them to sign in later.',
     'A teacher imported here does not get a login. Invite them afterwards from the Teachers page.',
     'Email and staff number must each be unique within the school. A row repeating one that already exists is reported as already existing and is skipped.',
   ],
   loadContext: async (schoolId) => {
-    const teachers = await fetchSchoolTeachers(schoolId)
+    const [teachers, subjects] = await Promise.all([fetchSchoolTeachers(schoolId), fetchSubjects(schoolId)])
     return {
       byEmail: new Map(teachers.filter((t) => t.email).map((t) => [norm(t.email as string), t])),
       byStaffNo: new Map(teachers.filter((t) => t.staff_no).map((t) => [norm(t.staff_no as string), t])),
+      subjectsByName: new Map(subjects.map((subject) => [norm(subject.name), subject.id])),
     }
   },
   precheck: () => null,
@@ -124,9 +210,18 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
       const status = raw.status?.trim() ? norm(raw.status) : 'active'
 
       if (!fullName) problems.push('full name is required')
-      if (email && !isValidEmail(email)) problems.push(`'${email}' is not a valid email address`)
+      if (!email) problems.push('email is required — it is how they are invited to sign in')
+      else if (!isValidEmail(email)) problems.push(`'${email}' is not a valid email address`)
       if (!TEACHER_STATUSES.includes(status as (typeof TEACHER_STATUSES)[number])) {
         problems.push(`status must be ${TEACHER_STATUSES.join(' or ')}`)
+      }
+
+      const subjectName = raw.primarySubject?.trim() ?? ''
+      let primarySubjectId: string | null = null
+      if (subjectName) {
+        const found = context.subjectsByName.get(norm(subjectName))
+        if (!found) problems.push(`subject '${subjectName}' does not exist in this school`)
+        else primarySubjectId = found
       }
 
       let exists = false
@@ -148,7 +243,9 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
       rows.push({
         row,
         raw,
-        value: problems.length ? null : { fullName, email: orNull(email), phone: orNull(raw.phone ?? ''), staffNo: orNull(staffNo), status },
+        value: problems.length
+          ? null
+          : { fullName, email: orNull(email), phone: orNull(raw.phone ?? ''), staffNo: orNull(staffNo), status, primarySubjectId },
         problems,
         status: problems.length ? 'error' : exists ? 'exists' : 'ready',
         note: exists && !problems.length ? 'already in Nom Cloud — will be skipped' : undefined,
@@ -160,7 +257,7 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
     const value = prepared.value as TeacherImportValue
     const label = value.fullName
     try {
-      await createTeacher(schoolId, { ...value, primarySubjectId: null })
+      await createTeacher(schoolId, value)
       return { row: prepared.row, label, status: 'created', detail: 'Teacher created.' }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error)
@@ -204,14 +301,14 @@ interface ClassContext {
 const classKey = (yearId: string, campusId: string | null, name: string) => `${yearId}|${campusId ?? ''}|${norm(name)}`
 
 const classColumns: ColumnSpec[] = [
-  { key: 'name', header: 'Class name', required: true, example: 'Grade 5A' },
-  { key: 'grade', header: 'Grade', required: true, example: 'Grade 5' },
-  { key: 'section', header: 'Section', required: false, example: 'A' },
-  { key: 'academicYear', header: 'Academic year', required: true, example: '2026/2027', hint: 'Must match an academic year that already exists, exactly.' },
-  { key: 'campus', header: 'Campus', required: false, example: '', hint: 'Leave blank for a single-campus school. If filled, must match a campus name exactly.' },
-  { key: 'homeroomTeacher', header: 'Homeroom teacher', required: false, example: 'Amina Yusuf Hassan', hint: 'Matched by staff number, then email, then full name. Import teachers first.' },
-  { key: 'capacity', header: 'Capacity', required: false, example: '35', hint: 'A whole number above zero.' },
-  { key: 'room', header: 'Room', required: false, example: 'Block B, Room 12' },
+  { key: 'name', header: 'Class name', aliases: ['class', 'classname', 'name', 'stream', 'class/stream'], required: true, example: 'Grade 5A' },
+  { key: 'grade', header: 'Grade', aliases: ['form', 'level', 'year group', 'standard', 'grade level'], required: true, example: 'Grade 5' },
+  { key: 'section', header: 'Section', aliases: ['stream letter', 'division'], required: false, example: 'A' },
+  { key: 'academicYear', header: 'Academic year', aliases: ['year', 'school year', 'session', 'academic session'], required: true, example: '2026/2027', hint: 'Must match an academic year that already exists, exactly.' },
+  { key: 'campus', header: 'Campus', aliases: ['branch', 'site', 'school branch'], required: false, example: '', hint: 'Leave blank for a single-campus school. If filled, must match a campus name exactly.' },
+  { key: 'homeroomTeacher', header: 'Homeroom teacher', aliases: ['class teacher', 'classteacher', 'form teacher', 'teacher', 'homeroom'], required: false, example: 'Amina Yusuf Hassan', hint: 'Matched by staff number, then email, then full name. Import teachers first.' },
+  { key: 'capacity', header: 'Capacity', aliases: ['max students', 'maximum students', 'seats', 'class size'], required: false, example: '35', hint: 'A whole number above zero.' },
+  { key: 'room', header: 'Room', aliases: ['classroom', 'room no', 'room number', 'venue'], required: false, example: 'Block B, Room 12' },
 ]
 
 export const classesImport: ImportKind<ClassImportValue, ClassContext> = {
@@ -342,10 +439,26 @@ export const classesImport: ImportKind<ClassImportValue, ClassContext> = {
 
 interface GuardianSpec {
   fullName: string
-  /** Narrowed to the app's own list while checking, so the writer cannot widen it. */
-  relationship: GuardianRelationship
+  /**
+   * Narrowed to the app's own list while checking, so the writer cannot widen
+   * it. Null when their file has no relationship column — student_guardians
+   * .relationship is nullable and the Students page already renders a guardian
+   * with none as just their name.
+   */
+  relationship: GuardianRelationship | null
   phone: string
   email: string | null
+  /**
+   * The identity two rows must share to become ONE guardian record.
+   *
+   *   "email:<address>"  matched against this file AND the database
+   *   "phone:<number>"   matched against this file ONLY — never the database
+   *   null               always its own record
+   *
+   * Decided here rather than in the writer so the preview reports exactly the
+   * merges that will happen, and so a school can correct them first.
+   */
+  mergeKey: string | null
 }
 
 export interface StudentImportValue {
@@ -366,27 +479,44 @@ interface StudentContext {
   classes: { id: string; name: string; campus_id: string | null }[]
   campuses: CampusRow[]
   admissionNos: Set<string>
-  /** Existing guardians by lower-cased email — the ONLY key used to match. */
+  /**
+   * Existing guardians by lower-cased email — the ONLY key matched against the
+   * DATABASE. Phone is deliberately absent: a mother and a father commonly
+   * answer one family number, and merging them would give one of them sight of
+   * records that are not theirs.
+   */
   guardiansByEmail: Map<string, string>
+  /**
+   * Guardians created while writing THIS file, by merge key. Starts empty on
+   * every upload and is never seeded from the database, which is what confines
+   * phone matching to a single import.
+   */
+  createdThisRun: Map<string, string>
+  /** The school's shortcode, for generating admission numbers. */
+  shortcode: string
+  /** Year used in a generated admission number: the active academic year's start. */
+  admissionYear: number
+  /** Highest sequence already issued for that shortcode and year. */
+  lastAdmissionSeq: number
 }
 
 const studentColumns: ColumnSpec[] = [
-  { key: 'fullName', header: 'Full name', required: true, example: 'Ayaan Mohamed Ali' },
-  { key: 'admissionNo', header: 'Admission number', required: true, example: '2026-014', hint: 'Must be unique in the school. This is what makes re-importing safe.' },
-  { key: 'gender', header: 'Gender', required: false, example: 'female', options: GENDERS },
-  { key: 'dateOfBirth', header: 'Date of birth', required: false, example: '2015-04-23', hint: 'yyyy-mm-dd or dd/mm/yyyy. Must be in the past.' },
-  { key: 'status', header: 'Status', required: false, example: 'active', options: STUDENT_STATUSES },
-  { key: 'className', header: 'Class', required: true, example: 'Grade 5A', hint: 'Must match a class that already exists in the active academic year.' },
-  { key: 'campus', header: 'Campus', required: false, example: '', hint: 'Only needed when two campuses use the same class name.' },
-  { key: 'g1Name', header: 'Guardian 1 name', required: true, example: 'Amina Hassan' },
-  { key: 'g1Relationship', header: 'Guardian 1 relationship', required: true, example: 'Mother', options: GUARDIAN_RELATIONSHIPS },
-  { key: 'g1Phone', header: 'Guardian 1 phone', required: true, example: '+252612345678' },
-  { key: 'g1Email', header: 'Guardian 1 email', required: false, example: 'amina.hassan@example.com', hint: 'The ONLY way siblings are linked to one guardian. Without it, the same parent on two rows becomes two records.' },
-  { key: 'g2Name', header: 'Guardian 2 name', required: false, example: '' },
-  { key: 'g2Relationship', header: 'Guardian 2 relationship', required: false, example: '', options: GUARDIAN_RELATIONSHIPS },
-  { key: 'g2Phone', header: 'Guardian 2 phone', required: false, example: '' },
-  { key: 'g2Email', header: 'Guardian 2 email', required: false, example: '' },
-  { key: 'primaryContact', header: 'Primary contact', required: false, example: 'Guardian 1', options: ['Guardian 1', 'Guardian 2'] },
+  { key: 'fullName', header: 'Full name', aliases: NAME_ALIASES, required: true, example: 'Ayaan Mohamed Ali' },
+  { key: 'className', header: 'Class', aliases: STUDENT_CLASS_ALIASES, required: true, example: 'Grade 5A', hint: 'Must match a class that already exists in the active academic year.' },
+  { key: 'g1Name', header: 'Guardian 1 name', aliases: GUARDIAN_NAME_ALIASES, required: true, example: 'Amina Hassan' },
+  { key: 'g1Phone', header: 'Guardian 1 phone', aliases: GUARDIAN_PHONE_ALIASES, required: true, example: '+252612345678' },
+  { key: 'admissionNo', header: 'Admission number', aliases: ADMISSION_ALIASES, required: false, example: '2026-014', hint: 'Must be unique in the school. Leave the column out and Nom Cloud generates one per pupil, shown in the preview before anything is written.' },
+  { key: 'g1Relationship', header: 'Guardian 1 relationship', aliases: GUARDIAN_RELATIONSHIP_ALIASES, required: false, example: 'Mother', options: GUARDIAN_RELATIONSHIPS, hint: 'Left unrecorded when the column is missing, which is how the Guardians page already shows a guardian with no stated relationship.' },
+  { key: 'g1Email', header: 'Guardian 1 email', aliases: GUARDIAN_EMAIL_ALIASES, required: false, example: 'amina.hassan@example.com', hint: 'The only thing that links a guardian to records already in Nom Cloud. Without it, matching happens only inside this one file.' },
+  { key: 'gender', header: 'Gender', aliases: GENDER_ALIASES, required: false, example: 'female', options: GENDERS },
+  { key: 'dateOfBirth', header: 'Date of birth', aliases: DOB_ALIASES, required: false, example: '2015-04-23', hint: 'yyyy-mm-dd or dd/mm/yyyy. Must be in the past.' },
+  { key: 'status', header: 'Status', aliases: ['student status', 'state', 'enrolment status', 'enrollment status'], required: false, example: 'active', options: STUDENT_STATUSES },
+  { key: 'campus', header: 'Campus', aliases: ['branch', 'site', 'school branch'], required: false, example: '', hint: 'Only needed when two campuses use the same class name.' },
+  { key: 'g2Name', header: 'Guardian 2 name', aliases: ['second guardian name', 'second parent name', 'guardian 2', 'parent 2 name', 'other parent name'], required: false, example: '' },
+  { key: 'g2Relationship', header: 'Guardian 2 relationship', aliases: ['second guardian relationship', 'parent 2 relationship'], required: false, example: '', options: GUARDIAN_RELATIONSHIPS },
+  { key: 'g2Phone', header: 'Guardian 2 phone', aliases: ['second guardian phone', 'second parent phone', 'parent 2 phone', 'alternate phone', 'other phone'], required: false, example: '' },
+  { key: 'g2Email', header: 'Guardian 2 email', aliases: ['second guardian email', 'parent 2 email'], required: false, example: '' },
+  { key: 'primaryContact', header: 'Primary contact', aliases: ['main contact', 'primary guardian'], required: false, example: 'Guardian 1', options: ['Guardian 1', 'Guardian 2'] },
 ]
 
 export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
@@ -396,34 +526,52 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
   maxRows: 2000,
   columns: studentColumns,
   notes: [
+    'Import your own pupil list. Nom Cloud recognises headers such as "Student Name", "Adm No", "Parent Name" and "Parent Mobile"; anything it cannot place, you point at yourself before importing.',
+    'Only the pupil name, the class, and one guardian name and phone are needed. Everything else can be missing.',
     'Import teachers and classes before students: the class must already exist.',
-    'Guardians are matched by EMAIL ONLY. Two rows share one guardian record when the email is the same. A shared family phone is never used to merge two people, because a mother and a father often answer the same number.',
-    'A guardian with no email cannot be matched. The same parent on two rows without an email becomes two separate records — the preview warns about this before anything is written.',
+    'No admission number column? Nom Cloud generates one per pupil as SHORTCODE-YEAR-NNN, continuing from the highest it has already issued. A number you supply is never changed. The generated numbers appear in the preview before anything is written.',
+    'Guardians already in Nom Cloud are matched by EMAIL ONLY. A phone number is never matched against the database, because a mother and a father commonly answer one family number.',
+    'Inside ONE uploaded file, rows sharing an identical guardian phone are treated as the same guardian, so siblings do not create three copies of one parent. Every such merge is listed in the preview. This never applies across two separate imports.',
     'No invitation is sent by importing. Invite guardians afterwards from the Guardians page.',
   ],
   loadContext: async (schoolId) => {
     const years = await fetchAcademicYears(schoolId)
     const activeYear = activeAcademicYear(years)
-    const [classes, campuses, students, guardians] = await Promise.all([
+    const [classes, campuses, students, guardians, school] = await Promise.all([
       activeYear
         ? supabase.from('classes').select('id, name, campus_id').eq('school_id', schoolId).eq('academic_year_id', activeYear.id)
         : Promise.resolve({ data: [], error: null }),
       supabase.from('campuses').select('id, name').eq('school_id', schoolId),
       supabase.from('students').select('admission_no').eq('school_id', schoolId),
       supabase.from('guardians').select('id, email').eq('school_id', schoolId).not('email', 'is', null),
+      supabase.from('schools').select('shortcode').eq('id', schoolId).single(),
     ])
     if (classes.error) throw classes.error
     if (campuses.error) throw campuses.error
     if (students.error) throw students.error
     if (guardians.error) throw guardians.error
+    if (school.error) throw school.error
+
+    const admissionValues = ((students.data ?? []) as { admission_no: string }[]).map((s) => s.admission_no)
+    const shortcode = (school.data as { shortcode: string }).shortcode
+    // The academic year's start, not today's date, so importing the same intake
+    // in January does not begin a second series for the same school year.
+    const admissionYear = activeYear
+      ? new Date(`${activeYear.start_date}T00:00:00Z`).getUTCFullYear()
+      : new Date().getUTCFullYear()
+
     return {
       activeYear,
       classes: (classes.data ?? []) as { id: string; name: string; campus_id: string | null }[],
       campuses: (campuses.data ?? []) as CampusRow[],
-      admissionNos: new Set(((students.data ?? []) as { admission_no: string }[]).map((s) => norm(s.admission_no))),
+      admissionNos: new Set(admissionValues.map((value) => norm(value))),
       guardiansByEmail: new Map(
         ((guardians.data ?? []) as { id: string; email: string }[]).map((g) => [norm(g.email), g.id]),
       ),
+      createdThisRun: new Map(),
+      shortcode,
+      admissionYear,
+      lastAdmissionSeq: highestAdmissionSequence(admissionValues, shortcode, admissionYear),
     }
   },
   precheck: (context) =>
@@ -437,23 +585,48 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
     const yearId = context.activeYear.id
     const rows: PreparedRow<StudentImportValue>[] = []
     const seenAdmission = new Map<string, number>()
-    /** email -> first row that used it, for the "links to N students" notice. */
-    const emailRows = new Map<string, { name: string; rows: number[] }>()
-    /** lower-cased name -> rows where that name appeared WITHOUT an email. */
-    const namelessRows = new Map<string, number[]>()
+    /** merge key -> the rows that share it, for the "links to N pupils" notices. */
+    const mergeRows = new Map<string, { name: string; phone: string; byEmail: boolean; rows: number[] }>()
+    /** lower-cased name -> rows sharing it with neither an email nor a shared phone. */
+    const unmatchableByName = new Map<string, { display: string; rows: number[] }>()
+
+    /** Sequence for generated admission numbers, continuing the school's series. */
+    let nextSequence = context.lastAdmissionSeq
+    let generatedCount = 0
+    let firstGenerated = ''
+    let lastGenerated = ''
 
     for (const raw of raws) {
       const row = rowNumber(raw)
       const problems: string[] = []
       const fullName = raw.fullName?.trim() ?? ''
-      const admissionNo = raw.admissionNo?.trim() ?? ''
       const genderRaw = raw.gender?.trim() ?? ''
       const statusRaw = raw.status?.trim() ?? ''
       const className = raw.className?.trim() ?? ''
       const campusName = raw.campus?.trim() ?? ''
 
       if (!fullName) problems.push('full name is required')
-      if (!admissionNo) problems.push('admission number is required')
+
+      // ---- admission number: theirs if supplied, otherwise generated
+      //
+      // Generated only for a row that could otherwise be written. Numbering a
+      // row that is about to be refused would burn a number and leave a gap in
+      // the school's own series for no reason.
+      let admissionNo = raw.admissionNo?.trim() ?? ''
+      let generatedAdmissionNo = false
+      if (!admissionNo && fullName) {
+        do {
+          nextSequence += 1
+          admissionNo = admissionNumber(context.shortcode, context.admissionYear, nextSequence)
+        } while (context.admissionNos.has(norm(admissionNo)) || seenAdmission.has(norm(admissionNo)))
+        generatedAdmissionNo = true
+        generatedCount += 1
+        if (!firstGenerated) firstGenerated = admissionNo
+        lastGenerated = admissionNo
+        // Written back so the school SEES the number in the preview, which was
+        // the condition for generating them at all.
+        raw.admissionNo = admissionNo
+      }
 
       const genderText = genderRaw ? norm(genderRaw) : null
       const genderValid = genderText === null || GENDERS.includes(genderText as StudentGender)
@@ -496,6 +669,9 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
 
       // ---- guardians
       const guardians: GuardianSpec[] = []
+      /** Phones already claimed by an earlier guardian ON THIS ROW. */
+      const phonesThisRow = new Set<string>()
+
       const readGuardian = (prefix: 'g1' | 'g2', required: boolean) => {
         const name = raw[`${prefix}Name`]?.trim() ?? ''
         const relationship = raw[`${prefix}Relationship`]?.trim() ?? ''
@@ -508,28 +684,44 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
           else if (relationship || phone || email) problems.push(`${label} has details but no name`)
           return
         }
-        if (!relationship) problems.push(`${label} relationship is required`)
-        else if (!GUARDIAN_RELATIONSHIPS.some((r) => norm(r) === norm(relationship))) {
+        // A stated relationship must be one Nom Cloud knows. A MISSING one is
+        // accepted and stored as unrecorded: most school spreadsheets have a
+        // "Parent Name" column and no relationship column at all, and refusing
+        // those files would defeat the point of reading their own file.
+        if (relationship && !GUARDIAN_RELATIONSHIPS.some((r) => norm(r) === norm(relationship))) {
           problems.push(`${label} relationship must be ${GUARDIAN_RELATIONSHIPS.join(', ')}`)
         }
+        // guardians.phone is NOT NULL in the database, so this one genuinely
+        // cannot be left out.
         if (!phone) problems.push(`${label} phone is required`)
         if (email && !isValidEmail(email)) problems.push(`${label} email '${email}' is not a valid email address`)
 
-        // Only the app's own three values are ever stored. A row whose
-        // relationship is not one of them has already been reported above, and
-        // is recorded as 'Other' purely so the rest of the row can be checked —
-        // it will not be written, because the row is in error.
-        const canonical = GUARDIAN_RELATIONSHIPS.find((r) => norm(r) === norm(relationship)) ?? 'Other'
-        guardians.push({ fullName: name, relationship: canonical, phone, email: email && isValidEmail(email) ? email : null })
+        const validEmail = email && isValidEmail(email) ? email : null
+        const canonical = GUARDIAN_RELATIONSHIPS.find((r) => norm(r) === norm(relationship)) ?? null
 
-        if (email && isValidEmail(email)) {
-          const key = norm(email)
-          const entry = emailRows.get(key) ?? { name, rows: [] }
+        // Merge identity. Email wins, because it is the only evidence strong
+        // enough to match against records already in the database. Otherwise the
+        // phone merges rows WITHIN this file — but never two guardians on the
+        // same row, who are two named people however one family phone is shared.
+        let mergeKey: string | null = null
+        if (validEmail) {
+          mergeKey = `email:${norm(validEmail)}`
+        } else if (phone && !phonesThisRow.has(normPhone(phone))) {
+          mergeKey = `phone:${normPhone(phone)}`
+        }
+        if (phone) phonesThisRow.add(normPhone(phone))
+
+        guardians.push({ fullName: name, relationship: canonical, phone, email: validEmail, mergeKey })
+
+        if (mergeKey) {
+          const entry = mergeRows.get(mergeKey) ?? { name, phone, byEmail: Boolean(validEmail), rows: [] }
           entry.rows.push(row)
-          emailRows.set(key, entry)
-        } else {
+          mergeRows.set(mergeKey, entry)
+        } else if (!validEmail) {
           const key = norm(name)
-          namelessRows.set(key, [...(namelessRows.get(key) ?? []), row])
+          const entry = unmatchableByName.get(key) ?? { display: name, rows: [] }
+          entry.rows.push(row)
+          unmatchableByName.set(key, entry)
         }
       }
       readGuardian('g1', true)
@@ -550,6 +742,7 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
       }
 
       const notes: string[] = []
+      if (generatedAdmissionNo) notes.push(`admission number ${admissionNo} generated`)
       for (const guardian of guardians) {
         if (guardian.email && context.guardiansByEmail.has(norm(guardian.email))) {
           notes.push(`${guardian.fullName} already exists and will be linked, not duplicated`)
@@ -571,20 +764,33 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
 
     // ---- file-level notices
     const notices: string[] = []
-    for (const [, entry] of emailRows) {
-      if (entry.rows.length > 1) {
-        notices.push(`Guardian ${entry.name} links to ${entry.rows.length} students (rows ${entry.rows.join(', ')}) — one guardian record will be used.`)
-      }
+
+    if (generatedCount > 0) {
+      notices.push(
+        generatedCount === 1
+          ? `No admission number was supplied for 1 pupil. ${firstGenerated} will be used.`
+          : `No admission number was supplied for ${generatedCount} pupils. ${firstGenerated} to ${lastGenerated} will be used — check them in the table below before importing.`,
+      )
     }
-    for (const [, rowsWithName] of namelessRows) {
-      if (rowsWithName.length > 1) {
-        const name = raws.find((r) => rowNumber(r) === rowsWithName[0])
-        const display = name?.g1Name?.trim() || name?.g2Name?.trim() || 'that guardian'
-        notices.push(
-          `Row ${rowsWithName.slice(0, -1).join(', Row ')} and Row ${rowsWithName[rowsWithName.length - 1]}: guardians with the same name (${display}) and no email — they will be created separately. Add an email to link them.`,
-        )
-      }
+
+    // Every merge, so it can be corrected before anything is written.
+    for (const [, entry] of mergeRows) {
+      if (entry.rows.length < 2) continue
+      notices.push(
+        entry.byEmail
+          ? `${entry.name} links to ${entry.rows.length} pupils (rows ${entry.rows.join(', ')}) — one guardian record will be used.`
+          : `${entry.name} (${entry.phone}) links to ${entry.rows.length} pupils (rows ${entry.rows.join(', ')}) — one guardian record will be used, matched on the phone number inside this file.`,
+      )
     }
+
+    // Same name, no email, and no shared phone either: genuinely two records.
+    for (const [, entry] of unmatchableByName) {
+      if (entry.rows.length < 2) continue
+      notices.push(
+        `Rows ${entry.rows.join(', ')}: guardians named ${entry.display} with no email and different phone numbers — they will be created separately. Give them the same phone number or an email to link them.`,
+      )
+    }
+
     return finish(rows, notices)
   },
   importRow: async (schoolId, prepared, context): Promise<RowOutcome> => {
@@ -602,16 +808,25 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
 
       const linked: string[] = []
       for (const [index, guardian] of value.guardians.entries()) {
-        const key = guardian.email ? norm(guardian.email) : null
-        const existingId = key ? context.guardiansByEmail.get(key) : undefined
+        const emailKey = guardian.email ? norm(guardian.email) : null
         let guardianId: string
-        if (existingId) {
-          guardianId = existingId
+
+        // 1. Already in the database, matched on email alone.
+        const inDatabase = emailKey ? context.guardiansByEmail.get(emailKey) : undefined
+        // 2. Created earlier in THIS file, matched on email or — only here — phone.
+        const inThisRun = guardian.mergeKey ? context.createdThisRun.get(guardian.mergeKey) : undefined
+
+        if (inDatabase) {
+          guardianId = inDatabase
           linked.push(`${guardian.fullName} (existing)`)
+        } else if (inThisRun) {
+          guardianId = inThisRun
+          linked.push(`${guardian.fullName} (shared with an earlier row)`)
         } else {
           guardianId = await createGuardian(schoolId, { fullName: guardian.fullName, email: guardian.email, phone: guardian.phone })
-          // Remember it immediately so the next sibling links rather than duplicates.
-          if (key) context.guardiansByEmail.set(key, guardianId)
+          // Remembered immediately so the next sibling links rather than duplicates.
+          if (emailKey) context.guardiansByEmail.set(emailKey, guardianId)
+          if (guardian.mergeKey) context.createdThisRun.set(guardian.mergeKey, guardianId)
           linked.push(`${guardian.fullName} (new)`)
         }
         await linkGuardianToStudent(schoolId, studentId, guardianId, index === value.primaryIndex, guardian.relationship)

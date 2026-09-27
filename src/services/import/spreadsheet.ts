@@ -1,4 +1,5 @@
-import type { ColumnSpec, RowOutcome } from '@/services/import/types'
+import { canonicalHeader } from '@/services/import/headers'
+import type { ColumnMapping, ColumnSpec, RowOutcome } from '@/services/import/types'
 import { MAX_FILE_BYTES } from '@/services/import/types'
 
 // ---------------------------------------------------------------------------
@@ -14,7 +15,15 @@ import { MAX_FILE_BYTES } from '@/services/import/types'
 // are behind dynamic import() and cost nothing until an import actually starts.
 // ---------------------------------------------------------------------------
 
-/** Rows of raw text keyed by header, plus the row number each came from. */
+/** The file as a grid of text, before anything knows what the columns mean. */
+export interface SheetMatrix {
+  /** Every line of the sheet, row 0 being the header line. */
+  matrix: string[][]
+  /** Non-empty headers found on line 1, in file order. */
+  headers: string[]
+}
+
+/** Rows of raw text keyed by OUR column key, ready for a kind to check. */
 export interface SheetRows {
   rows: Record<string, string>[]
   /** Headers found in the file, in file order. */
@@ -42,17 +51,33 @@ const clean = (value: unknown): string => {
   return String(value).trim()
 }
 
-/** Header comparison ignores case, surrounding space and a trailing asterisk. */
-const normaliseHeader = (value: string) => value.trim().replace(/\*$/, '').trim().toLowerCase()
-
-function toRecords(matrix: string[][], columns: ColumnSpec[]): SheetRows {
+/**
+ * Turns the grid into records, using the mapping to decide which of THEIR
+ * columns feeds each of OURS.
+ *
+ * The mapping is the only thing that knows about their headers; a column our
+ * mapping leaves null simply reads as empty, which is what "not in my file"
+ * means for an optional field.
+ */
+export function toRecords(source: SheetMatrix, columns: ColumnSpec[], mapping: ColumnMapping): SheetRows {
+  const { matrix, headers } = source
   const headerRow = matrix[0] ?? []
-  const headers = headerRow.map((h) => h.trim()).filter(Boolean)
-  const index = new Map<string, number>()
+
+  // Their header text -> its column index in the sheet.
+  const indexOfHeader = new Map<string, number>()
   headerRow.forEach((header, i) => {
-    const key = normaliseHeader(header)
-    if (key && !index.has(key)) index.set(key, i)
+    const key = canonicalHeader(header)
+    if (key && !indexOfHeader.has(key)) indexOfHeader.set(key, i)
   })
+
+  // Our column key -> its column index, resolved once rather than per row.
+  const columnIndex = new Map<string, number>()
+  for (const column of columns) {
+    const header = mapping[column.key]
+    if (!header) continue
+    const at = indexOfHeader.get(canonicalHeader(header))
+    if (at !== undefined) columnIndex.set(column.key, at)
+  }
 
   const rows: Record<string, string>[] = []
   for (let r = 1; r < matrix.length; r += 1) {
@@ -60,7 +85,7 @@ function toRecords(matrix: string[][], columns: ColumnSpec[]): SheetRows {
     const record: Record<string, string> = {}
     let any = false
     for (const column of columns) {
-      const at = index.get(normaliseHeader(column.header))
+      const at = columnIndex.get(column.key)
       const value = at === undefined ? '' : clean(cells[at])
       record[column.key] = value
       if (value) any = true
@@ -77,8 +102,18 @@ function toRecords(matrix: string[][], columns: ColumnSpec[]): SheetRows {
 
 export class ImportFileError extends Error {}
 
-/** Reads .xlsx or .csv into rows of text. Throws ImportFileError for anything else. */
-export async function readSpreadsheet(file: File, columns: ColumnSpec[]): Promise<SheetRows> {
+/** The headers on line 1, trimmed, with blank cells dropped. */
+const headersOf = (matrix: string[][]) => (matrix[0] ?? []).map((header) => header.trim()).filter(Boolean)
+
+/**
+ * Reads .xlsx or .csv into a grid of text. Throws ImportFileError for anything
+ * else.
+ *
+ * Deliberately knows nothing about our columns. The file is read ONCE and the
+ * grid is kept, so correcting the column mapping re-maps what is already in
+ * memory instead of asking the administrator to choose the file again.
+ */
+export async function readSheet(file: File): Promise<SheetMatrix> {
   if (file.size > MAX_FILE_BYTES) {
     throw new ImportFileError(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 5 MB.`)
   }
@@ -90,7 +125,7 @@ export async function readSpreadsheet(file: File, columns: ColumnSpec[]): Promis
     const parsed = Papa.parse<string[]>(text.replace(/^﻿/, ''), { skipEmptyLines: false })
     const matrix = (parsed.data ?? []).map((line) => (Array.isArray(line) ? line.map((c) => clean(c)) : []))
     if (matrix.length === 0) throw new ImportFileError('That file appears to be empty.')
-    return toRecords(matrix, columns)
+    return { matrix, headers: headersOf(matrix) }
   }
 
   if (name.endsWith('.xlsx')) {
@@ -108,7 +143,7 @@ export async function readSpreadsheet(file: File, columns: ColumnSpec[]): Promis
       matrix.push(cells)
     })
     if (matrix.length === 0) throw new ImportFileError('That sheet appears to be empty.')
-    return toRecords(matrix, columns)
+    return { matrix, headers: headersOf(matrix) }
   }
 
   if (name.endsWith('.xls')) {
@@ -131,7 +166,11 @@ function download(blob: Blob, fileName: string) {
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 /**
- * Builds the template and downloads it to the administrator's own computer.
+ * Builds the example file and downloads it to the administrator's own computer.
+ *
+ * THIS IS AN EXAMPLE, NOT A REQUIREMENT. The importer reads a school's own
+ * spreadsheet and recognises their own headers; this file just shows which
+ * columns Nom Cloud can use and which values a fixed-value column accepts.
  *
  * Fixed-value columns get a real Excel dropdown, so a school cannot type "Male"
  * where the database will only accept "male". The list is applied generously far
@@ -190,11 +229,12 @@ export async function downloadTemplate(options: {
 
   const guide = workbook.addWorksheet('How to use this')
   guide.columns = [{ width: 24 }, { width: 96 }]
-  guide.addRow(['Nom Cloud', `${options.sheetName} import template`]).font = { bold: true, size: 14 }
+  guide.addRow(['Nom Cloud', `${options.sheetName} import — example file`]).font = { bold: true, size: 14 }
   guide.addRow([])
   guide.addRow(['Rule', 'What it means']).font = { bold: true }
+  guide.addRow(['You do not need this file', 'Import your own spreadsheet. Nom Cloud recognises common column names such as "Student Name", "Adm No" or "Parent Mobile", and asks you to point at a column only when it cannot tell.'])
   guide.addRow(['The example row', 'Row 2 is an example. Delete it before importing, or leave it — it will be reported as a row like any other.'])
-  guide.addRow(['Starred columns', 'A star in the header means the column must be filled in.'])
+  guide.addRow(['Starred columns', 'A star in the header means Nom Cloud needs that information. Everything else can be missing, and is left empty.'])
   guide.addRow(['Dropdowns', 'Cells with a dropdown only accept the listed values. Do not type your own.'])
   guide.addRow(['Row limit', `Up to ${options.maxRows} rows per file, and 5 MB.`])
   guide.addRow(['Nothing is sent', 'No invitation email is sent by importing. Import first, check the data, then invite from the Teachers or Guardians page.'])

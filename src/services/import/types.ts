@@ -15,8 +15,17 @@
 export interface ColumnSpec {
   /** Internal key the parsed row is stored under. */
   key: string
-  /** The exact header text written into, and expected back from, the file. */
+  /** The header text written into the example file, and the first name looked for. */
   header: string
+  /**
+   * Other real-world header names accepted for this column.
+   *
+   * A school arrives with its own spreadsheet, not ours, so "Adm No" and
+   * "Parent Mobile" have to be understood without anyone retyping 500 rows.
+   * Compared after canonicalising — see headers.ts — so case, spaces,
+   * underscores and punctuation do not matter and only the letters do.
+   */
+  aliases?: readonly string[]
   required: boolean
   /** Shown in the single example row so the expected format is obvious. */
   example: string
@@ -35,11 +44,16 @@ export interface PreparedRow<T> {
   /** The parsed, validated record. Null when the row cannot be imported. */
   value: T | null
   /**
-   * The cells exactly as they were read, keyed by column.
+   * The cells as they were read, keyed by column.
    *
    * The preview shows THESE, not the parsed value, because a rejected row has
    * no parsed value — so it used to render a line of dashes and the school could
    * not tell which pupil the problem belonged to.
+   *
+   * ONE EXCEPTION, deliberately. A generated admission number is written back
+   * here as well as into `value`, because the decision was that the school must
+   * SEE the numbers in the preview before anything is written. Leaving the cell
+   * empty and hiding the number until after the import would defeat that.
    */
   raw: Record<string, string>
   /** Plain-language problems, already prefixed with nothing — the UI adds "Row n:". */
@@ -93,6 +107,16 @@ export interface ImportKind<T, Ctx> {
   prepare: (rows: Record<string, string>[], context: Ctx) => ImportPlan<T>
   importRow: (schoolId: string, prepared: PreparedRow<T>, context: Ctx) => Promise<RowOutcome>
 }
+
+/**
+ * Which header in the uploaded file feeds each of our columns.
+ *
+ * Keyed by ColumnSpec.key; the value is the header text as it appears in THEIR
+ * file, or null for "not in my file". Built automatically from the aliases and
+ * then corrected by hand in the mapping step when a required field could not be
+ * recognised.
+ */
+export type ColumnMapping = Record<string, string | null>
 
 /** Upper bound on any uploaded file, whatever its row count. */
 export const MAX_FILE_BYTES = 5 * 1024 * 1024

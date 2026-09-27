@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Warning as AlertTriangle, CheckCircle as CheckCircle2, Download, MinusCircle, Upload, XCircle } from '@phosphor-icons/react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
+import Select from '@/components/ui/Select'
 import RequestProcessing from '@/components/ui/RequestProcessing'
 import { useAuth } from '@/context/AuthContext'
-import { downloadResults, downloadTemplate, readSpreadsheet, ImportFileError } from '@/services/import/spreadsheet'
+import { downloadResults, downloadTemplate, readSheet, toRecords, ImportFileError, type SheetMatrix } from '@/services/import/spreadsheet'
+import { matchHeaders, unmappedRequired, unmappedRequiredMessage } from '@/services/import/headers'
 import { runImport, summariseImport, type ImportProgress } from '@/services/import/run'
-import type { ImportKind, ImportPlan, RowOutcome } from '@/services/import/types'
+import type { ColumnMapping, ImportKind, ImportPlan, RowOutcome } from '@/services/import/types'
 import { errorMessage } from '@/utils/errorMessage'
 
 // ---------------------------------------------------------------------------
@@ -23,13 +25,24 @@ import { errorMessage } from '@/utils/errorMessage'
 // outcomes. Nothing is written until the preview is confirmed, and nothing is
 // ever stored in the browser.
 //
+// THEIR FILE, NOT OURS. A school with 500 pupils already has a spreadsheet, so
+// their headers are recognised from a list of real-world names and the import
+// goes straight to the preview when everything needed was found. Only when a
+// REQUIRED field cannot be recognised does a mapping step appear, asking the one
+// question that cannot be answered for them: which of your columns is this?
+// The step is also reachable from the preview, so an unrecognised column can be
+// mapped even when nothing was actually blocking.
+//
+// The mapping step is built from the Select and Button already used everywhere
+// else in the app. No new dialog, no new layout, no new styling.
+//
 // WHO MAY IMPORT. Offered to an owner, director or administrator. The database's
 // own rule is unchanged and slightly wider (it also admits a principal), so a
 // principal calling the API directly is still permitted, exactly as they are
 // for every other write.
 // ---------------------------------------------------------------------------
 
-type Phase = 'upload' | 'reading' | 'review' | 'importing' | 'done'
+type Phase = 'upload' | 'reading' | 'mapping' | 'review' | 'importing' | 'done'
 
 const IMPORTER_ROLES = ['owner', 'director', 'administrator']
 const PAGE_SIZE = 25
@@ -58,6 +71,9 @@ export default function ImportDialog<T, Ctx>({
   const [busy, setBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [mapping, setMapping] = useState<ColumnMapping>({})
+  const [sheet, setSheet] = useState<SheetMatrix | null>(null)
+  const [unmatched, setUnmatched] = useState<string[]>([])
   const contextRef = useRef<Ctx | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -70,6 +86,9 @@ export default function ImportDialog<T, Ctx>({
     setProgress(null)
     setSearch('')
     setPage(1)
+    setMapping({})
+    setSheet(null)
+    setUnmatched([])
     contextRef.current = null
     if (fileRef.current) fileRef.current.value = ''
   }, [])
@@ -96,6 +115,42 @@ export default function ImportDialog<T, Ctx>({
     }
   }
 
+  /**
+   * Builds the plan from the grid already in memory and the mapping in force.
+   *
+   * Separate from reading the file so correcting the mapping costs nothing: the
+   * administrator never has to choose the file again.
+   */
+  const buildPlan = useCallback(
+    (source: SheetMatrix, columnMapping: ColumnMapping): boolean => {
+      const context = contextRef.current
+      if (!context) return false
+
+      const missing = unmappedRequired(columnMapping, kind.columns)
+      if (missing.length > 0) {
+        setError(unmappedRequiredMessage(missing))
+        return false
+      }
+
+      const { rows } = toRecords(source, kind.columns, columnMapping)
+      if (rows.length === 0) {
+        setError('Add a header row and at least one row of data.')
+        return false
+      }
+      if (rows.length > kind.maxRows) {
+        setError(`That file has ${rows.length} rows. The limit is ${kind.maxRows} per file — split it and import in parts.`)
+        return false
+      }
+
+      setError(null)
+      setPlan(kind.prepare(rows, context))
+      setPage(1)
+      setSearch('')
+      return true
+    },
+    [kind],
+  )
+
   const processFile = async (file: File | undefined) => {
     if (!file || !schoolId) return
     setPhase('reading')
@@ -112,25 +167,30 @@ export default function ImportDialog<T, Ctx>({
         return
       }
 
-      const { rows } = await readSpreadsheet(file, kind.columns)
-      if (rows.length === 0) {
-        setError('Add a header row and at least one row of data.')
-        setPhase('upload')
+      const source = await readSheet(file)
+      setSheet(source)
+
+      // Recognise their headers. Everything required found means no questions:
+      // straight to the preview, which is the whole point.
+      const match = matchHeaders(source.headers, kind.columns)
+      setMapping(match.mapping)
+      setUnmatched(match.unmatched)
+
+      if (match.missingRequired.length > 0) {
+        setError(unmappedRequiredMessage(unmappedRequired(match.mapping, kind.columns)))
+        setPhase('mapping')
         return
       }
-      if (rows.length > kind.maxRows) {
-        setError(`That file has ${rows.length} rows. The limit is ${kind.maxRows} per file — split it and import in parts.`)
-        setPhase('upload')
-        return
-      }
-      setPlan(kind.prepare(rows, context))
-      setPage(1)
-      setSearch('')
-      setPhase('review')
+      setPhase(buildPlan(source, match.mapping) ? 'review' : 'mapping')
     } catch (err: unknown) {
       setError(err instanceof ImportFileError ? err.message : `Could not read ${file.name}. ${errorMessage(err)}`)
       setPhase('upload')
     }
+  }
+
+  const applyMapping = () => {
+    if (!sheet) return
+    if (buildPlan(sheet, mapping)) setPhase('review')
   }
 
   const startImport = async () => {
@@ -208,9 +268,13 @@ export default function ImportDialog<T, Ctx>({
             <Button variant="ghost" onClick={onClose}>
               Close
             </Button>
-            <Button disabled={!plan || plan.counts.ready === 0 || phase !== 'review'} onClick={() => void startImport()}>
-              Import {plan?.counts.ready ?? 0} valid {noun}
-            </Button>
+            {phase === 'mapping' ? (
+              <Button onClick={applyMapping}>Use these columns</Button>
+            ) : (
+              <Button disabled={!plan || plan.counts.ready === 0 || phase !== 'review'} onClick={() => void startImport()}>
+                Import {plan?.counts.ready ?? 0} valid {noun}
+              </Button>
+            )}
           </>
         )
       }
@@ -219,12 +283,12 @@ export default function ImportDialog<T, Ctx>({
         <div className="flex items-center gap-2 text-xs font-semibold text-graphite">
           {step('1 Upload', true)}
           <span>→</span>
-          {step('2 Review', phase === 'review' || phase === 'importing' || phase === 'done')}
+          {step('2 Review', phase === 'mapping' || phase === 'review' || phase === 'importing' || phase === 'done')}
           <span>→</span>
           {step('3 Import', phase === 'done')}
         </div>
 
-        {phase !== 'done' && (
+        {phase !== 'done' && phase !== 'mapping' && (
           <>
             <input
               ref={fileRef}
@@ -254,11 +318,12 @@ export default function ImportDialog<T, Ctx>({
 
             <div className="flex flex-wrap items-center gap-3">
               <Button variant="outline" size="sm" onClick={() => void getTemplate()} loading={busy}>
-                <Download className="h-4 w-4" /> Download template
+                <Download className="h-4 w-4" /> Download example file
               </Button>
               <p className="text-xs text-graphite">
-                Start from the template so the columns and allowed values are already correct. No invitation email is sent
-                by importing.
+                Upload your own spreadsheet — common column names are recognised, and you will be asked only about a
+                column Nom Cloud cannot place. The example file is optional, and shows the columns that can be used. No
+                invitation email is sent by importing.
               </p>
             </div>
           </>
@@ -278,6 +343,47 @@ export default function ImportDialog<T, Ctx>({
           </p>
         )}
 
+        {/* ---------------- column mapping ---------------- */}
+        {phase === 'mapping' && sheet && (
+          <div>
+            <p className="text-sm font-semibold text-ink dark:text-white">Which of your columns is which?</p>
+            <p className="mt-1 text-xs text-graphite">
+              Nom Cloud read {sheet.headers.length} columns from your file and placed the ones it recognised. Point the
+              rest at the right column, or leave them as not in your file. A field marked with{' '}
+              <span className="text-brand">*</span> is needed before the import can run.
+            </p>
+
+            <div className="mt-4 grid max-h-72 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+              {kind.columns.map((column) => (
+                <Select
+                  key={column.key}
+                  label={column.header}
+                  required={column.required}
+                  value={mapping[column.key] ?? ''}
+                  onChange={(event) =>
+                    setMapping((current) => ({ ...current, [column.key]: event.target.value || null }))
+                  }
+                  error={column.required && !mapping[column.key] ? 'Choose the column that holds it' : undefined}
+                >
+                  <option value="">— not in my file —</option>
+                  {sheet.headers.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </Select>
+              ))}
+            </div>
+
+            {unmatched.length > 0 && (
+              <p className="mt-3 text-xs text-graphite">
+                Not used yet: {unmatched.join(', ')}. Columns Nom Cloud has no place for are ignored, and nothing in your
+                file is changed.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* ---------------- review ---------------- */}
         {(phase === 'review' || phase === 'importing') && plan && (
           <div>
@@ -289,15 +395,22 @@ export default function ImportDialog<T, Ctx>({
                   {plan.counts.exists > 0 && ` · ${plan.counts.exists} already in Nom Cloud`}
                 </p>
               </div>
-              <input
-                className="input h-9 w-40 text-xs"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value)
-                  setPage(1)
-                }}
-                placeholder="Search preview"
-              />
+              <div className="flex items-center gap-2">
+                {phase === 'review' && (
+                  <Button variant="outline" size="sm" onClick={() => setPhase('mapping')}>
+                    Change columns
+                  </Button>
+                )}
+                <input
+                  className="input h-9 w-40 text-xs"
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value)
+                    setPage(1)
+                  }}
+                  placeholder="Search preview"
+                />
+              </div>
             </div>
 
             {plan.notices.length > 0 && (
