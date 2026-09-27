@@ -16,7 +16,6 @@ import type { AnnouncementAudience } from '@/services/communicationService'
 
 const audienceOptions: { value: AnnouncementAudience; label: string }[] = [
   { value: 'all', label: 'Entire School' },
-  { value: 'group', label: 'Specific Group' },
   { value: 'teachers', label: 'All Teachers' },
   { value: 'parents', label: 'All Parents' },
   { value: 'class', label: 'Specific Class' },

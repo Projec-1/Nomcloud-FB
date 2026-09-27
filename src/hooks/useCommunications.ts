@@ -87,6 +87,13 @@ export function useAnnouncements(): UseAnnouncementsResult {
     canAccess: authState !== 'ready' ? undefined : schoolId !== null,
     error,
     data: announcements,
+    // An empty list is NOT the gate's 'empty' state here, because the board is
+    // also how an announcement gets created: collapsing to a bare empty panel
+    // hid the "New Announcement" button, so a school with none could never
+    // publish its first. This was masked while the list came from seeded sample
+    // data and appeared the moment those samples were removed. The board renders
+    // its own "No announcements yet" state instead.
+    isEmpty: () => false,
     retry: reload,
   })
 

@@ -52,10 +52,8 @@ const priorityTone: Record<AnnouncementPriority, 'neutral' | 'warning' | 'danger
 
 const audienceLabels: Record<AnnouncementAudience, string> = {
   all: 'Entire School',
-  group: 'Specific Group',
   teachers: 'All Teachers',
   parents: 'All Parents',
-  students: 'All Students',
   class: 'Specific Class',
 }
 
@@ -156,7 +154,6 @@ export default function AnnouncementBoard({
     // announcements_audience_class_check enforces this pairing in the database,
     // in both directions. Checking here only produces a better message.
     if (form.audience === 'class' && !form.classId) next.classId = 'Select the class.'
-    if (form.audience === 'group' && !form.groupId) next.groupId = 'Select the group.'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -170,8 +167,6 @@ export default function AnnouncementBoard({
         body: form.body,
         audience: form.audience,
         classId: form.audience === 'class' ? form.classId : null,
-        groupId: form.audience === 'group' ? form.groupId : null,
-        groupName: form.audience === 'group' ? form.groupName : null,
         priority: form.priority,
         publishedAt: form.publishAt ? new Date(form.publishAt).toISOString() : null,
         expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
@@ -272,9 +267,7 @@ export default function AnnouncementBoard({
                     <Badge tone={priorityTone[a.priority]}>{a.priority}</Badge>
                     <Badge tone="neutral">
                       {a.audience === 'class'
-                        ? classes.find((c) => c.id === a.classId)?.name ?? 'Class'
-                        : a.audience === 'group'
-                          ? a.groupName ?? 'Group'
+                        ? classes.find((c) => c.id === a.classId)?.name ?? a.groupName ?? 'Class'
                         : audienceLabels[a.audience]}
                     </Badge>
                     {!a.publishedAt && <Badge tone="neutral">Draft</Badge>}
@@ -401,14 +394,6 @@ export default function AnnouncementBoard({
                   {c.name}
                 </option>
               ))}
-            </Select>
-          )}
-          {form.audience === 'group' && (
-            <Select label="Group" required value={form.groupName} onChange={(e) => setForm({ ...form, groupId: e.target.value, groupName: e.target.options[e.target.selectedIndex]?.text ?? '' })}>
-              <option value="">Select a group</option>
-              <option value="teachers">Teachers</option>
-              <option value="parents">Parents</option>
-              <option value="students">Students</option>
             </Select>
           )}
           <div className="grid gap-4 sm:grid-cols-2">

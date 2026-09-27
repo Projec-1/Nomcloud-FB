@@ -85,7 +85,7 @@
 import { supabase } from '@/lib/supabase'
 
 /** The audiences `announcements_audience_check` allows. */
-export type AnnouncementAudience = 'all' | 'group' | 'teachers' | 'parents' | 'students' | 'class'
+export type AnnouncementAudience = 'all' | 'teachers' | 'parents' | 'class'
 
 /** The priorities `announcements_priority_check` allows. */
 export type AnnouncementPriority = 'normal' | 'important' | 'urgent'
@@ -112,9 +112,8 @@ export interface AnnouncementInput {
   title: string
   body: string
   audience: AnnouncementAudience
+  /** Required for a 'class' notice, null for every other audience. */
   classId: string | null
-  groupId: string | null
-  groupName: string | null
   priority: AnnouncementPriority
   publishedAt?: string | null
   expiresAt: string | null
@@ -187,124 +186,168 @@ async function profileNames(schoolId: string, userIds: string[]): Promise<Map<st
  * do not collide — one is about what the client asks for, the other about what
  * the database will answer.
  */
-const MOCK_ANNOUNCEMENTS_KEY = 'nomcloud_frontend_announcements_v1'
+const ANNOUNCEMENT_COLUMNS =
+  'id, title, body, audience, class_id, priority, pinned, published_at, expires_at, archived_at, created_at, created_by'
 
-function defaultMockAnnouncements(): AnnouncementView[] {
-  const now = new Date().toISOString()
-  return [
-    {
-      id: 'mock-announcement-1',
-      title: 'Welcome to the new school term',
-      body: 'Classes resume on Saturday. Please review the weekly timetable before the first lesson.',
-      audience: 'all',
-      classId: null,
-      groupId: null,
-      groupName: null,
-      priority: 'important',
-      pinned: true,
-      publishedAt: now,
-      createdAt: now,
-      createdBy: 'mock-admin',
-      authorName: 'School Administration',
-      expiresAt: null,
-      archivedAt: null,
-    },
-    {
-      id: 'mock-announcement-2',
-      title: 'Grade 7 mathematics reminder',
-      body: 'Bring your mathematics workbook for tomorrow’s problem-solving session.',
-      audience: 'class',
-      classId: 'grade-7',
-      groupId: null,
-      groupName: null,
-      priority: 'normal',
-      pinned: false,
-      publishedAt: now,
-      createdAt: now,
-      createdBy: 'mock-teacher',
-      authorName: 'Ahmed Hassan',
-      expiresAt: null,
-      archivedAt: null,
-    },
-  ]
+interface AnnouncementRow {
+  id: string
+  title: string
+  body: string
+  audience: AnnouncementAudience
+  class_id: string | null
+  priority: AnnouncementPriority
+  pinned: boolean
+  published_at: string | null
+  expires_at: string | null
+  archived_at: string | null
+  created_at: string
+  created_by: string | null
 }
 
-function readMockAnnouncements() {
-  try {
-    const raw = window.localStorage.getItem(MOCK_ANNOUNCEMENTS_KEY)
-    return raw ? (JSON.parse(raw) as AnnouncementView[]) : defaultMockAnnouncements()
-  } catch (error) {
-    console.error('[NomCloud] Could not read mock announcements.', error)
-    return defaultMockAnnouncements()
-  }
+/**
+ * Every announcement the signed-in person is entitled to, pinned first.
+ *
+ * WHAT DECIDES WHO SEES WHAT IS THE DATABASE, NOT THIS QUERY. The read asks for
+ * one school's announcements and nothing more; the six SELECT policies then
+ * narrow the answer — an administrator sees all of them, a teacher sees class
+ * notices for classes they teach, a guardian sees 'all' and 'parents' plus class
+ * notices for a class their child is in. Asking broadly and receiving a narrow
+ * answer is the policy working, and no audience filter is applied here that
+ * could disagree with it.
+ *
+ * THE CLASS NAME AND THE AUTHOR'S NAME come from two further scoped reads rather
+ * than an embedded select: announcements meets classes through a COMPOSITE key,
+ * and a silently failed embedding would read as a school with no announcements.
+ * Both extra reads are governed by their own policies, so a name the caller may
+ * not see simply comes back absent instead of leaking.
+ */
+export async function fetchAnnouncements(schoolId: string): Promise<AnnouncementView[]> {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select(ANNOUNCEMENT_COLUMNS)
+    .eq('school_id', schoolId)
+    .order('pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  const rows = (data ?? []) as AnnouncementRow[]
+  if (rows.length === 0) return []
+
+  const classIds = Array.from(new Set(rows.map((row) => row.class_id).filter((id): id is string => Boolean(id))))
+  const authorIds = Array.from(new Set(rows.map((row) => row.created_by).filter((id): id is string => Boolean(id))))
+
+  const [classes, authors] = await Promise.all([
+    classIds.length
+      ? supabase.from('classes').select('id, name').eq('school_id', schoolId).in('id', classIds)
+      : Promise.resolve({ data: [], error: null }),
+    authorIds.length
+      ? supabase.from('profiles').select('id, full_name').in('id', authorIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (classes.error) throw classes.error
+  if (authors.error) throw authors.error
+
+  const classNameById = new Map(((classes.data ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]))
+  const authorNameById = new Map(((authors.data ?? []) as { id: string; full_name: string }[]).map((a) => [a.id, a.full_name]))
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    audience: row.audience,
+    classId: row.class_id,
+    // A "group" IS a class in the database: there is no separate groups table,
+    // and announcements.class_id is the only grouping the schema carries. So a
+    // class notice reports its class as its group, and everything else reports
+    // no group rather than an invented one.
+    groupId: row.class_id,
+    groupName: row.class_id ? (classNameById.get(row.class_id) ?? null) : null,
+    priority: row.priority,
+    pinned: row.pinned,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    // Absent rather than guessed: a reader who may not see the author's profile
+    // gets no name, which is the policy answering honestly.
+    authorName: (row.created_by ? authorNameById.get(row.created_by) : null) ?? 'School',
+    expiresAt: row.expires_at,
+    archivedAt: row.archived_at,
+  }))
 }
 
-function writeMockAnnouncements(rows: AnnouncementView[]) {
-  window.localStorage.setItem(MOCK_ANNOUNCEMENTS_KEY, JSON.stringify(rows))
-}
-
-export async function fetchAnnouncements(_schoolId: string): Promise<AnnouncementView[]> {
-  return readMockAnnouncements().sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt))
-}
+/** class_id is set only for a class notice; the CHECK enforces both directions. */
+const classIdFor = (input: AnnouncementInput) => (input.audience === 'class' ? input.classId : null)
 
 /**
  * Publishes an announcement.
  *
  * The audience/class_id pairing is enforced by `announcements_audience_class_check`
  * in both directions, so a class notice without a class, or a school-wide notice
- * carrying one, is refused with 23514 rather than stored inconsistently. The
- * caller normalises class_id to null for every non-class audience.
+ * carrying one, is refused with 23514 rather than stored inconsistently.
+ *
+ * created_by is taken from the session, never from the caller: every INSERT
+ * policy on this table requires created_by = auth.uid().
  */
 export async function createAnnouncement(schoolId: string, input: AnnouncementInput): Promise<void> {
-  const now = new Date().toISOString()
-  const rows = readMockAnnouncements()
-  rows.push({
-    id: `mock-announcement-${Date.now()}`,
+  const userId = await currentUserId()
+  if (!userId) throw new Error('You must be signed in to publish an announcement.')
+
+  const { error } = await supabase.from('announcements').insert({
+    school_id: schoolId,
     title: input.title.trim(),
     body: input.body.trim(),
     audience: input.audience,
-    classId: input.classId,
-    groupId: input.groupId,
-    groupName: input.groupName,
+    class_id: classIdFor(input),
     priority: input.priority,
-    pinned: false,
-    publishedAt: input.publishedAt === undefined ? now : input.publishedAt,
-    createdAt: now,
-    createdBy: 'mock-user',
-    authorName: input.audience === 'class' ? 'Teacher' : 'School Administration',
-    expiresAt: input.expiresAt ?? null,
-    archivedAt: null,
+    published_at: input.publishedAt ?? new Date().toISOString(),
+    expires_at: input.expiresAt,
+    created_by: userId,
   })
-  writeMockAnnouncements(rows)
+  if (error) throw error
 }
 
 export async function updateAnnouncement(schoolId: string, id: string, input: AnnouncementInput): Promise<void> {
-  const rows = readMockAnnouncements().map((item) => item.id === id ? {
-    ...item,
-    title: input.title.trim(),
-    body: input.body.trim(),
-    audience: input.audience,
-    classId: input.classId,
-    groupId: input.groupId,
-    groupName: input.groupName,
-    priority: input.priority,
-    publishedAt: input.publishedAt ?? null,
-    expiresAt: input.expiresAt ?? null,
-  } : item)
-  writeMockAnnouncements(rows)
+  const { error } = await supabase
+    .from('announcements')
+    .update({
+      title: input.title.trim(),
+      body: input.body.trim(),
+      audience: input.audience,
+      class_id: classIdFor(input),
+      priority: input.priority,
+      expires_at: input.expiresAt,
+      ...(input.publishedAt !== undefined ? { published_at: input.publishedAt } : {}),
+    })
+    .eq('school_id', schoolId)
+    .eq('id', id)
+  if (error) throw error
 }
 
+/**
+ * Archives an announcement: a soft delete, so it stays available to
+ * administrators. `archived_at` comes from migration 20260924000002.
+ */
 export async function archiveAnnouncement(schoolId: string, id: string): Promise<void> {
-  writeMockAnnouncements(readMockAnnouncements().map((item) => item.id === id ? { ...item, archivedAt: new Date().toISOString() } : item))
+  const { error } = await supabase
+    .from('announcements')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('school_id', schoolId)
+    .eq('id', id)
+  if (error) throw error
 }
 
-/** Pins or unpins an announcement. Management only, per the UPDATE policies. */
 export async function setAnnouncementPinned(schoolId: string, id: string, pinned: boolean): Promise<void> {
-  writeMockAnnouncements(readMockAnnouncements().map((item) => item.id === id ? { ...item, pinned } : item))
+  const { error } = await supabase
+    .from('announcements')
+    .update({ pinned })
+    .eq('school_id', schoolId)
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function deleteAnnouncement(schoolId: string, id: string): Promise<void> {
-  writeMockAnnouncements(readMockAnnouncements().filter((item) => item.id !== id))
+  const { error } = await supabase.from('announcements').delete().eq('school_id', schoolId).eq('id', id)
+  if (error) throw error
 }
 
 // ===========================================================================
