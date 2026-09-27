@@ -143,7 +143,7 @@ export default function ImportDialog<T, Ctx>({
       }
 
       setError(null)
-      setPlan(kind.prepare(rows, context))
+      setPlan(kind.prepare(rows, context, columnMapping))
       setPage(1)
       setSearch('')
       return true

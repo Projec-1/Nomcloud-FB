@@ -104,7 +104,14 @@ export interface ImportKind<T, Ctx> {
   loadContext: (schoolId: string) => Promise<Ctx>
   /** A reason this kind cannot be imported at all right now, or null. */
   precheck: (context: Ctx) => string | null
-  prepare: (rows: Record<string, string>[], context: Ctx) => ImportPlan<T>
+  /**
+   * `mapping` is passed so a kind can tell a column that is ABSENT FROM THEIR
+   * FILE from one that is present but blank. The students import needs that
+   * distinction: with no admission number column at all it falls back to
+   * recognising a pupil by name, class and guardian phone, and it must not do
+   * that for a file that has the column and simply left a cell empty.
+   */
+  prepare: (rows: Record<string, string>[], context: Ctx, mapping: ColumnMapping) => ImportPlan<T>
   importRow: (schoolId: string, prepared: PreparedRow<T>, context: Ctx) => Promise<RowOutcome>
 }
 

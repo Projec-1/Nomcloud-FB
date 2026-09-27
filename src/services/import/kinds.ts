@@ -153,6 +153,8 @@ export interface TeacherImportValue {
   staffNo: string | null
   status: string
   primarySubjectId: string | null
+  dateOfBirth: string | null
+  gender: StudentGender | null
 }
 
 interface TeacherContext {
@@ -168,9 +170,8 @@ const teacherColumns: ColumnSpec[] = [
   { key: 'phone', header: 'Phone', aliases: PHONE_ALIASES, required: false, example: '+252612345678' },
   { key: 'staffNo', header: 'Staff number', aliases: STAFF_NO_ALIASES, required: false, example: 'T-2026-014', hint: 'Must be unique in the school.' },
   { key: 'status', header: 'Status', aliases: ['employment status', 'state'], required: false, example: 'active', options: TEACHER_STATUSES },
-  // No Date of birth or Gender column: the teachers table has nowhere to put
-  // them (see the report). A school's own DOB column is simply left unmapped and
-  // ignored, rather than shown here as though it were being stored.
+  { key: 'dateOfBirth', header: 'Date of birth', aliases: DOB_ALIASES, required: false, example: '1990-04-23', hint: 'yyyy-mm-dd or dd/mm/yyyy. Must be in the past.' },
+  { key: 'gender', header: 'Gender', aliases: GENDER_ALIASES, required: false, example: 'female', options: GENDERS },
   { key: 'primarySubject', header: 'Primary subject', aliases: ['subject', 'main subject', 'teaching subject', 'specialisation', 'specialization'], required: false, example: '', hint: 'Matched by subject name. Reported as a problem when it names a subject the school does not have.' },
 ]
 
@@ -182,7 +183,8 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
   columns: teacherColumns,
   notes: [
     'Import your own staff list. Nom Cloud recognises headers such as "Teacher Name", "Staff ID" or "E-mail"; anything it cannot place, you point at yourself before importing.',
-    'Only the name and the email address are needed. Phone, staff number, status and primary subject can all be missing, and are left empty.',
+    'Only the name and the email address are needed. Phone, staff number, status, date of birth, gender and primary subject can all be missing, and are left empty.',
+    'Gender may be written in any case — Male, MALE and male are all stored as male.',
     'The email address is required because it is the only way to invite them to sign in later.',
     'A teacher imported here does not get a login. Invite them afterwards from the Teachers page.',
     'Email and staff number must each be unique within the school. A row repeating one that already exists is reported as already existing and is skipped.',
@@ -224,6 +226,20 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
         else primarySubjectId = found
       }
 
+      // Gender is lower-cased before it is stored, so a school's "Male", "MALE"
+      // and "male" all satisfy teachers_gender_check, which accepts only the
+      // three lowercase values. Anything else is refused HERE, with a readable
+      // reason, rather than reaching the database and coming back as a 23514.
+      const teacherGenderRaw = raw.gender?.trim() ?? ''
+      const teacherGenderText = teacherGenderRaw ? norm(teacherGenderRaw) : null
+      const teacherGenderValid = teacherGenderText === null || GENDERS.includes(teacherGenderText as StudentGender)
+      if (!teacherGenderValid) problems.push(`gender must be ${GENDERS.join(', ')}`)
+      const teacherGender = (teacherGenderValid ? teacherGenderText : null) as StudentGender | null
+
+      const { date: teacherDob, bad: badDob } = parseDate(raw.dateOfBirth ?? '')
+      if (badDob) problems.push(`date of birth '${raw.dateOfBirth}' is not a date — use yyyy-mm-dd`)
+      else if (teacherDob && !isPast(teacherDob)) problems.push('date of birth must be in the past')
+
       let exists = false
       if (email && isValidEmail(email)) {
         const key = norm(email)
@@ -245,7 +261,16 @@ export const teachersImport: ImportKind<TeacherImportValue, TeacherContext> = {
         raw,
         value: problems.length
           ? null
-          : { fullName, email: orNull(email), phone: orNull(raw.phone ?? ''), staffNo: orNull(staffNo), status, primarySubjectId },
+          : {
+              fullName,
+              email: orNull(email),
+              phone: orNull(raw.phone ?? ''),
+              staffNo: orNull(staffNo),
+              status,
+              primarySubjectId,
+              dateOfBirth: teacherDob,
+              gender: teacherGender,
+            },
         problems,
         status: problems.length ? 'error' : exists ? 'exists' : 'ready',
         note: exists && !problems.length ? 'already in Nom Cloud — will be skipped' : undefined,
@@ -498,7 +523,32 @@ interface StudentContext {
   admissionYear: number
   /** Highest sequence already issued for that shortcode and year. */
   lastAdmissionSeq: number
+  /**
+   * Pupils already in Nom Cloud as "name|classId|phone" triples, used ONLY for a
+   * file with no admission number column. One pupil contributes one triple per
+   * guardian phone, so a row matches on any one of the pupil's guardians.
+   */
+  existingTriples: Set<string>
 }
+
+/**
+ * The key that decides "this pupil is already in Nom Cloud" when their file has
+ * no admission number to go on.
+ *
+ * NAME NORMALISATION, and its limits. Case is folded and runs of whitespace
+ * collapse to one space, so "AYAAN  MOHAMED ali" and "Ayaan Mohamed Ali" are one
+ * pupil. Unicode is normalised to NFKC first, because two keyboards can produce
+ * different byte sequences for the same visible Somali or Arabic name and a
+ * school should not get a duplicate out of that.
+ *
+ * Nothing else is normalised, deliberately. Punctuation is NOT stripped, so
+ * "Al-Amin" and "Al Amin" stay different people, and name parts are never
+ * reordered. This key SUPPRESSES a write: a false match silently drops a real
+ * pupil from the import, while a missed match only produces a duplicate the
+ * school can see in the preview and fix. Under-matching is the safe direction.
+ */
+const pupilTriple = (fullName: string, classId: string, phone: string) =>
+  `${fullName.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()}|${classId}|${normPhone(phone)}`
 
 const studentColumns: ColumnSpec[] = [
   { key: 'fullName', header: 'Full name', aliases: NAME_ALIASES, required: true, example: 'Ayaan Mohamed Ali' },
@@ -530,6 +580,7 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
     'Only the pupil name, the class, and one guardian name and phone are needed. Everything else can be missing.',
     'Import teachers and classes before students: the class must already exist.',
     'No admission number column? Nom Cloud generates one per pupil as SHORTCODE-YEAR-NNN, continuing from the highest it has already issued. A number you supply is never changed. The generated numbers appear in the preview before anything is written.',
+    'With no admission number column, a pupil already in Nom Cloud is recognised by full name, class and guardian phone all matching, so importing the same file twice does not duplicate anyone. Twins sharing a class and a family phone cannot be told apart this way: once one of them is in Nom Cloud the other is taken for the same pupil, so give twins admission numbers. When the column IS present, the admission number is the only key used.',
     'Guardians already in Nom Cloud are matched by EMAIL ONLY. A phone number is never matched against the database, because a mother and a father commonly answer one family number.',
     'Inside ONE uploaded file, rows sharing an identical guardian phone are treated as the same guardian, so siblings do not create three copies of one parent. Every such merge is listed in the preview. This never applies across two separate imports.',
     'No invitation is sent by importing. Invite guardians afterwards from the Guardians page.',
@@ -537,22 +588,51 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
   loadContext: async (schoolId) => {
     const years = await fetchAcademicYears(schoolId)
     const activeYear = activeAcademicYear(years)
-    const [classes, campuses, students, guardians, school] = await Promise.all([
+    const [classes, campuses, students, guardians, school, enrolments, links, phones] = await Promise.all([
       activeYear
         ? supabase.from('classes').select('id, name, campus_id').eq('school_id', schoolId).eq('academic_year_id', activeYear.id)
         : Promise.resolve({ data: [], error: null }),
       supabase.from('campuses').select('id, name').eq('school_id', schoolId),
-      supabase.from('students').select('admission_no').eq('school_id', schoolId),
+      supabase.from('students').select('id, full_name, admission_no').eq('school_id', schoolId),
       supabase.from('guardians').select('id, email').eq('school_id', schoolId).not('email', 'is', null),
       supabase.from('schools').select('shortcode').eq('id', schoolId).single(),
+      // The three reads behind existingTriples: who is enrolled where in the
+      // active year, which guardians they have, and those guardians' phones.
+      activeYear
+        ? supabase.from('class_enrollments').select('student_id, class_id')
+            .eq('school_id', schoolId).eq('academic_year_id', activeYear.id).is('left_on', null)
+        : Promise.resolve({ data: [], error: null }),
+      supabase.from('student_guardians').select('student_id, guardian_id').eq('school_id', schoolId),
+      supabase.from('guardians').select('id, phone').eq('school_id', schoolId),
     ])
     if (classes.error) throw classes.error
     if (campuses.error) throw campuses.error
     if (students.error) throw students.error
     if (guardians.error) throw guardians.error
     if (school.error) throw school.error
+    if (enrolments.error) throw enrolments.error
+    if (links.error) throw links.error
+    if (phones.error) throw phones.error
 
-    const admissionValues = ((students.data ?? []) as { admission_no: string }[]).map((s) => s.admission_no)
+    const studentRows = (students.data ?? []) as { id: string; full_name: string; admission_no: string }[]
+    const admissionValues = studentRows.map((s) => s.admission_no)
+
+    const phoneById = new Map(((phones.data ?? []) as { id: string; phone: string }[]).map((g) => [g.id, g.phone]))
+    const phonesByStudent = new Map<string, string[]>()
+    for (const link of (links.data ?? []) as { student_id: string; guardian_id: string }[]) {
+      const phone = phoneById.get(link.guardian_id)
+      if (!phone) continue
+      phonesByStudent.set(link.student_id, [...(phonesByStudent.get(link.student_id) ?? []), phone])
+    }
+    const nameById = new Map(studentRows.map((s) => [s.id, s.full_name]))
+    const existingTriples = new Set<string>()
+    for (const enrolment of (enrolments.data ?? []) as { student_id: string; class_id: string }[]) {
+      const name = nameById.get(enrolment.student_id)
+      if (!name) continue
+      for (const phone of phonesByStudent.get(enrolment.student_id) ?? []) {
+        existingTriples.add(pupilTriple(name, enrolment.class_id, phone))
+      }
+    }
     const shortcode = (school.data as { shortcode: string }).shortcode
     // The academic year's start, not today's date, so importing the same intake
     // in January does not begin a second series for the same school year.
@@ -572,6 +652,7 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
       shortcode,
       admissionYear,
       lastAdmissionSeq: highestAdmissionSequence(admissionValues, shortcode, admissionYear),
+      existingTriples,
     }
   },
   precheck: (context) =>
@@ -580,7 +661,7 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
       : context.classes.length === 0
         ? 'This school has no classes in the active academic year yet. Import or create classes first, then import students.'
         : null,
-  prepare: (raws, context) => {
+  prepare: (raws, context, mapping) => {
     if (!context.activeYear) return emptyPlan<StudentImportValue>()
     const yearId = context.activeYear.id
     const rows: PreparedRow<StudentImportValue>[] = []
@@ -589,6 +670,16 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
     const mergeRows = new Map<string, { name: string; phone: string; byEmail: boolean; rows: number[] }>()
     /** lower-cased name -> rows sharing it with neither an email nor a shared phone. */
     const unmatchableByName = new Map<string, { display: string; rows: number[] }>()
+
+    /**
+     * With no admission number column there is no key of the school's own to
+     * recognise a pupil by, so name + class + guardian phone stands in. When the
+     * column IS there the number remains the only key, however thin the rest of
+     * the row is.
+     */
+    const matchOnTriple = !mapping.admissionNo
+    /** triple -> rows using it, to warn about two pupils that cannot be told apart. */
+    const tripleRows = new Map<string, { display: string; className: string; phone: string; rows: number[] }>()
 
     /** Sequence for generated admission numbers, continuing the school's series. */
     let nextSequence = context.lastAdmissionSeq
@@ -607,26 +698,11 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
 
       if (!fullName) problems.push('full name is required')
 
-      // ---- admission number: theirs if supplied, otherwise generated
-      //
-      // Generated only for a row that could otherwise be written. Numbering a
-      // row that is about to be refused would burn a number and leave a gap in
-      // the school's own series for no reason.
-      let admissionNo = raw.admissionNo?.trim() ?? ''
-      let generatedAdmissionNo = false
-      if (!admissionNo && fullName) {
-        do {
-          nextSequence += 1
-          admissionNo = admissionNumber(context.shortcode, context.admissionYear, nextSequence)
-        } while (context.admissionNos.has(norm(admissionNo)) || seenAdmission.has(norm(admissionNo)))
-        generatedAdmissionNo = true
-        generatedCount += 1
-        if (!firstGenerated) firstGenerated = admissionNo
-        lastGenerated = admissionNo
-        // Written back so the school SEES the number in the preview, which was
-        // the condition for generating them at all.
-        raw.admissionNo = admissionNo
-      }
+      // The number they supplied, if any. A generated one is decided further
+      // down, once the class and the guardians are known: a row that turns out to
+      // be a pupil Nom Cloud already has must not burn a number and leave a gap
+      // in the school's own series.
+      const suppliedAdmissionNo = raw.admissionNo?.trim() ?? ''
 
       const genderText = genderRaw ? norm(genderRaw) : null
       const genderValid = genderText === null || GENDERS.includes(genderText as StudentGender)
@@ -657,12 +733,12 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
         } else classId = matches[0].id
       }
 
-      // ---- duplicates: inside the file, and against the database
+      // ---- duplicates against a number they supplied
       let exists = false
-      if (admissionNo) {
-        const key = norm(admissionNo)
+      if (suppliedAdmissionNo) {
+        const key = norm(suppliedAdmissionNo)
         const earlier = seenAdmission.get(key)
-        if (earlier) problems.push(`admission number '${admissionNo}' is also on row ${earlier}`)
+        if (earlier) problems.push(`admission number '${suppliedAdmissionNo}' is also on row ${earlier}`)
         else seenAdmission.set(key, row)
         if (context.admissionNos.has(key)) exists = true
       }
@@ -741,7 +817,51 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
         problems.push('primary contact is Guardian 2, but there is no guardian 2')
       }
 
+      // ---- the pupil is already in Nom Cloud, recognised without a number
+      //
+      // All three of name, class and ONE of the row's guardian phones must match
+      // the same existing pupil. Runs only for a file with no admission number
+      // column at all.
+      let matchedTriple: string | null = null
+      if (matchOnTriple && fullName && classId) {
+        for (const guardian of guardians) {
+          if (!guardian.phone) continue
+          const triple = pupilTriple(fullName, classId, guardian.phone)
+          // Recorded whether or not it matches, so two rows that cannot be told
+          // apart from each other are reported too.
+          const entry = tripleRows.get(triple) ?? { display: fullName, className, phone: guardian.phone, rows: [] }
+          if (!entry.rows.includes(row)) entry.rows.push(row)
+          tripleRows.set(triple, entry)
+          if (context.existingTriples.has(triple)) {
+            matchedTriple = triple
+            exists = true
+            break
+          }
+        }
+      }
+
+      // ---- admission number: generated only now, and only if it will be used
+      let admissionNo = suppliedAdmissionNo
+      let generatedAdmissionNo = false
+      if (!admissionNo && fullName && !exists) {
+        do {
+          nextSequence += 1
+          admissionNo = admissionNumber(context.shortcode, context.admissionYear, nextSequence)
+        } while (context.admissionNos.has(norm(admissionNo)) || seenAdmission.has(norm(admissionNo)))
+        seenAdmission.set(norm(admissionNo), row)
+        generatedAdmissionNo = true
+        generatedCount += 1
+        if (!firstGenerated) firstGenerated = admissionNo
+        lastGenerated = admissionNo
+        // Written back so the school SEES the number in the preview, which was
+        // the condition for generating them at all.
+        raw.admissionNo = admissionNo
+      }
+
       const notes: string[] = []
+      if (matchedTriple) {
+        notes.push('already in Nom Cloud — same name, class and guardian phone')
+      }
       if (generatedAdmissionNo) notes.push(`admission number ${admissionNo} generated`)
       for (const guardian of guardians) {
         if (guardian.email && context.guardiansByEmail.has(norm(guardian.email))) {
@@ -758,7 +878,12 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
             : { fullName, admissionNo, gender, dateOfBirth, status, classId, academicYearId: yearId, guardians, primaryIndex },
         problems,
         status: problems.length ? 'error' : exists ? 'exists' : 'ready',
-        note: exists && !problems.length ? 'admission number already in Nom Cloud — will be skipped' : notes.join('; ') || undefined,
+        note:
+          exists && !problems.length
+            ? matchedTriple
+              ? 'already in Nom Cloud — same name, class and guardian phone — will be skipped'
+              : 'admission number already in Nom Cloud — will be skipped'
+            : notes.join('; ') || undefined,
       })
     }
 
@@ -771,6 +896,22 @@ export const studentsImport: ImportKind<StudentImportValue, StudentContext> = {
           ? `No admission number was supplied for 1 pupil. ${firstGenerated} will be used.`
           : `No admission number was supplied for ${generatedCount} pupils. ${firstGenerated} to ${lastGenerated} will be used — check them in the table below before importing.`,
       )
+    }
+
+    // What the triple rule is, and what it cannot do. Stated whenever the rule is
+    // in force, not only when something matched, because the school has to be
+    // able to spot a twin BEFORE importing rather than after.
+    if (matchOnTriple) {
+      const already = rows.filter((entry) => entry.status === 'exists').length
+      notices.push(
+        `This file has no admission number column, so a pupil counts as already in Nom Cloud when the full name, the class and one guardian phone number all match${already > 0 ? ` — ${already} of these rows do` : ''}. Two different pupils who share all three cannot be told apart this way: once either of a pair of twins in the same class on one family phone is in Nom Cloud, the other is taken for the same pupil and skipped. If you have twins, give them admission numbers in the file before importing.`,
+      )
+      for (const [, entry] of tripleRows) {
+        if (entry.rows.length < 2) continue
+        notices.push(
+          `Rows ${entry.rows.join(', ')} are the same name, class and guardian phone: ${entry.display}, ${entry.className}, ${entry.phone}. Nom Cloud cannot tell them apart without an admission number. Importing now creates ${entry.rows.length} separate pupils, but importing this file a second time — or importing it when one of them is already in Nom Cloud — will skip them all as duplicates. If they are twins, give them admission numbers.`,
+        )
+      }
     }
 
     // Every merge, so it can be corrected before anything is written.

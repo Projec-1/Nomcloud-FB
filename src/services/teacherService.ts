@@ -357,6 +357,26 @@ export interface TeacherInput {
   staffNo: string | null
   primarySubjectId: string | null
   status: string
+  /**
+   * Date of birth and gender are OPTIONAL PROPERTIES, not merely nullable ones.
+   *
+   * The bulk import supplies them when a school's staff file has those columns;
+   * the teacher form does not offer them at all, because that screen's design is
+   * not ours to change. Leaving a key out therefore has to mean "do not touch
+   * this column" rather than "set it to null", or saving an edit in the form
+   * would quietly erase what an import stored. The two writers below spread
+   * these keys in only when the caller actually passed them.
+   */
+  dateOfBirth?: string | null
+  gender?: string | null
+}
+
+/** Only the keys the caller actually supplied, so an omitted one is left alone. */
+function optionalTeacherFields(input: TeacherInput): Record<string, string | null> {
+  return {
+    ...('dateOfBirth' in input ? { date_of_birth: input.dateOfBirth ?? null } : {}),
+    ...('gender' in input ? { gender: input.gender ?? null } : {}),
+  }
 }
 
 /** Every teacher in the school, for the management staff list. */
@@ -382,6 +402,7 @@ export async function createTeacher(schoolId: string, input: TeacherInput): Prom
       staff_no: input.staffNo,
       primary_subject_id: input.primarySubjectId,
       status: input.status,
+      ...optionalTeacherFields(input),
     })
     .select('id')
     .single()
@@ -403,6 +424,7 @@ export async function updateTeacher(schoolId: string, id: string, input: Teacher
       staff_no: input.staffNo,
       primary_subject_id: input.primarySubjectId,
       status: input.status,
+      ...optionalTeacherFields(input),
     })
     .eq('school_id', schoolId)
     .eq('id', id)
